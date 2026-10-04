@@ -1,7 +1,21 @@
 export type ISODate = string; // YYYY-MM-DD
 export type HHMM = string; // 09:20
 
-export type SubjectId = "glossa" | "math" | "meleti" | "eikastika";
+export type SubjectId =
+  | "glossa"
+  | "math"
+  | "meleti"
+  | "eikastika"
+  | "istoria"
+  | "fysika"
+  | "geografia"
+  | "agglika"
+  | "thriskeftika"
+  | "mousiki"
+  | "fa"
+  | "tpe"
+  | "ergastiria"
+  | "allo";
 
 export interface Subject {
   id: SubjectId;
@@ -38,6 +52,35 @@ export interface LessonSlot {
   taughtNote: string;
   carriedFromId?: string;
   carriedToId?: string;
+}
+
+export type BlockKind = "duty" | "free" | "meeting";
+
+/** Non-teaching parts of the day from the school timetable: παιδονομία, κενά, συσκέψεις. */
+export interface TimeBlock {
+  id: string;
+  date: ISODate;
+  start: HHMM;
+  end: HHMM;
+  kind: BlockKind;
+  label: string;
+}
+
+export interface TimetableEntry {
+  id: string;
+  weekday: number; // 1 = Monday … 5 = Friday
+  start: HHMM;
+  end: HHMM;
+  kind: "lesson" | BlockKind;
+  classId?: string;
+  subjectId?: SubjectId;
+  label: string;
+}
+
+export interface Profile {
+  displayName: string;
+  schoolName: string;
+  onboarded: boolean;
 }
 
 export interface AttendanceRecord {
@@ -83,8 +126,10 @@ export interface FileMeta {
   name: string;
   size: number;
   type: string;
-  /** Key in IndexedDB holding the uploaded blob; absent for seed/demo files. */
+  /** Key in IndexedDB holding the uploaded blob (demo mode). */
   blobKey?: string;
+  /** Path in Supabase Storage (signed-in mode). */
+  path?: string;
 }
 
 export interface Material {

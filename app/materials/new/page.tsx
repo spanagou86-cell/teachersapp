@@ -92,7 +92,7 @@ function Wizard() {
   const [drag, setDrag] = useState(false);
 
   const [kind, setKind] = useState<Exclude<MaterialKind, "file">>("worksheet");
-  const [classId, setClassId] = useState(slot?.classId ?? "d1");
+  const [classId, setClassId] = useState(slot?.classId ?? classes[0]?.id ?? "");
   const [subjectId, setSubjectId] = useState<SubjectId>(slot?.subjectId ?? "math");
   const [level, setLevel] = useState<Level>("standard");
   const [withSolutions, setWithSolutions] = useState(true);

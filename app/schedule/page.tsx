@@ -1,14 +1,15 @@
 "use client";
 
 import clsx from "clsx";
-import { ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "lucide-react";
+import { CalendarCog, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { LessonRow, StatusPill } from "@/components/lesson";
+import { DayList, StatusPill } from "@/components/lesson";
+import { KIND_LABEL } from "@/lib/timetable";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { SUBJECT_STYLE } from "@/components/subject";
-import { Button, Card, IconButton } from "@/components/ui";
-import { addDays, dayMonth, dayName, dayOfMonth, dayShort, DEMO_TODAY, shortDate, startOfWeek, weekDates } from "@/lib/dates";
+import { Button, ButtonLink, Card, IconButton } from "@/components/ui";
+import { addDays, dayMonth, dayName, dayOfMonth, dayShort, shortDate, startOfWeek, weekDates } from "@/lib/dates";
 import { slotsOn } from "@/lib/schedule";
 import { useApp } from "@/lib/store";
 
@@ -16,14 +17,16 @@ export default function SchedulePage() {
   const slots = useApp((s) => s.slots);
   const subjects = useApp((s) => s.subjects);
   const classes = useApp((s) => s.classes);
-  const [monday, setMonday] = useState(startOfWeek(DEMO_TODAY));
-  const [day, setDay] = useState(DEMO_TODAY);
+  const today = useApp((s) => s.today);
+  const blocks = useApp((s) => s.blocks);
+  const [monday, setMonday] = useState(startOfWeek(today));
+  const [day, setDay] = useState(today);
   const dates = weekDates(monday);
-  const isThisWeek = monday === startOfWeek(DEMO_TODAY);
+  const isThisWeek = monday === startOfWeek(today);
   const moveWeek = (n: number) => {
-    const m = addDays(monday, n * 7);
+    const m = n === 0 ? startOfWeek(today) : addDays(monday, n * 7);
     setMonday(m);
-    setDay(n === 0 ? DEMO_TODAY : m);
+    setDay(n === 0 ? today : m);
   };
 
   const weekSlots = slots.filter((s) => s.date >= dates[0] && s.date <= dates[4]);
@@ -36,6 +39,9 @@ export default function SchedulePage() {
         subtitle={`${shortDate(dates[0])} – ${shortDate(dates[4])} · ${weekSlots.length} μαθήματα${done ? ` · ${done} ολοκληρώθηκαν` : ""}`}
         actions={
           <div className="flex items-center gap-1">
+            <ButtonLink href="/settings/timetable" variant="secondary" className="mr-2 h-9">
+              <CalendarCog className="size-4" /> Ωρολόγιο
+            </ButtonLink>
             <IconButton label="Προηγούμενη εβδομάδα" onClick={() => moveWeek(-1)} className="border border-line bg-surface">
               <ChevronLeft className="size-5" />
             </IconButton>
@@ -71,25 +77,20 @@ export default function SchedulePage() {
         <h2 className="mb-2 font-bold">
           {dayName(day)}, {dayMonth(day)}
         </h2>
-        <div className="space-y-2">
-          {slotsOn(slots, day).map((s) => (
-            <LessonRow key={s.id} slot={s} compact />
-          ))}
-          {slotsOn(slots, day).length === 0 && <p className="py-8 text-center text-sm text-muted">Δεν υπάρχουν μαθήματα.</p>}
-        </div>
+        <DayList date={day} compact empty={<p className="py-8 text-center text-sm text-muted">Δεν υπάρχουν μαθήματα.</p>} />
       </div>
 
       {/* Desktop: week grid */}
       <Card className="hidden overflow-hidden lg:block">
         <div className="grid grid-cols-5 divide-x divide-line-2">
           {dates.map((d) => {
-            const today = d === DEMO_TODAY;
+            const isToday = d === today;
             return (
-              <div key={d} className={clsx("min-h-[460px]", today && "bg-brand-50/50")}>
+              <div key={d} className={clsx("min-h-[460px]", isToday && "bg-brand-50/50")}>
                 <div className="flex items-baseline gap-2 border-b border-line-2 px-3 py-3">
-                  <span className={clsx("text-xs font-bold tracking-wide", today ? "text-brand" : "text-muted")}>{dayShort(d)}</span>
-                  <span className={clsx("text-xl font-extrabold", today ? "text-brand" : "text-ink")}>{dayOfMonth(d)}</span>
-                  {today && <span className="ml-auto rounded-md bg-brand px-1.5 py-0.5 text-[10px] font-bold text-white">ΣΗΜΕΡΑ</span>}
+                  <span className={clsx("text-xs font-bold tracking-wide", isToday ? "text-brand" : "text-muted")}>{dayShort(d)}</span>
+                  <span className={clsx("text-xl font-extrabold", isToday ? "text-brand" : "text-ink")}>{dayOfMonth(d)}</span>
+                  {isToday && <span className="ml-auto rounded-md bg-brand px-1.5 py-0.5 text-[10px] font-bold text-white">ΣΗΜΕΡΑ</span>}
                 </div>
                 <div className="space-y-2 p-2">
                   {slotsOn(slots, d).map((s) => {
@@ -126,6 +127,20 @@ export default function SchedulePage() {
                       </Link>
                     );
                   })}
+                  {blocks
+                    .filter((b) => b.date === d)
+                    .map((b) => (
+                      <div
+                        key={b.id}
+                        className={clsx(
+                          "rounded-xl border px-2.5 py-1.5 text-xs",
+                          b.kind === "duty" ? "border-amber-100 bg-amber-50" : b.kind === "meeting" ? "border-info-50 bg-info-50" : "border-dashed border-line text-muted",
+                        )}
+                      >
+                        <span className="font-semibold tabular-nums">{b.start}–{b.end}</span> · {KIND_LABEL[b.kind]}
+                        {b.label && ` · ${b.label}`}
+                      </div>
+                    ))}
                 </div>
               </div>
             );

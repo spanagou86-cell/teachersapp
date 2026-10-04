@@ -5,13 +5,14 @@ import { Bell, BookOpen, ChevronDown, Crown, FileUp, Info, Plus, Search, Sparkle
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { DEMO_TODAY, DEMO_NOW, shortDate, timeToMin } from "@/lib/dates";
+import { shortDate } from "@/lib/dates";
 import { useApp } from "@/lib/store";
-import { useHydrated } from "@/lib/store/hooks";
+import { isBarePath, useSession } from "@/lib/store/session";
 import { Avatar } from "../ui";
 import { Toaster } from "../toast";
 import { UploadTrigger } from "../upload";
 import { SubjectIcon } from "../subject";
+import { needsLog, useClock } from "../lesson";
 import { isActive, MOBILE_NAV, SIDEBAR_NAV } from "./nav";
 
 export function Logo({ className }: { className?: string }) {
@@ -25,13 +26,20 @@ export function Logo({ className }: { className?: string }) {
 
 function Sidebar() {
   const pathname = usePathname();
+  const profile = useApp((s) => s.profile);
+  const mode = useApp((s) => s.mode);
+  const syncing = useApp((s) => s.syncing);
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface/80 px-4 py-6 backdrop-blur lg:flex">
-      <Logo className="px-2" />
+      <div className="flex items-center justify-between px-2">
+        <Logo />
+        {mode === "cloud" && (
+          <span title={syncing ? "Αποθήκευση…" : "Όλα αποθηκεύτηκαν"} className={clsx("size-2 rounded-full", syncing ? "animate-pulse-soft bg-amber" : "bg-brand-500")} />
+        )}
+      </div>
       <div className="mt-6 flex h-11 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium text-ink-2">
         <School className="size-4 text-muted" />
-        <span className="flex-1">Δημοτικό σχολείο</span>
-        <ChevronDown className="size-4 text-muted" />
+        <span className="flex-1 truncate">{profile.schoolName || "Το σχολείο μου"}</span>
       </div>
       <nav className="mt-5 flex flex-col gap-1">
         {SIDEBAR_NAV.map(({ href, label, Icon }) => {
@@ -61,10 +69,10 @@ function Sidebar() {
           </span>
         </Link>
         <Link href="/about" className="flex items-center gap-3 rounded-xl border-t border-line px-2 pt-4 hover:opacity-80">
-          <Avatar name="Σπύρος Π" seed={3} />
-          <span className="flex-1">
-            <span className="block text-sm font-semibold">Σπύρος</span>
-            <span className="block text-xs text-muted">Εκπαιδευτικός</span>
+          <Avatar name={profile.displayName || "?"} seed={3} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold">{profile.displayName || "Λογαριασμός"}</span>
+            <span className="block truncate text-xs text-muted">{mode === "demo" ? "Επίδειξη" : profile.schoolName || "Εκπαιδευτικός"}</span>
           </span>
           <Info className="size-4 text-muted" />
         </Link>
@@ -82,6 +90,7 @@ function SearchBox() {
   const slots = useApp((s) => s.slots);
   const students = useApp((s) => s.students);
   const classes = useApp((s) => s.classes);
+  const today = useApp((s) => s.today);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -105,7 +114,7 @@ function SearchBox() {
         out.push({ key: m.id, href: `/materials/${m.id}`, title: m.title, sub: "Υλικό", icon: <SubjectIcon id={m.subjectId} size="sm" /> });
     const seen = new Set<string>();
     for (const s of slots)
-      if (s.date >= DEMO_TODAY && norm(s.topic).includes(term) && !seen.has(s.topic)) {
+      if (s.date >= today && norm(s.topic).includes(term) && !seen.has(s.topic)) {
         seen.add(s.topic);
         out.push({ key: s.id, href: `/lessons/${s.id}`, title: s.topic, sub: `Μάθημα · ${shortDate(s.date)} ${s.start}`, icon: <SubjectIcon id={s.subjectId} size="sm" /> });
       }
@@ -119,7 +128,7 @@ function SearchBox() {
           icon: <Avatar name={`${st.firstName} ${st.lastName}`} size="sm" />,
         });
     return out.slice(0, 8);
-  }, [q, materials, slots, students, classes]);
+  }, [q, materials, slots, students, classes, today]);
 
   return (
     <div className="relative max-w-2xl flex-1">
@@ -173,6 +182,7 @@ function SearchBox() {
 }
 
 function CreateMenu() {
+  const firstClass = useApp((s) => s.classes[0]?.id);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -200,7 +210,7 @@ function CreateMenu() {
           <UploadTrigger className={item}>
             <FileUp className="size-4 text-brand" /> Ανέβασμα αρχείου
           </UploadTrigger>
-          <Link href="/classes/d1?tab=notes" className={item}>
+          <Link href={firstClass ? `/classes/${firstClass}?tab=notes` : "/classes"} className={item}>
             <StickyNote className="size-4 text-brand" /> Σημείωση τάξης
           </Link>
         </div>
@@ -212,9 +222,8 @@ function CreateMenu() {
 function Notifications() {
   const slots = useApp((s) => s.slots);
   const [open, setOpen] = useState(false);
-  const pending = slots.filter(
-    (s) => s.status === "planned" && (s.date < DEMO_TODAY || (s.date === DEMO_TODAY && timeToMin(s.end) <= timeToMin(DEMO_NOW))),
-  );
+  const clock = useClock();
+  const pending = slots.filter((s) => needsLog(s, clock));
   return (
     <div className="relative">
       <button
@@ -295,13 +304,21 @@ function Skeleton() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const hydrated = useHydrated();
+  const ready = useSession();
+  const pathname = usePathname();
+  if (isBarePath(pathname))
+    return (
+      <div className="min-h-dvh">
+        {ready ? children : <div className="mx-auto max-w-md p-6"><Skeleton /></div>}
+        <Toaster />
+      </div>
+    );
   return (
     <div className="min-h-dvh">
       <Sidebar />
       <div className="lg:pl-64">
         <TopBar />
-        <main className="mx-auto max-w-6xl px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-12 lg:pt-2">{hydrated ? children : <Skeleton />}</main>
+        <main className="mx-auto max-w-6xl px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-12 lg:pt-2">{ready ? children : <Skeleton />}</main>
       </div>
       <BottomNav />
       <Toaster />

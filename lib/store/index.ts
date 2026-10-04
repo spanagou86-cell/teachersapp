@@ -2,14 +2,32 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { toast } from "@/components/toast";
 import { buildBlocks } from "../ai/templates";
-import { DEMO_TODAY } from "../dates";
+import { addDays, DEMO_NOW, DEMO_TODAY } from "../dates";
 import { uid } from "../id";
 import { applyChange, restoreOriginal, restoreVersion } from "../materials";
 import { carryOverLesson, undoCarryOver, type CarryOverResult, type TimeWindow } from "../schedule";
 import { seed, type SeedState } from "../seed";
-import type { Block, FileMeta, LessonSlot, Level, Material, MaterialKind, SubjectId } from "../types";
+import { materialize } from "../timetable";
+import type {
+  Block,
+  ClassGroup,
+  FileMeta,
+  HHMM,
+  ISODate,
+  LessonSlot,
+  Level,
+  Material,
+  MaterialKind,
+  Profile,
+  Student,
+  SubjectId,
+  TimeBlock,
+  TimetableEntry,
+} from "../types";
 import { deleteBlob } from "./blobs";
+import { loadAll, remote } from "./remote";
 
 export interface NewMaterialInput {
   title: string;
@@ -22,8 +40,37 @@ export interface NewMaterialInput {
   blocks?: Block[];
 }
 
+/**
+ * demo  — sample data kept in this browser, fixed demo clock (no account).
+ * cloud — the signed-in teacher's data from Supabase, real clock.
+ */
+export type Mode = "demo" | "cloud";
+
+interface Session {
+  mode: Mode | null;
+  userId?: string;
+  email?: string;
+  profile: Profile;
+  today: ISODate;
+  now: HHMM;
+  syncing: boolean;
+}
+
 interface Actions {
+  startDemo: () => void;
+  loadCloud: (userId: string, email?: string) => Promise<void>;
+  leave: () => void;
+  tick: () => void;
   reset: () => void;
+
+  updateProfile: (p: Partial<Profile>) => void;
+  addClass: (c: Omit<ClassGroup, "id">) => string;
+  updateClass: (c: ClassGroup) => void;
+  deleteClass: (id: string) => void;
+  addStudents: (classId: string, names: string[]) => void;
+  renameStudent: (s: Student) => void;
+  removeStudent: (id: string) => void;
+  saveTimetable: (entries: TimetableEntry[]) => Promise<void>;
 
   toggleTask: (id: string) => void;
   addTask: (text: string) => void;
@@ -50,133 +97,383 @@ interface Actions {
   deleteNote: (id: string) => void;
 }
 
-export type AppState = SeedState & Actions;
+export type AppState = SeedState & Session & Actions;
 
 const attendanceKey = (classId: string, date: string) => `${classId}|${date}`;
 
+/** Wall clock in Greece, independent of the device's time zone. */
+export function athensClock(d = new Date()): { today: ISODate; now: HHMM } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Athens",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(d)
+      .map((p) => [p.type, p.value]),
+  );
+  return { today: `${parts.year}-${parts.month}-${parts.day}`, now: `${parts.hour}:${parts.minute}` };
+}
+
+const EMPTY: Omit<SeedState, "subjects"> = {
+  classes: [],
+  students: [],
+  slots: [],
+  materials: [],
+  attendance: {},
+  tasks: [],
+  notes: [],
+  timetable: [],
+  blocks: [],
+};
+
+const noteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Resolves when every queued database write has finished. */
+export let flushWrites: () => Promise<unknown> = () => Promise.resolve();
+
 export const useApp = create<AppState>()(
   persist(
-    (set, get) => ({
-      ...seed(),
+    (set, get) => {
+      /** In cloud mode, mirror a local change to the database; on failure, reload the truth. */
+      // Writes run one after another, in the order the teacher made them
+      // (a class must exist before its students, a lesson before its links).
+      let queue: Promise<unknown> = Promise.resolve();
+      let pending = 0;
+      const sync = (write: () => Promise<unknown>) => {
+        if (get().mode !== "cloud") return;
+        pending++;
+        set({ syncing: true });
+        queue = queue
+          .then(write)
+          .catch((err) => {
+            console.error(err);
+            toast("Δεν αποθηκεύτηκε. Έλεγξε τη σύνδεση.", { label: "Ανανέωση", run: () => void reload() });
+          })
+          .finally(() => {
+            if (--pending === 0) set({ syncing: false });
+          });
+      };
+      flushWrites = () => queue;
+      const reload = async () => {
+        const { userId, email } = get();
+        if (userId) await get().loadCloud(userId, email);
+      };
 
-      reset: () => set(seed()),
+      return {
+        ...seed(),
+        mode: null,
+        profile: { displayName: "Σπύρος", schoolName: "Δημοτικό σχολείο", onboarded: true },
+        today: DEMO_TODAY,
+        now: DEMO_NOW,
+        syncing: false,
 
-      toggleTask: (id) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) })),
-      addTask: (text) => set((s) => ({ tasks: [...s.tasks, { id: uid("t"), text, done: false }] })),
-      removeTask: (id) => set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) })),
+        startDemo: () =>
+          set({ ...seed(), mode: "demo", userId: undefined, email: undefined, today: DEMO_TODAY, now: DEMO_NOW, profile: { displayName: "Σπύρος", schoolName: "Δημοτικό σχολείο", onboarded: true } }),
+        loadCloud: async (userId, email) => {
+          const clock = athensClock();
+          const data = await loadAll(userId, clock.today);
+          set({ ...data, mode: "cloud", userId, email, ...clock });
+        },
+        leave: () => set({ ...seed(), mode: null, userId: undefined, email: undefined, today: DEMO_TODAY, now: DEMO_NOW }),
+        tick: () => {
+          if (get().mode === "cloud") set(athensClock());
+        },
+        reset: () => {
+          if (get().mode === "demo") set(seed());
+        },
 
-      toggleAbsent: (classId, date, studentId) =>
-        set((s) => {
+        updateProfile: (p) => {
+          set((s) => ({ profile: { ...s.profile, ...p } }));
+          sync(() => remote.updateProfile(get().userId!, p));
+        },
+        addClass: (c) => {
+          const cls = { ...c, id: uid() };
+          set((s) => ({ classes: [...s.classes, cls] }));
+          sync(() => remote.upsertClass(cls));
+          return cls.id;
+        },
+        updateClass: (c) => {
+          set((s) => ({ classes: s.classes.map((x) => (x.id === c.id ? c : x)) }));
+          sync(() => remote.upsertClass(c));
+        },
+        deleteClass: (id) => {
+          set((s) => ({
+            classes: s.classes.filter((c) => c.id !== id),
+            students: s.students.filter((x) => x.classId !== id),
+            slots: s.slots.filter((x) => x.classId !== id),
+            materials: s.materials.filter((x) => x.classId !== id),
+            timetable: s.timetable.filter((x) => x.classId !== id),
+          }));
+          sync(() => remote.deleteClass(id));
+        },
+        addStudents: (classId, names) => {
+          const list: Student[] = names
+            .map((n) => n.trim().replace(/\s+/g, " "))
+            .filter(Boolean)
+            .map((n) => {
+              const [first, ...rest] = n.split(" ");
+              return { id: uid(), classId, firstName: first.slice(0, 60), lastName: rest.join(" ").slice(0, 60) };
+            });
+          if (!list.length) return;
+          set((s) => ({ students: [...s.students, ...list] }));
+          sync(() => remote.insertStudents(list));
+        },
+        renameStudent: (st) => {
+          set((s) => ({ students: s.students.map((x) => (x.id === st.id ? st : x)) }));
+          sync(() => remote.updateStudent(st));
+        },
+        removeStudent: (id) => {
+          set((s) => ({ students: s.students.filter((x) => x.id !== id) }));
+          sync(() => remote.deleteStudent(id));
+        },
+        saveTimetable: async (entries) => {
+          const { mode, today, timetable: previous } = get();
+          if (mode === "cloud") {
+            await flushWrites();
+            set({ syncing: true });
+            try {
+              await remote.saveTimetable(entries, previous, today);
+              await remote.updateProfile(get().userId!, { onboarded: true });
+              await reload();
+            } finally {
+              set({ syncing: false });
+            }
+            return;
+          }
+          // Demo: rebuild the coming three weeks locally from the new template.
+          const keep = (s: LessonSlot) => s.date < today || s.status !== "planned" || s.taughtNote || s.materialIds.length || s.carriedFromId;
+          const occ = materialize(entries, today, addDays(today, 20));
+          set((s) => ({
+            timetable: entries,
+            slots: [
+              ...s.slots.filter(keep),
+              ...occ
+                .filter((o) => o.entry.kind === "lesson" && !s.slots.some((x) => keep(x) && x.date === o.date && x.start === o.entry.start))
+                .map((o) => ({
+                  id: uid(),
+                  date: o.date,
+                  start: o.entry.start,
+                  end: o.entry.end,
+                  classId: o.entry.classId!,
+                  subjectId: o.entry.subjectId!,
+                  topic: "",
+                  materialIds: [],
+                  status: "planned" as const,
+                  taughtNote: "",
+                })),
+            ],
+            blocks: [
+              ...s.blocks.filter((b) => b.date < today),
+              ...occ
+                .filter((o) => o.entry.kind !== "lesson")
+                .map((o): TimeBlock => ({ id: uid(), date: o.date, start: o.entry.start, end: o.entry.end, kind: o.entry.kind as TimeBlock["kind"], label: o.entry.label })),
+            ],
+          }));
+        },
+
+        toggleTask: (id) => {
+          set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) }));
+          const t = get().tasks.find((x) => x.id === id);
+          if (t) sync(() => remote.upsertTask(t));
+        },
+        addTask: (text) => {
+          const t = { id: uid(), text: text.slice(0, 200), done: false };
+          set((s) => ({ tasks: [...s.tasks, t] }));
+          sync(() => remote.upsertTask(t));
+        },
+        removeTask: (id) => {
+          set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
+          sync(() => remote.deleteTask(id));
+        },
+
+        toggleAbsent: (classId, date, studentId) => {
           const key = attendanceKey(classId, date);
-          const absent = s.attendance[key]?.absentIds ?? [];
-          const absentIds = absent.includes(studentId) ? absent.filter((x) => x !== studentId) : [...absent, studentId];
-          return { attendance: { ...s.attendance, [key]: { absentIds, recordedAt: Date.now() } } };
-        }),
-      markAllPresent: (classId, date) =>
-        set((s) => ({ attendance: { ...s.attendance, [attendanceKey(classId, date)]: { absentIds: [], recordedAt: Date.now() } } })),
+          const absent = get().attendance[key]?.absentIds ?? [];
+          const record = { absentIds: absent.includes(studentId) ? absent.filter((x) => x !== studentId) : [...absent, studentId], recordedAt: Date.now() };
+          set((s) => ({ attendance: { ...s.attendance, [key]: record } }));
+          sync(() => remote.setAttendance(classId, date, record));
+        },
+        markAllPresent: (classId, date) => {
+          const record = { absentIds: [], recordedAt: Date.now() };
+          set((s) => ({ attendance: { ...s.attendance, [attendanceKey(classId, date)]: record } }));
+          sync(() => remote.setAttendance(classId, date, record));
+        },
 
-      updateSlot: (id, patch) => set((s) => ({ slots: s.slots.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
-      attachMaterial: (slotId, materialId) =>
-        set((s) => ({
-          slots: s.slots.map((x) =>
-            x.id === slotId && !x.materialIds.includes(materialId) ? { ...x, materialIds: [...x.materialIds, materialId] } : x,
-          ),
-        })),
-      detachMaterial: (slotId, materialId) =>
-        set((s) => ({
-          slots: s.slots.map((x) => (x.id === slotId ? { ...x, materialIds: x.materialIds.filter((m) => m !== materialId) } : x)),
-        })),
-      carryOver: (slotId, target) => {
-        const result = carryOverLesson(get().slots, slotId, target, uid("l"), DEMO_TODAY);
-        if (result.ok) set({ slots: result.slots });
-        return result;
-      },
-      undoCarryOver: (newSlotId) => set((s) => ({ slots: undoCarryOver(s.slots, newSlotId) })),
+        updateSlot: (id, patch) => {
+          set((s) => ({ slots: s.slots.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+          if (patch.taughtNote !== undefined && Object.keys(patch).length === 1) {
+            // The note is saved as the teacher types; wait for a pause.
+            clearTimeout(noteTimers.get(id));
+            noteTimers.set(
+              id,
+              setTimeout(() => {
+                noteTimers.delete(id);
+                const slot = get().slots.find((x) => x.id === id);
+                if (slot) sync(() => remote.updateSlot(id, { taughtNote: slot.taughtNote }));
+              }, 700),
+            );
+            return;
+          }
+          sync(() => remote.updateSlot(id, patch));
+        },
+        attachMaterial: (slotId, materialId) => {
+          if (get().slots.find((x) => x.id === slotId)?.materialIds.includes(materialId)) return;
+          set((s) => ({ slots: s.slots.map((x) => (x.id === slotId ? { ...x, materialIds: [...x.materialIds, materialId] } : x)) }));
+          sync(() => remote.attach(slotId, materialId));
+        },
+        detachMaterial: (slotId, materialId) => {
+          set((s) => ({ slots: s.slots.map((x) => (x.id === slotId ? { ...x, materialIds: x.materialIds.filter((m) => m !== materialId) } : x)) }));
+          sync(() => remote.detach(slotId, materialId));
+        },
+        carryOver: (slotId, target) => {
+          const { slots, blocks, today } = get();
+          const busy = blocks.filter((b) => b.kind !== "free");
+          const result = carryOverLesson(slots, slotId, target, uid(), today, busy);
+          if (result.ok) {
+            set({ slots: result.slots });
+            const original = result.slots.find((s) => s.id === slotId)!;
+            sync(async () => {
+              await remote.insertSlot(result.newSlot);
+              await remote.updateSlot(slotId, { status: original.status, carriedToId: result.newSlot.id });
+            });
+          }
+          return result;
+        },
+        undoCarryOver: (newSlotId) => {
+          const moved = get().slots.find((s) => s.id === newSlotId);
+          set((s) => ({ slots: undoCarryOver(s.slots, newSlotId) }));
+          if (moved?.carriedFromId) {
+            const from = moved.carriedFromId;
+            sync(async () => {
+              await remote.updateSlot(from, { carriedToId: undefined });
+              await remote.deleteSlot(newSlotId);
+            });
+          }
+        },
 
-      createMaterial: (input) => {
-        const id = uid("m");
-        const now = Date.now();
-        const cls = get().classes.find((c) => c.id === input.classId);
-        const blocks =
-          input.blocks ??
-          buildBlocks({
+        createMaterial: (input) => {
+          const id = uid();
+          const now = Date.now();
+          const cls = get().classes.find((c) => c.id === input.classId);
+          const blocks =
+            input.blocks ??
+            buildBlocks({
+              subjectId: input.subjectId,
+              kind: input.kind,
+              level: input.level,
+              grade: cls?.grade ?? "",
+              hint: `${input.title} ${input.file?.name ?? ""}`,
+              prefix: id.slice(0, 8),
+            });
+          const material: Material = {
+            id,
+            title: input.title,
+            classId: input.classId,
             subjectId: input.subjectId,
             kind: input.kind,
             level: input.level,
-            grade: cls?.grade ?? "",
-            hint: `${input.title} ${input.file?.name ?? ""}`,
-            prefix: id,
-          });
-        const material: Material = {
-          id,
-          title: input.title,
-          classId: input.classId,
-          subjectId: input.subjectId,
-          kind: input.kind,
-          level: input.level,
-          withSolutions: input.withSolutions,
-          blackAndWhite: false,
-          file: input.file,
-          originalBlocks: blocks,
-          blocks,
-          versions: [{ id: uid("v"), at: now, label: input.file ? "Δημιουργία από αρχείο" : "Δημιουργία", blocks }],
-          createdAt: now,
-          updatedAt: now,
-        };
-        set((s) => ({ materials: [material, ...s.materials] }));
-        return id;
-      },
-      changeBlocks: (id, blocks, label) =>
-        set((s) => ({ materials: s.materials.map((m) => (m.id === id ? applyChange(m, blocks, label, uid("v"), Date.now()) : m)) })),
-      restoreVersion: (id, versionId) =>
-        set((s) => ({ materials: s.materials.map((m) => (m.id === id ? restoreVersion(m, versionId, uid("v"), Date.now()) : m)) })),
-      restoreOriginal: (id) =>
-        set((s) => ({ materials: s.materials.map((m) => (m.id === id ? restoreOriginal(m, uid("v"), Date.now()) : m)) })),
-      patchMaterial: (id, patch) =>
-        set((s) => ({ materials: s.materials.map((m) => (m.id === id ? { ...m, ...patch, updatedAt: Date.now() } : m)) })),
-      duplicateMaterial: (id, blocks, suffix) => {
-        const src = get().materials.find((m) => m.id === id);
-        if (!src) return id;
-        const newId = uid("m");
-        const now = Date.now();
-        const copy: Material = {
-          ...src,
-          id: newId,
-          title: `${src.title} ${suffix}`,
-          blocks,
-          originalBlocks: blocks,
-          versions: [{ id: uid("v"), at: now, label: `Αντίγραφο από «${src.title}»`, blocks }],
-          createdAt: now,
-          updatedAt: now,
-        };
-        set((s) => ({ materials: [copy, ...s.materials] }));
-        return newId;
-      },
-      deleteMaterial: (id) => {
-        const m = get().materials.find((x) => x.id === id);
-        const shared = m?.file?.blobKey && get().materials.some((x) => x.id !== id && x.file?.blobKey === m.file?.blobKey);
-        if (m?.file?.blobKey && !shared) void deleteBlob(m.file.blobKey);
-        set((s) => ({
-          materials: s.materials.filter((x) => x.id !== id),
-          slots: s.slots.map((x) => ({ ...x, materialIds: x.materialIds.filter((mid) => mid !== id) })),
-        }));
-      },
+            withSolutions: input.withSolutions,
+            blackAndWhite: false,
+            file: input.file,
+            originalBlocks: blocks,
+            blocks,
+            versions: [{ id: uid(), at: now, label: input.file ? "Δημιουργία από αρχείο" : "Δημιουργία", blocks }],
+            createdAt: now,
+            updatedAt: now,
+          };
+          set((s) => ({ materials: [material, ...s.materials] }));
+          sync(() => remote.insertMaterial(material));
+          return id;
+        },
+        changeBlocks: (id, blocks, label) => {
+          set((s) => ({ materials: s.materials.map((m) => (m.id === id ? applyChange(m, blocks, label, uid(), Date.now()) : m)) }));
+          const m = get().materials.find((x) => x.id === id);
+          if (m) sync(() => remote.saveMaterialChange(m));
+        },
+        restoreVersion: (id, versionId) => {
+          set((s) => ({ materials: s.materials.map((m) => (m.id === id ? restoreVersion(m, versionId, uid(), Date.now()) : m)) }));
+          const m = get().materials.find((x) => x.id === id);
+          if (m) sync(() => remote.saveMaterialChange(m));
+        },
+        restoreOriginal: (id) => {
+          set((s) => ({ materials: s.materials.map((m) => (m.id === id ? restoreOriginal(m, uid(), Date.now()) : m)) }));
+          const m = get().materials.find((x) => x.id === id);
+          if (m) sync(() => remote.saveMaterialChange(m));
+        },
+        patchMaterial: (id, patch) => {
+          set((s) => ({ materials: s.materials.map((m) => (m.id === id ? { ...m, ...patch, updatedAt: Date.now() } : m)) }));
+          sync(() => remote.patchMaterial(id, patch));
+        },
+        duplicateMaterial: (id, blocks, suffix) => {
+          const src = get().materials.find((m) => m.id === id);
+          if (!src) return id;
+          const newId = uid();
+          const now = Date.now();
+          const copy: Material = {
+            ...src,
+            id: newId,
+            title: `${src.title} ${suffix}`,
+            blocks,
+            originalBlocks: blocks,
+            versions: [{ id: uid(), at: now, label: `Αντίγραφο από «${src.title}»`, blocks }],
+            createdAt: now,
+            updatedAt: now,
+          };
+          set((s) => ({ materials: [copy, ...s.materials] }));
+          sync(() => remote.insertMaterial(copy));
+          return newId;
+        },
+        deleteMaterial: (id) => {
+          const m = get().materials.find((x) => x.id === id);
+          if (!m) return;
+          const shared = get().materials.some((x) => x.id !== id && x.file && (x.file.blobKey ?? x.file.path) === (m.file?.blobKey ?? m.file?.path));
+          if (get().mode !== "cloud" && m.file?.blobKey && !shared) void deleteBlob(m.file.blobKey);
+          set((s) => ({
+            materials: s.materials.filter((x) => x.id !== id),
+            slots: s.slots.map((x) => ({ ...x, materialIds: x.materialIds.filter((mid) => mid !== id) })),
+          }));
+          // A version B copy shares the uploaded file; keep it while another material uses it.
+          sync(() => remote.deleteMaterial(shared ? { ...m, file: undefined } : m));
+        },
 
-      addNote: (classId, text) =>
-        set((s) => ({ notes: [{ id: uid("n"), classId, date: DEMO_TODAY, text, createdAt: Date.now() }, ...s.notes] })),
-      deleteNote: (id) => set((s) => ({ notes: s.notes.filter((n) => n.id !== id) })),
-    }),
+        addNote: (classId, text) => {
+          const n = { id: uid(), classId, date: get().today, text: text.slice(0, 2000), createdAt: Date.now() };
+          set((s) => ({ notes: [n, ...s.notes] }));
+          sync(() => remote.addNote(n));
+        },
+        deleteNote: (id) => {
+          set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }));
+          sync(() => remote.deleteNote(id));
+        },
+      };
+    },
     {
       name: "taxi-demo",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({
-        slots: s.slots,
-        materials: s.materials,
-        attendance: s.attendance,
-        tasks: s.tasks,
-        notes: s.notes,
-      }),
+      // Only the demo lives in the browser; a teacher's real data stays in the database.
+      partialize: (s) =>
+        s.mode === "demo"
+          ? { mode: s.mode, slots: s.slots, blocks: s.blocks, timetable: s.timetable, materials: s.materials, attendance: s.attendance, tasks: s.tasks, notes: s.notes, classes: s.classes, students: s.students }
+          : { mode: null },
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as Partial<AppState>;
+        // v1 had no modes: anyone with saved data was using the demo.
+        if (version < 2) return { ...p, mode: p.slots ? "demo" : null } as AppState;
+        return p as AppState;
+      },
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<AppState>;
+        if (p.mode !== "demo") return { ...current, ...EMPTY, mode: null };
+        const s = seed();
+        // Older saves don't have the timetable fields.
+        return { ...current, ...p, timetable: p.timetable ?? s.timetable, blocks: p.blocks ?? s.blocks, classes: p.classes ?? s.classes, students: p.students ?? s.students };
+      },
     },
   ),
 );

@@ -4,15 +4,15 @@ import clsx from "clsx";
 import { ArrowRight, CalendarClock, Camera, ChevronRight, Clock, CloudUpload, Crown, NotebookPen, Plus, Trash2, UserCheck, Users } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { needsLog, LessonRow } from "@/components/lesson";
+import { DayList, needsLog, useClock } from "@/components/lesson";
 import { MobileBrandBar } from "@/components/shell/PageHeader";
 import { FileBadge, SUBJECT_STYLE } from "@/components/subject";
 import { toast } from "@/components/toast";
 import { Button, ButtonLink, Card, cx, EmptyState, inputClass, Select, Sheet } from "@/components/ui";
 import { UploadTrigger } from "@/components/upload";
-import { dayOfMonth, dayShort, DEMO_NOW, DEMO_TODAY, longDate, relativeTime, startOfWeek, weekDates } from "@/lib/dates";
+import { dayName, dayOfMonth, dayShort, longDate, relativeTime, startOfWeek, timeToMin, weekDates } from "@/lib/dates";
 import { fileKindLabel, formatBytes } from "@/lib/materials";
-import { nextLesson, slotsOn } from "@/lib/schedule";
+import { schoolDayFor, slotsOn, upcomingLesson } from "@/lib/schedule";
 import { useApp } from "@/lib/store";
 import type { LessonSlot } from "@/lib/types";
 
@@ -43,7 +43,7 @@ function PaperIllustration() {
   );
 }
 
-function NextLessonHero({ slot }: { slot: LessonSlot }) {
+function NextLessonHero({ slot, when }: { slot: LessonSlot; when?: string }) {
   const subject = useApp((s) => s.subjects.find((x) => x.id === slot.subjectId));
   const cls = useApp((s) => s.classes.find((x) => x.id === slot.classId));
   const Icon = SUBJECT_STYLE[slot.subjectId].Icon;
@@ -52,7 +52,7 @@ function NextLessonHero({ slot }: { slot: LessonSlot }) {
       <PaperIllustration />
       <div className="relative flex items-start gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/70 lg:text-brand-500">Για το επόμενο μάθημα</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/70 lg:text-brand-500">Για το επόμενο μάθημα{when && ` · ${when}`}</p>
           <h2 className="mt-1.5 text-2xl font-extrabold tracking-tight lg:text-[28px] lg:text-brand-700">
             {subject?.name}
             <span className="hidden lg:inline"> · {cls?.grade}</span>
@@ -265,11 +265,19 @@ function RecentMaterial() {
 export default function TodayPage() {
   const slots = useApp((s) => s.slots);
   const tasks = useApp((s) => s.tasks);
-  const [day, setDay] = useState(DEMO_TODAY);
+  const mode = useApp((s) => s.mode);
+  const profile = useApp((s) => s.profile);
+  const timetable = useApp((s) => s.timetable);
+  const firstClass = useApp((s) => s.classes[0]?.id);
+  const clock = useClock();
+  const { today, now } = clock;
+  const schoolDay = schoolDayFor(today);
+  const [day, setDay] = useState(schoolDay);
   const [noteOpen, setNoteOpen] = useState(false);
-  const next = nextLesson(slots, DEMO_TODAY, DEMO_NOW);
-  const toLog = slotsOn(slots, DEMO_TODAY).filter(needsLog);
-  const daySlots = slotsOn(slots, day);
+  const next = upcomingLesson(slots, today, now);
+  const toLog = slotsOn(slots, today).filter((s) => needsLog(s, clock));
+  const firstName = profile.displayName.split(" ")[0];
+  const greeting = timeToMin(now) < timeToMin("12:00") ? "Καλημέρα" : "Καλησπέρα";
   const meeting = tasks.find((t) => t.time && !t.done);
   const quick = "flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-line bg-surface py-3.5 text-sm font-medium text-ink-2 shadow-card hover:bg-line-2";
 
@@ -277,13 +285,17 @@ export default function TodayPage() {
     <div>
       <MobileBrandBar />
       <header className="mb-4 lg:mb-6">
-        <h1 className="text-[28px] font-extrabold tracking-tight text-brand-700 sm:text-[40px] sm:leading-tight">Καλημέρα, Σπύρο.</h1>
+        <h1 className="text-[28px] font-extrabold tracking-tight text-brand-700 sm:text-[40px] sm:leading-tight">{greeting}
+          {firstName && `, ${mode === "demo" ? "Σπύρο" : firstName}`}.
+        </h1>
         <p className="mt-0.5 text-[15px] text-muted sm:text-lg">
-          {longDate(DEMO_TODAY)}
+          {longDate(today)}
           <span className="hidden sm:inline"> · Η μέρα σου, οργανωμένη.</span>
-          <span className="ml-2 inline-flex items-center gap-1 rounded-md bg-line-2 px-1.5 py-0.5 align-middle text-xs font-semibold text-muted" title="Το πρωτότυπο τρέχει σε σταθερή ώρα επίδειξης">
-            <CalendarClock className="size-3" /> demo {DEMO_NOW}
-          </span>
+          {mode === "demo" && (
+            <span className="ml-2 inline-flex items-center gap-1 rounded-md bg-line-2 px-1.5 py-0.5 align-middle text-xs font-semibold text-muted" title="Η επίδειξη τρέχει σε σταθερή ώρα">
+              <CalendarClock className="size-3" /> demo {now}
+            </span>
+          )}
         </p>
       </header>
 
@@ -295,11 +307,26 @@ export default function TodayPage() {
       </Link>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-5 lg:col-span-2">{next && <NextLessonHero slot={next} />}</div>
+        <div className="space-y-5 lg:col-span-2">
+          {next ? (
+            <NextLessonHero slot={next} when={next.date === today ? undefined : dayName(next.date)} />
+          ) : (
+            !timetable.length && (
+              <Card className="flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center">
+                <CalendarClock className="size-8 text-brand" />
+                <div className="flex-1">
+                  <p className="font-bold">Πρόσθεσε το ωρολόγιο πρόγραμμά σου</p>
+                  <p className="text-sm text-muted">Μαθήματα, παιδονομίες και κενά. Μετά θα βλέπεις εδώ κάθε μέρα σου.</p>
+                </div>
+                <ButtonLink href="/settings/timetable">Ωρολόγιο πρόγραμμα</ButtonLink>
+              </Card>
+            )
+          )}
+        </div>
 
         <div className="min-w-0 space-y-5">
           <div className="grid grid-cols-3 gap-3 lg:hidden">
-            <Link href={`/classes/${next?.classId ?? "d1"}`} className={quick}>
+            <Link href={next ? `/classes/${next.classId}` : "/classes"} className={quick}>
               <UserCheck className="size-6 text-ink-2" strokeWidth={1.6} /> Απουσίες
             </Link>
             <button type="button" className={quick} onClick={() => setNoteOpen(true)}>
@@ -321,7 +348,7 @@ export default function TodayPage() {
                 <span className="hidden lg:inline">Το πρόγραμμά σου</span>
               </h2>
               <div className="flex gap-1.5" role="tablist" aria-label="Ημέρα">
-                {weekDates(startOfWeek(DEMO_TODAY)).map((d) => (
+                {weekDates(startOfWeek(schoolDay)).map((d) => (
                   <button
                     key={d}
                     type="button"
@@ -339,15 +366,10 @@ export default function TodayPage() {
                 ))}
               </div>
             </div>
-            {daySlots.length ? (
-              <div className="space-y-2">
-                {daySlots.map((s) => (
-                  <LessonRow key={s.id} slot={s} />
-                ))}
-              </div>
-            ) : (
-              <EmptyState icon={<CalendarClock className="size-6" />} title="Κανένα μάθημα" text="Δεν υπάρχουν μαθήματα αυτή τη μέρα." />
-            )}
+            <DayList
+              date={day}
+              empty={<EmptyState icon={<CalendarClock className="size-6" />} title="Κανένα μάθημα" text="Δεν υπάρχουν μαθήματα αυτή τη μέρα." />}
+            />
           </Card>
 
           {meeting && (
@@ -379,7 +401,7 @@ export default function TodayPage() {
           </ButtonLink>
         </div>
       </div>
-      <QuickNoteSheet open={noteOpen} onClose={() => setNoteOpen(false)} defaultClass={next?.classId ?? "d1"} />
+      <QuickNoteSheet open={noteOpen} onClose={() => setNoteOpen(false)} defaultClass={next?.classId ?? firstClass ?? ""} />
     </div>
   );
 }

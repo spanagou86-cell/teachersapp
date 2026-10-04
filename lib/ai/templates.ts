@@ -58,7 +58,9 @@ const GRAPH_EXERCISES = (p: string): Block[] => [
   }),
 ];
 
-const BANK: Record<SubjectId, { topic: string; intro: string; exercises: (p: string) => Block[]; summary: string[] }> = {
+type Bank = { topic: string; intro: string; exercises: (p: string) => Block[]; summary: string[] };
+
+const BANK: Partial<Record<SubjectId, Bank>> = {
   math: {
     topic: "Πράξεις και προβλήματα",
     intro: "Λύσε τις ασκήσεις. Γράψε τις πράξεις σου στον χώρο που υπάρχει.",
@@ -165,8 +167,31 @@ const BANK: Record<SubjectId, { topic: string; intro: string; exercises: (p: str
   },
 };
 
+/** Subjects without their own demo content get generic exercises. */
+const GENERIC: Bank = {
+  topic: "Επανάληψη",
+  intro: "Απάντησε στις ερωτήσεις με δικά σου λόγια.",
+  exercises: (p) => [
+    ex(`${p}-e1`, {
+      basic: ["Γράψε μία λέξη που θυμάσαι από το σημερινό μάθημα."],
+      standard: ["Γράψε τρία πράγματα που έμαθες σήμερα."],
+      advanced: ["Εξήγησε με δικά σου λόγια το πιο σημαντικό που έμαθες σήμερα και γιατί."],
+      b: ["Γράψε τρεις ερωτήσεις για το σημερινό μάθημα."],
+    }, 3),
+    ex(`${p}-e2`, {
+      basic: ["Ζωγράφισε κάτι από το σημερινό μάθημα."],
+      standard: ["Τι θα ήθελες να μάθεις περισσότερο για αυτό το θέμα;"],
+      advanced: ["Σύνδεσε το σημερινό θέμα με κάτι από την καθημερινή σου ζωή."],
+      b: ["Ποιο ήταν το πιο δύσκολο σημείο σήμερα;"],
+    }, 3),
+  ],
+  summary: ["Σύντομη περίληψη του μαθήματος.", "Κύρια σημεία για επανάληψη στο σπίτι."],
+};
+
+const bankFor = (id: SubjectId): Bank => BANK[id] ?? GENERIC;
+
 export function bankTopic(subjectId: SubjectId): string {
-  return BANK[subjectId].topic;
+  return bankFor(subjectId).topic;
 }
 
 export interface BuildInput {
@@ -180,7 +205,7 @@ export interface BuildInput {
 }
 
 export function buildBlocks({ subjectId, kind, level, grade, hint, prefix: p }: BuildInput): Block[] {
-  const bank = BANK[subjectId];
+  const bank = bankFor(subjectId);
   const isGraph = subjectId === "math" && /γραφ|graph|chart|ραβδ/i.test(hint);
   const topic = isGraph ? "Διαβάζω μια γραφική παράσταση" : bank.topic;
   const exercises = (isGraph ? GRAPH_EXERCISES(p) : bank.exercises(p)).map((b) => withLevel(b, level));

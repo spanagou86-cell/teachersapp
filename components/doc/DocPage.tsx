@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { ArrowDown, ArrowUp, BookOpen, GripVertical, Pencil, Trash2, Target } from "lucide-react";
 import { useState } from "react";
 import { buttonClass, cx, inputClass } from "../ui";
+import { SUBJECTS } from "@/lib/seed";
 import type { Block, Material } from "@/lib/types";
 
 const BAR_COLORS = ["#ef8f9d", "#f6d36b", "#f4a259", "#5f9fdc", "#9b7fd6"];
@@ -105,7 +106,7 @@ export function DocPage({
   className?: string;
 }) {
   const [editingId, setEditingId] = useState<string>();
-  const subject = { glossa: "Γλώσσα", math: "Μαθηματικά", meleti: "Μελέτη Περιβάλλοντος", eikastika: "Εικαστικά" }[material.subjectId];
+  const subject = SUBJECTS.find((x) => x.id === material.subjectId)?.name;
   const isSheet = material.kind === "worksheet" || material.kind === "quiz";
   let exNo = 0;
 

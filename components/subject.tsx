@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { BookOpen, Calculator, FileImage, FileText, FileType2, Leaf, Palette } from "lucide-react";
+import { Atom, BookOpen, Calculator, Church, Dumbbell, FileImage, FileText, FileType2, Globe2, Landmark, Languages, Leaf, Monitor, Music, Palette, Puzzle, Shapes } from "lucide-react";
 import { fileKindLabel } from "@/lib/materials";
 import type { FileMeta, SubjectId } from "@/lib/types";
 
@@ -8,6 +8,16 @@ export const SUBJECT_STYLE: Record<SubjectId, { bar: string; soft: string; text:
   math: { bar: "bg-math", soft: "bg-math-50", text: "text-amber", Icon: Calculator },
   meleti: { bar: "bg-meleti", soft: "bg-meleti-50", text: "text-meleti", Icon: Leaf },
   eikastika: { bar: "bg-eikastika", soft: "bg-eikastika-50", text: "text-eikastika", Icon: Palette },
+  istoria: { bar: "bg-amber", soft: "bg-amber-50", text: "text-amber", Icon: Landmark },
+  fysika: { bar: "bg-brand-500", soft: "bg-brand-50", text: "text-brand-500", Icon: Atom },
+  geografia: { bar: "bg-info", soft: "bg-info-50", text: "text-info", Icon: Globe2 },
+  agglika: { bar: "bg-danger", soft: "bg-danger-50", text: "text-danger", Icon: Languages },
+  thriskeftika: { bar: "bg-glossa", soft: "bg-glossa-50", text: "text-glossa", Icon: Church },
+  mousiki: { bar: "bg-eikastika", soft: "bg-eikastika-50", text: "text-eikastika", Icon: Music },
+  fa: { bar: "bg-brand-500", soft: "bg-brand-50", text: "text-brand-500", Icon: Dumbbell },
+  tpe: { bar: "bg-meleti", soft: "bg-meleti-50", text: "text-meleti", Icon: Monitor },
+  ergastiria: { bar: "bg-math", soft: "bg-math-50", text: "text-amber", Icon: Puzzle },
+  allo: { bar: "bg-muted", soft: "bg-line-2", text: "text-ink-2", Icon: Shapes },
 };
 
 export function SubjectIcon({ id, size = "md", className }: { id: SubjectId; size?: "sm" | "md" | "lg"; className?: string }) {

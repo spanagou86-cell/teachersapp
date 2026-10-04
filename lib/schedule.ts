@@ -1,4 +1,4 @@
-import { DEMO_TODAY, timeToMin } from "./dates";
+import { addDays, DEMO_TODAY, timeToMin, weekday } from "./dates";
 import type { HHMM, ISODate, LessonSlot } from "./types";
 
 /** School day periods (Greek primary timetable used in the mockups). */
@@ -31,13 +31,17 @@ export function slotsOn(slots: LessonSlot[], date: ISODate): LessonSlot[] {
 }
 
 /** Lessons of the teacher that overlap the target window. A teacher can't be in two rooms at once. */
-export function findConflicts(slots: LessonSlot[], target: TimeWindow, ignoreId?: string): LessonSlot[] {
+export function findConflicts<T extends TimeWindow & { id: string }>(slots: T[], target: TimeWindow, ignoreId?: string): T[] {
   return slots.filter((s) => s.id !== ignoreId && overlaps(s, target));
 }
 
 /** Free periods on a date (no overlapping lesson). */
-export function freePeriods(slots: LessonSlot[], date: ISODate): { start: HHMM; end: HHMM }[] {
-  return PERIODS.filter((p) => findConflicts(slots, { date, ...p }).length === 0);
+export function freePeriods(
+  slots: (TimeWindow & { id: string })[],
+  date: ISODate,
+  periods: { start: HHMM; end: HHMM }[] = PERIODS,
+): { start: HHMM; end: HHMM }[] {
+  return periods.filter((p) => findConflicts(slots, { date, ...p }).length === 0);
 }
 
 export function nextLesson(slots: LessonSlot[], date: ISODate, now: HHMM): LessonSlot | undefined {
@@ -46,7 +50,7 @@ export function nextLesson(slots: LessonSlot[], date: ISODate, now: HHMM): Lesso
 
 export type CarryOverResult =
   | { ok: true; slots: LessonSlot[]; newSlot: LessonSlot }
-  | { ok: false; reason: "conflict"; conflicts: LessonSlot[] }
+  | { ok: false; reason: "conflict"; conflicts: (TimeWindow & { id: string })[] }
   | { ok: false; reason: "past" | "not-found" | "already-carried" };
 
 /**
@@ -59,12 +63,14 @@ export function carryOverLesson(
   target: TimeWindow,
   newId: string,
   today: ISODate = DEMO_TODAY,
+  /** Other busy time (παιδονομία, συσκέψεις) that a lesson can't be moved onto. */
+  busy: (TimeWindow & { id: string })[] = [],
 ): CarryOverResult {
   const original = slots.find((s) => s.id === slotId);
   if (!original) return { ok: false, reason: "not-found" };
   if (original.carriedToId) return { ok: false, reason: "already-carried" };
   if (target.date < today) return { ok: false, reason: "past" };
-  const conflicts = findConflicts(slots, target, slotId);
+  const conflicts = findConflicts<TimeWindow & { id: string }>([...slots, ...busy], target, slotId);
   if (conflicts.length) return { ok: false, reason: "conflict", conflicts };
 
   const newSlot: LessonSlot = {
@@ -95,4 +101,15 @@ export function undoCarryOver(slots: LessonSlot[], newSlotId: string): LessonSlo
   return slots
     .filter((s) => s.id !== newSlotId)
     .map((s) => (s.id === moved.carriedFromId ? { ...s, carriedToId: undefined } : s));
+}
+
+/** Next lesson from now on, looking ahead past weekends and holidays. */
+export function upcomingLesson(slots: LessonSlot[], today: ISODate, now: HHMM): LessonSlot | undefined {
+  return sortSlots(slots).find((s) => s.date > today || (s.date === today && timeToMin(s.end) > timeToMin(now)));
+}
+
+/** The school day to show by default: today, or next Monday on weekends. */
+export function schoolDayFor(today: ISODate): ISODate {
+  const wd = weekday(today);
+  return wd === 6 ? addDays(today, 2) : wd === 0 ? addDays(today, 1) : today;
 }

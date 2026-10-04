@@ -1,11 +1,12 @@
 "use client";
 
-import { ChevronRight, UserCheck } from "lucide-react";
+import { ChevronRight, Plus, UserCheck, Users } from "lucide-react";
+import { useState } from "react";
+import { ClassSheet } from "@/components/classes";
 import Link from "next/link";
 import { MobileBrandBar, PageHeader } from "@/components/shell/PageHeader";
 import { SubjectIcon } from "@/components/subject";
-import { Card } from "@/components/ui";
-import { DEMO_NOW, DEMO_TODAY } from "@/lib/dates";
+import { Button, Card, EmptyState } from "@/components/ui";
 import { nextLesson } from "@/lib/schedule";
 import { useApp } from "@/lib/store";
 
@@ -15,15 +16,32 @@ export default function ClassesPage() {
   const slots = useApp((s) => s.slots);
   const subjects = useApp((s) => s.subjects);
   const attendance = useApp((s) => s.attendance);
+  const today = useApp((s) => s.today);
+  const now = useApp((s) => s.now);
+  const [creating, setCreating] = useState(false);
   return (
     <div>
       <MobileBrandBar />
-      <PageHeader title="Οι τάξεις μου" subtitle={`${classes.length} τμήματα · ${students.length} μαθητές`} />
+      <PageHeader
+        title="Οι τάξεις μου"
+        subtitle={`${classes.length} τμήματα · ${students.length} μαθητές`}
+        actions={
+          <Button onClick={() => setCreating(true)} className="w-full sm:w-auto">
+            <Plus className="size-4" /> Νέο τμήμα
+          </Button>
+        }
+      />
+      {classes.length === 0 && (
+        <Card>
+          <EmptyState icon={<Users className="size-6" />} title="Δεν έχεις τμήματα ακόμη" text="Πρόσθεσε το πρώτο σου τμήμα και τους μαθητές του." />
+        </Card>
+      )}
+      {creating && <ClassSheet open onClose={() => setCreating(false)} />}
       <div className="grid gap-4 md:grid-cols-2">
         {classes.map((c) => {
           const count = students.filter((s) => s.classId === c.id).length;
-          const att = attendance[`${c.id}|${DEMO_TODAY}`];
-          const next = nextLesson(slots.filter((s) => s.classId === c.id), DEMO_TODAY, DEMO_NOW);
+          const att = attendance[`${c.id}|${today}`];
+          const next = nextLesson(slots.filter((s) => s.classId === c.id), today, now);
           return (
             <Link key={c.id} href={`/classes/${c.id}`} className="group">
               <Card className="p-5 transition group-hover:shadow-pop">

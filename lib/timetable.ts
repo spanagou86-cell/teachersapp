@@ -1,0 +1,64 @@
+import { addDays, timeToMin, weekday } from "./dates";
+import { PERIODS } from "./schedule";
+import type { HHMM, ISODate, TimetableEntry } from "./types";
+
+export interface Period {
+  start: HHMM;
+  end: HHMM;
+}
+
+export const KIND_LABEL: Record<TimetableEntry["kind"], string> = {
+  lesson: "Μάθημα",
+  duty: "Παιδονομία",
+  free: "Κενό",
+  meeting: "Σύσκεψη",
+};
+
+/** Rows of the weekly grid: every distinct time window in the template, or the default school day. */
+export function periodsFrom(entries: TimetableEntry[]): Period[] {
+  if (!entries.length) return PERIODS;
+  const map = new Map<string, Period>();
+  for (const e of entries) map.set(`${e.start}-${e.end}`, { start: e.start, end: e.end });
+  return [...map.values()].sort((a, b) => timeToMin(a.start) - timeToMin(b.start) || timeToMin(a.end) - timeToMin(b.end));
+}
+
+/** Last day of the school year that contains `today` (30 June). */
+export function schoolYearEnd(today: ISODate): ISODate {
+  const [y, m] = today.split("-").map(Number);
+  return `${m >= 7 ? y + 1 : y}-06-30`;
+}
+
+export interface Occurrence {
+  templateId: string;
+  date: ISODate;
+  entry: TimetableEntry;
+}
+
+/** Every weekday occurrence of the template between `from` and `to`, skipping ones that already exist. */
+export function materialize(entries: TimetableEntry[], from: ISODate, to: ISODate, existing: Set<string> = new Set()): Occurrence[] {
+  const byDay = new Map<number, TimetableEntry[]>();
+  for (const e of entries) byDay.set(e.weekday, [...(byDay.get(e.weekday) ?? []), e]);
+  const out: Occurrence[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    for (const entry of byDay.get(weekday(d)) ?? []) {
+      if (!existing.has(`${entry.id}|${d}`)) out.push({ templateId: entry.id, date: d, entry });
+    }
+  }
+  return out;
+}
+
+/** Entries that overlap another entry on the same day (a teacher can't be in two places). */
+export function overlappingEntries(entries: TimetableEntry[]): Set<string> {
+  const bad = new Set<string>();
+  for (const a of entries)
+    for (const b of entries)
+      if (a.id !== b.id && a.weekday === b.weekday && timeToMin(a.start) < timeToMin(b.end) && timeToMin(b.start) < timeToMin(a.end)) {
+        bad.add(a.id);
+        bad.add(b.id);
+      }
+  return bad;
+}
+
+export function isValidTime(t: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+}

@@ -1,16 +1,17 @@
 "use client";
 
 import clsx from "clsx";
-import { ChevronLeft, ChevronRight, CalendarDays, Info, NotebookPen, Plus, Trash2, Users } from "lucide-react";
+import { Pencil, ChevronLeft, ChevronRight, CalendarDays, Info, NotebookPen, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
+import { ClassSheet } from "@/components/classes";
 import { StatusPill } from "@/components/lesson";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { SubjectIcon } from "@/components/subject";
 import { toast } from "@/components/toast";
 import { Avatar, Button, ButtonLink, Card, CheckCircle, cx, EmptyState, inputClass, Segmented } from "@/components/ui";
-import { addDays, dayName, DEMO_TODAY, longDate, shortDate, weekday } from "@/lib/dates";
+import { addDays, dayName, longDate, shortDate, weekday } from "@/lib/dates";
 import { sortSlots } from "@/lib/schedule";
 import { useApp } from "@/lib/store";
 import type { ClassGroup, Student } from "@/lib/types";
@@ -26,7 +27,8 @@ function prevSchoolDay(d: string, dir: -1 | 1): string {
 function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
   const router = useRouter();
   const params = useSearchParams();
-  const date = params.get("date") ?? DEMO_TODAY;
+  const today = useApp((s) => s.today);
+  const date = params.get("date") ?? today;
   const record = useApp((s) => s.attendance[`${cls.id}|${date}`]);
   const toggle = useApp((s) => s.toggleAbsent);
   const allPresent = useApp((s) => s.markAllPresent);
@@ -42,12 +44,12 @@ function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
         </button>
         <span className="flex items-center gap-2 font-semibold">
           <CalendarDays className="size-5" />
-          {date === DEMO_TODAY ? "Σήμερα" : dayName(date)} · {longDate(date).split(", ")[1]}
+          {date === today ? "Σήμερα" : dayName(date)} · {longDate(date).split(", ")[1]}
         </span>
         <button
           type="button"
           aria-label="Επόμενη μέρα"
-          disabled={date >= DEMO_TODAY}
+          disabled={date >= today}
           onClick={() => go(prevSchoolDay(date, 1))}
           className="flex size-10 items-center justify-center rounded-lg hover:bg-line-2 disabled:opacity-30"
         >
@@ -123,7 +125,8 @@ function Progress({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
   const slots = useApp((s) => s.slots);
   const subjects = useApp((s) => s.subjects);
   const attendance = useApp((s) => s.attendance);
-  const past = useMemo(() => sortSlots(slots.filter((s) => s.classId === cls.id && s.date <= DEMO_TODAY)), [slots, cls.id]);
+  const today = useApp((s) => s.today);
+  const past = useMemo(() => sortSlots(slots.filter((s) => s.classId === cls.id && s.date <= today)), [slots, cls.id, today]);
   const recorded = Object.entries(attendance).filter(([k]) => k.startsWith(`${cls.id}|`));
   const absences = roster
     .map((st) => ({ st, n: recorded.filter(([, r]) => r.absentIds.includes(st.id)).length }))
@@ -268,6 +271,7 @@ export default function ClassPage() {
   const cls = useApp((s) => s.classes.find((c) => c.id === id));
   const students = useApp((s) => s.students);
   const roster = useMemo(() => students.filter((s) => s.classId === id), [students, id]);
+  const [editing, setEditing] = useState(false);
 
   if (!cls) return <EmptyState icon={<Users className="size-6" />} title="Το τμήμα δεν βρέθηκε" action={<ButtonLink href="/classes">Οι τάξεις μου</ButtonLink>} />;
 
@@ -279,7 +283,17 @@ export default function ClassPage() {
 
   return (
     <div className="mx-auto max-w-3xl lg:max-w-none">
-      <PageHeader back="/classes" title={`${cls.name} · ${cls.grade}`} subtitle={`${roster.length} μαθητές · ${cls.room}`} />
+      <PageHeader
+        back="/classes"
+        title={`${cls.name} · ${cls.grade}`}
+        subtitle={[`${roster.length} μαθητές`, cls.room].filter(Boolean).join(" · ")}
+        actions={
+          <Button variant="secondary" onClick={() => setEditing(true)}>
+            <Pencil className="size-4" /> Επεξεργασία
+          </Button>
+        }
+      />
+      {editing && <ClassSheet open cls={cls} onClose={() => setEditing(false)} />}
       <Segmented<Tab>
         value={tab}
         onChange={setTab}

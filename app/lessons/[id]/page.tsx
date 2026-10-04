@@ -5,17 +5,18 @@ import { AlertTriangle, ArrowRight, CalendarArrowUp, Check, CloudUpload, CornerD
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import { needsLog, STATUS_LABEL } from "@/components/lesson";
+import { needsLog, STATUS_LABEL, useClock } from "@/components/lesson";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { FileBadge, SubjectIcon } from "@/components/subject";
 import { toast } from "@/components/toast";
 import { Button, ButtonLink, Card, cx, EmptyState, inputClass, Segmented, Sheet } from "@/components/ui";
 import { UploadTrigger } from "@/components/upload";
-import { addDays, dayName, dayShort, dayOfMonth, DEMO_NOW, DEMO_TODAY, longDate, shortDate, timeToMin, weekday } from "@/lib/dates";
+import { addDays, dayName, dayShort, dayOfMonth, longDate, shortDate, timeToMin, weekday } from "@/lib/dates";
 import { KIND_LABEL } from "@/lib/materials";
-import { findConflicts, PERIODS, sortSlots } from "@/lib/schedule";
+import { findConflicts, sortSlots } from "@/lib/schedule";
+import { KIND_LABEL as BLOCK_LABEL, periodsFrom } from "@/lib/timetable";
 import { attendanceFor, useApp } from "@/lib/store";
-import type { LessonSlot, LessonStatus } from "@/lib/types";
+import type { LessonSlot, LessonStatus, TimeBlock } from "@/lib/types";
 
 const NOTE_CHIPS = ["Ολοκληρώθηκε η ενότητα", "Μέχρι την άσκηση 2", "Χρειάζεται επανάληψη", "Δόθηκε εργασία για το σπίτι"];
 
@@ -26,23 +27,30 @@ function schoolDays(from: string, count: number): string[] {
 }
 
 function CarryOverPanel({ slot }: { slot: LessonSlot }) {
-  const slots = useApp((s) => s.slots);
+  const lessons = useApp((s) => s.slots);
+  const blocks = useApp((s) => s.blocks);
+  const timetable = useApp((s) => s.timetable);
+  const { today, now } = useClock();
+  // Κενά don't block a move; παιδονομία and συσκέψεις do.
+  const slots = useMemo(() => [...lessons, ...blocks.filter((b) => b.kind !== "free")], [lessons, blocks]);
+  const PERIODS = useMemo(() => periodsFrom(timetable.filter((e) => e.kind === "lesson" || e.kind === "free")), [timetable]);
   const subjects = useApp((s) => s.subjects);
   const carryOver = useApp((s) => s.carryOver);
   const undo = useApp((s) => s.undoCarryOver);
-  const days = useMemo(() => schoolDays(DEMO_TODAY, 10), []);
+  const days = useMemo(() => schoolDays(today, 10), [today]);
   const firstFree = useMemo(() => {
     for (const date of days)
       for (const p of PERIODS) {
-        if (date === DEMO_TODAY && timeToMin(p.start) <= timeToMin(DEMO_NOW)) continue;
+        if (date === today && timeToMin(p.start) <= timeToMin(now)) continue;
         if (findConflicts(slots, { date, ...p }, slot.id).length === 0 && !(date === slot.date && p.start === slot.start)) return { date, ...p };
       }
-  }, [days, slots, slot]);
+  }, [days, slots, slot, PERIODS, today, now]);
   const [date, setDate] = useState(firstFree?.date ?? days[0]);
   const [start, setStart] = useState<string | null>(firstFree?.start ?? null);
   const period = PERIODS.find((p) => p.start === start);
   const conflicts = period ? findConflicts(slots, { date, ...period }, slot.id) : [];
-  const subjectName = (id: string) => subjects.find((s) => s.id === id)?.name;
+  const busyLabel = (x: LessonSlot | TimeBlock) =>
+    "subjectId" in x ? subjects.find((s) => s.id === x.subjectId)?.name : `${BLOCK_LABEL[x.kind]}${x.label ? ` · ${x.label}` : ""}`;
 
   const confirm = () => {
     if (!period) return;
@@ -94,7 +102,7 @@ function CarryOverPanel({ slot }: { slot: LessonSlot }) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {PERIODS.map((p) => {
           const busy = findConflicts(slots, { date, ...p }, slot.id);
-          const past = date === DEMO_TODAY && timeToMin(p.start) <= timeToMin(DEMO_NOW);
+          const past = date === today && timeToMin(p.start) <= timeToMin(now);
           const self = date === slot.date && p.start === slot.start;
           const selected = start === p.start;
           return (
@@ -113,7 +121,7 @@ function CarryOverPanel({ slot }: { slot: LessonSlot }) {
             >
               <span className="block font-semibold tabular-nums">{p.start}–{p.end}</span>
               <span className={clsx("block truncate text-xs", busy.length ? "text-danger" : "text-brand-500")}>
-                {self ? "τρέχον μάθημα" : past ? "έχει περάσει" : busy.length ? `${subjectName(busy[0].subjectId)}` : "ελεύθερη"}
+                {self ? "τρέχον μάθημα" : past ? "έχει περάσει" : busy.length ? busyLabel(busy[0]) : "ελεύθερη"}
               </span>
             </button>
           );
@@ -123,7 +131,7 @@ function CarryOverPanel({ slot }: { slot: LessonSlot }) {
         <div role="alert" className="mt-3 flex gap-2 rounded-xl bg-danger-50 p-3 text-sm text-danger">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>
-            Σύγκρουση: έχεις ήδη {conflicts.map((c) => `${subjectName(c.subjectId)} (${c.start}–${c.end})`).join(", ")} στις {shortDate(date)}. Διάλεξε άλλη ώρα.
+            Σύγκρουση: έχεις ήδη {conflicts.map((c) => `${busyLabel(c)} (${c.start}–${c.end})`).join(", ")} στις {shortDate(date)}. Διάλεξε άλλη ώρα.
           </span>
         </div>
       )}
@@ -182,6 +190,7 @@ export default function LessonPage() {
   const attendance = useApp((s) => (slot ? attendanceFor(s, slot.classId, slot.date) : undefined));
   const updateSlot = useApp((s) => s.updateSlot);
   const detach = useApp((s) => s.detachMaterial);
+  const clock = useClock();
   const [attachOpen, setAttachOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState(false);
 
@@ -192,7 +201,7 @@ export default function LessonPage() {
   const previous = sortSlots(slots.filter((s) => s.classId === slot.classId && s.subjectId === slot.subjectId && s.date < slot.date && s.taughtNote)).at(-1);
   const carriedFrom = slots.find((s) => s.id === slot.carriedFromId);
   const carriedTo = slots.find((s) => s.id === slot.carriedToId);
-  const future = slot.date > DEMO_TODAY;
+  const future = slot.date > clock.today;
   const canCarry = !slot.carriedToId && slot.status !== "done";
 
   return (
@@ -256,7 +265,7 @@ export default function LessonPage() {
           <Card className="p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-lg font-bold">Τι διδάχθηκε</h2>
-              {needsLog(slot) && <span className="rounded-md bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger">Εκκρεμεί καταγραφή</span>}
+              {needsLog(slot, clock) && <span className="rounded-md bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger">Εκκρεμεί καταγραφή</span>}
             </div>
             <Segmented<LessonStatus>
               value={slot.status}

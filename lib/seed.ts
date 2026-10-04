@@ -1,13 +1,23 @@
 import { buildBlocks } from "./ai/templates";
 import { addDays, DEMO_TODAY, startOfWeek } from "./dates";
 import { PERIODS } from "./schedule";
-import type { AttendanceRecord, ClassGroup, ClassNote, LessonSlot, Material, Student, Subject, SubjectId, Task } from "./types";
+import type { AttendanceRecord, ClassGroup, ClassNote, LessonSlot, Material, Student, Subject, SubjectId, Task, TimeBlock, TimetableEntry } from "./types";
 
 export const SUBJECTS: Subject[] = [
   { id: "glossa", name: "Γλώσσα", short: "ΓΛ" },
   { id: "math", name: "Μαθηματικά", short: "ΜΑ" },
   { id: "meleti", name: "Μελέτη Περιβάλλοντος", short: "ΜΠ" },
   { id: "eikastika", name: "Εικαστικά", short: "ΕΙ" },
+  { id: "istoria", name: "Ιστορία", short: "ΙΣ" },
+  { id: "fysika", name: "Φυσικά", short: "ΦΥ" },
+  { id: "geografia", name: "Γεωγραφία", short: "ΓΕ" },
+  { id: "agglika", name: "Αγγλικά", short: "ΑΓ" },
+  { id: "thriskeftika", name: "Θρησκευτικά", short: "ΘΡ" },
+  { id: "mousiki", name: "Μουσική", short: "ΜΟ" },
+  { id: "fa", name: "Φυσική Αγωγή", short: "ΦΑ" },
+  { id: "tpe", name: "Πληροφορική", short: "ΤΠ" },
+  { id: "ergastiria", name: "Εργαστήρια Δεξιοτήτων", short: "ΕΔ" },
+  { id: "allo", name: "Άλλο", short: "··" },
 ];
 
 export const CLASSES: ClassGroup[] = [
@@ -35,7 +45,7 @@ function students(classId: string, names: string[]): Student[] {
 
 export const STUDENTS: Student[] = [...students("d1", D1_NAMES), ...students("d2", D2_NAMES)];
 
-const TOPICS: Record<SubjectId, string[]> = {
+const TOPICS: Partial<Record<SubjectId, string[]>> = {
   glossa: ["Επαναληπτικές ασκήσεις – Ορθογραφία", "Ο πληθυντικός των ουσιαστικών", "Κατανόηση κειμένου: «Το ποτάμι»", "Γράφω μια περιγραφή", "Ρήματα σε -ίζω", "Παραγωγή λόγου: Μια επιστολή", "Λεξιλόγιο: συνώνυμα", "Σημεία στίξης", "Διαβάζω ένα ποίημα", "Ορθογραφία: -ει / -οι", "Μικρή υπαγόρευση", "Λέξεις με διπλά σύμφωνα", "Επανάληψη ενότητας"],
   math: ["Γραφικές παραστάσεις", "Πρόσθεση τριψήφιων", "Αφαίρεση με κρατούμενο", "Προπαίδεια του 6 και του 8", "Προβλήματα δύο πράξεων", "Κλάσματα — επανάληψη", "Μετρήσεις μήκους", "Η διαίρεση ως μοιρασιά", "Γεωμετρικά σχήματα", "Χρήματα και ρέστα", "Επανάληψη ενότητας"],
   meleti: ["Το νερό στον τόπο μας", "Ο κύκλος του νερού", "Οικονομία στο νερό", "Ο χάρτης της περιοχής μας", "Επάγγελμα και τόπος", "Επανάληψη ενότητας"],
@@ -68,7 +78,7 @@ function buildSlots(): LessonSlot[] {
     for (const [wd, p, classId, subjectId] of TIMETABLE) {
       const key = `${classId}-${subjectId}`;
       const date = addDays(monday, wd - 1);
-      const list = TOPICS[subjectId];
+      const list = TOPICS[subjectId] ?? ["Μάθημα"];
       const isPast = date < DEMO_TODAY;
       const n = isPast ? list.length - 1 - (counters[`past-${key}`] = (counters[`past-${key}`] ?? -1) + 1) : (counters[key] = (counters[key] ?? -1) + 1);
       const topic = list[((n % list.length) + list.length) % list.length];
@@ -143,6 +153,38 @@ function seedAttendance(): Record<string, AttendanceRecord> {
   return out;
 }
 
+/** Weekly template behind the demo schedule, plus yard duty and a free period. */
+function seedTimetable(): TimetableEntry[] {
+  const lessons: TimetableEntry[] = TIMETABLE.map(([wd, p, classId, subjectId], i) => ({
+    id: `t-${i}`,
+    weekday: wd,
+    start: PERIODS[p].start,
+    end: PERIODS[p].end,
+    kind: "lesson",
+    classId,
+    subjectId,
+    label: "",
+  }));
+  return [
+    ...lessons,
+    { id: "t-duty-1", weekday: 2, start: "10:00", end: "10:20", kind: "duty", label: "Αυλή" },
+    { id: "t-duty-2", weekday: 4, start: "11:40", end: "12:00", kind: "duty", label: "Είσοδος" },
+    { id: "t-free-1", weekday: 2, start: "08:40", end: "09:20", kind: "free", label: "" },
+  ];
+}
+
+function seedBlocks(timetable: TimetableEntry[]): TimeBlock[] {
+  const thisWeek = startOfWeek(DEMO_TODAY);
+  const out: TimeBlock[] = [];
+  for (const w of [-7, 0, 7])
+    for (const e of timetable)
+      if (e.kind !== "lesson") {
+        const date = addDays(thisWeek, w + e.weekday - 1);
+        out.push({ id: `b-${e.id}-${date}`, date, start: e.start, end: e.end, kind: e.kind, label: e.label });
+      }
+  return out;
+}
+
 export interface SeedState {
   subjects: Subject[];
   classes: ClassGroup[];
@@ -152,12 +194,17 @@ export interface SeedState {
   attendance: Record<string, AttendanceRecord>;
   tasks: Task[];
   notes: ClassNote[];
+  timetable: TimetableEntry[];
+  blocks: TimeBlock[];
 }
 
 export function seed(): SeedState {
   const materials = seedMaterials();
   const slots = buildSlots().map((s) => (s.id === `l-${DEMO_TODAY}-0920` ? { ...s, materialIds: ["m1"] } : s));
+  const timetable = seedTimetable();
   return {
+    timetable,
+    blocks: seedBlocks(timetable),
     subjects: SUBJECTS,
     classes: CLASSES,
     students: STUDENTS,

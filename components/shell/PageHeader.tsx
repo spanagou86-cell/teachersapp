@@ -3,16 +3,18 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { useApp } from "@/lib/store";
 import { Avatar } from "../ui";
 import { Logo } from "./AppShell";
 
 /** Logo row shown on top-level mobile screens (desktop has the sidebar). */
 export function MobileBrandBar() {
+  const name = useApp((s) => s.profile.displayName);
   return (
     <div className="mb-4 flex items-center justify-between lg:hidden">
       <Logo />
       <Link href="/about" aria-label="Προφίλ και πληροφορίες">
-        <Avatar name="Σπύρος Π" seed={3} />
+        <Avatar name={name || "?"} seed={3} />
       </Link>
     </div>
   );

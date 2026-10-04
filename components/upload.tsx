@@ -4,7 +4,9 @@ import clsx from "clsx";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type ReactNode } from "react";
 import { uid } from "@/lib/id";
+import { useApp } from "@/lib/store";
 import { saveBlob } from "@/lib/store/blobs";
+import { remote } from "@/lib/store/remote";
 import { usePendingUpload } from "@/lib/store/pending";
 import type { FileMeta } from "@/lib/types";
 import { toast } from "./toast";
@@ -16,12 +18,19 @@ export async function ingestFile(file: File): Promise<{ meta: FileMeta; previewU
   const ok = /\.(pdf|docx?|odt)$/i.test(file.name) || file.type.startsWith("image/") || file.type === "application/pdf";
   if (!ok) return { error: "Υποστηρίζονται PDF, Word και εικόνες." };
   if (file.size > MAX_BYTES) return { error: "Το αρχείο ξεπερνά τα 25 MB." };
-  const blobKey = uid("blob");
+  const { mode, userId } = useApp.getState();
+  const previewUrl = URL.createObjectURL(file);
+  if (mode === "cloud" && userId) {
+    try {
+      const path = await remote.uploadFile(userId, file);
+      return { meta: { name: file.name, size: file.size, type: file.type, path }, previewUrl };
+    } catch {
+      return { error: "Το αρχείο δεν ανέβηκε. Έλεγξε τη σύνδεση και δοκίμασε ξανά." };
+    }
+  }
+  const blobKey = uid();
   const stored = await saveBlob(blobKey, file);
-  return {
-    meta: { name: file.name, size: file.size, type: file.type, blobKey: stored ? blobKey : undefined },
-    previewUrl: URL.createObjectURL(file),
-  };
+  return { meta: { name: file.name, size: file.size, type: file.type, blobKey: stored ? blobKey : undefined }, previewUrl };
 }
 
 /** Opens the file picker and hands the chosen file to the material wizard. */

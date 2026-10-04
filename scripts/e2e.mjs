@@ -29,6 +29,9 @@ async function flow(name, viewport, mobile) {
   const shot = (n) => page.screenshot({ path: path.join(OUT, `${name}-${n}.png`), fullPage: true });
 
   await page.goto(BASE);
+  // No account: start the demo from the login screen.
+  await page.waitForURL("**/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
   await page.getByText("Καλημέρα, Σπύρο.").waitFor();
   await shot("01-today");
 
@@ -39,7 +42,7 @@ async function flow(name, viewport, mobile) {
   await page.getByRole("radio", { name: "Προχωρημένο" }).click();
   await shot("02-wizard");
   await page.getByRole("button", { name: "Ετοίμασε το υλικό" }).click();
-  await page.waitForURL(/\/materials\/m-/);
+  await page.waitForURL(/\/materials\/[0-9a-f-]{36}/);
   await page.getByText("Το υλικό είναι έτοιμο.").waitFor();
   const materialUrl = page.url().split("?")[0];
   assert(true, "material created from upload");

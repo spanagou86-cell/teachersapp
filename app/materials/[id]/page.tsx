@@ -11,12 +11,13 @@ import { AdaptPanel, type Suggestion } from "@/components/doc/AdaptPanel";
 import { DocPage } from "@/components/doc/DocPage";
 import { toast } from "@/components/toast";
 import { Button, ButtonLink, Card, EmptyState, IconButton, Segmented, Select, Sheet, Tabs } from "@/components/ui";
-import { dayName, DEMO_TODAY, relativeTime, shortDate } from "@/lib/dates";
+import { dayName, relativeTime, shortDate } from "@/lib/dates";
 import { uid } from "@/lib/id";
 import { exerciseNumber, fileKindLabel, KIND_LABEL } from "@/lib/materials";
 import { sortSlots } from "@/lib/schedule";
 import { useApp } from "@/lib/store";
 import { loadBlob } from "@/lib/store/blobs";
+import { remote } from "@/lib/store/remote";
 import type { Block, Material } from "@/lib/types";
 
 type Tab = "original" | "edit" | "solutions";
@@ -27,16 +28,24 @@ function OriginalView({ material }: { material: Material }) {
   const [missing, setMissing] = useState(false);
   useEffect(() => {
     let revoke: string | undefined;
-    if (!material.file?.blobKey) return setMissing(true);
-    void loadBlob(material.file.blobKey).then((blob) => {
-      if (!blob) return setMissing(true);
-      revoke = URL.createObjectURL(blob);
-      setUrl(revoke);
-    });
+    let cancelled = false;
+    const file = material.file;
+    if (file?.path) {
+      // Private bucket: a short-lived link, only for the owner.
+      void remote.signedUrl(file.path).then((u) => (cancelled ? undefined : u ? setUrl(u) : setMissing(true)));
+    } else if (file?.blobKey) {
+      void loadBlob(file.blobKey).then((blob) => {
+        if (cancelled) return;
+        if (!blob) return setMissing(true);
+        revoke = URL.createObjectURL(blob);
+        setUrl(revoke);
+      });
+    } else setMissing(true);
     return () => {
+      cancelled = true;
       if (revoke) URL.revokeObjectURL(revoke);
     };
-  }, [material.file?.blobKey]);
+  }, [material.file]);
 
   const file = material.file;
   if (!file || missing)
@@ -75,13 +84,14 @@ function LessonLinks({ material }: { material: Material }) {
   const classes = useApp((s) => s.classes);
   const attach = useApp((s) => s.attachMaterial);
   const detach = useApp((s) => s.detachMaterial);
+  const today = useApp((s) => s.today);
   const linked = sortSlots(slots.filter((s) => s.materialIds.includes(material.id)));
   const upcoming = useMemo(
     () =>
-      sortSlots(slots.filter((s) => s.date >= DEMO_TODAY && !s.materialIds.includes(material.id) && !s.carriedToId))
+      sortSlots(slots.filter((s) => s.date >= today && !s.materialIds.includes(material.id) && !s.carriedToId))
         .sort((a, b) => Number(b.subjectId === material.subjectId && b.classId === material.classId) - Number(a.subjectId === material.subjectId && a.classId === material.classId))
         .slice(0, 20),
-    [slots, material],
+    [slots, material, today],
   );
   const [target, setTarget] = useState("");
   const chosen = target || upcoming[0]?.id || "";
@@ -292,10 +302,10 @@ function Editor() {
             <Redo2 className="size-4" />
           </IconButton>
           <span className="mx-1 h-6 w-px bg-line" />
-          <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid("b"), type: "exercise", text: "Νέα άσκηση", lines: 2, level: "standard" }], "Προσθήκη άσκησης")}>
+          <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid(), type: "exercise", text: "Νέα άσκηση", lines: 2, level: "standard" }], "Προσθήκη άσκησης")}>
             <Plus className="size-4" /> Άσκηση
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid("b"), type: "text", text: "Νέο κείμενο" }], "Προσθήκη κειμένου")}>
+          <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid(), type: "text", text: "Νέο κείμενο" }], "Προσθήκη κειμένου")}>
             <Type className="size-4" /> Κείμενο
           </Button>
           <span className="ml-auto hidden px-2 text-xs text-muted sm:block">{selectedId ? `Επιλογή: ${blockLabel(selectedId)}` : "Πάτησε ένα μπλοκ για επεξεργασία"}</span>
