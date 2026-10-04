@@ -262,7 +262,31 @@ async function deleteUntouched(slots: FutureSlot[]) {
   for (let i = 0; i < untouched.length; i += 200) await run(db().from("lesson_slots").delete().in("id", untouched.slice(i, i + 200)));
 }
 
+const TABLES = ["profiles", "classes", "students", "timetable_entries", "lesson_slots", "materials", "material_versions", "slot_materials", "attendance", "tasks", "class_notes", "student_notes"] as const;
+
 export const remote = {
+  /** Everything the teacher has stored, for "Κατέβασε τα δεδομένα μου" (GDPR portability). */
+  exportAll: async (): Promise<Record<string, unknown[]>> => {
+    const out: Record<string, unknown[]> = {};
+    for (const t of TABLES) out[t] = await all<unknown>((a, b) => db().from(t).select("*").range(a, b));
+    return out;
+  },
+
+  /** Removes the teacher's files, then the account; every database row goes with it (on delete cascade). */
+  deleteAccount: async (userId: string) => {
+    for (;;) {
+      const { data, error } = await db().storage.from("materials").list(userId, { limit: 100 });
+      if (error) throw new Error(error.message);
+      if (!data?.length) break;
+      const { error: rmError } = await db().storage.from("materials").remove(data.map((f) => `${userId}/${f.name}`));
+      if (rmError) throw new Error(rmError.message);
+      if (data.length < 100) break;
+    }
+    const { error } = await db().rpc("delete_my_account");
+    if (error) throw new Error(error.message);
+    await db().auth.signOut();
+  },
+
   updateProfile: (userId: string, p: Partial<Profile>) =>
     run(
       db()

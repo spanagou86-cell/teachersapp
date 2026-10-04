@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
+import { ServiceWorker } from "@/components/pwa";
 import { AppShell } from "@/components/shell/AppShell";
 import { PREFS_BOOT } from "@/lib/prefs-boot";
 import "./globals.css";
@@ -9,6 +10,9 @@ const manrope = Manrope({ subsets: ["latin", "greek"], variable: "--font-manrope
 export const metadata: Metadata = {
   title: { default: "τάξη — Η τάξη σου. Μαζί σου.", template: "%s · τάξη" },
   description: "Πρόγραμμα, μαθητές και υλικό σε ένα μέρος. Ανέβασε ένα αρχείο, προσάρμοσέ το, σύνδεσέ το με το μάθημα και κατέγραψε τι διδάχθηκε.",
+  applicationName: "τάξη",
+  appleWebApp: { capable: true, title: "τάξη", statusBarStyle: "default" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
@@ -29,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="font-sans antialiased">
         <AppShell>{children}</AppShell>
+        <ServiceWorker />
       </body>
     </html>
   );

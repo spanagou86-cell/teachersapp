@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Loader2, Mail, MailCheck, PlayCircle } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { Logo } from "@/components/shell/AppShell";
@@ -135,6 +136,17 @@ function Login() {
         <PlayCircle className="size-5" /> Δοκίμασε χωρίς λογαριασμό
       </button>
       <p className="mt-2 max-w-xs text-center text-xs text-muted">Η επίδειξη έχει δείγματα δεδομένων και μένει μόνο σε αυτόν τον browser.</p>
+      <p className="mt-6 max-w-xs text-center text-xs text-muted">
+        Συνεχίζοντας αποδέχεσαι τους{" "}
+        <Link href="/legal/terms" className="underline">
+          Όρους χρήσης
+        </Link>{" "}
+        και την{" "}
+        <Link href="/legal/privacy" className="underline">
+          Πολιτική απορρήτου
+        </Link>
+        .
+      </p>
     </div>
   );
 }

@@ -1,15 +1,17 @@
 "use client";
 
-import { CalendarClock, ChevronRight, Info, LogIn, LogOut, Monitor, Sun } from "lucide-react";
+import { CalendarClock, ChevronRight, Download, FileText, Info, Loader2, LogIn, LogOut, Monitor, ShieldCheck, Sun, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { InstallRow } from "@/components/pwa";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { toast } from "@/components/toast";
 import { Button, Card, cx, Field, inputClass, Segmented, Toggle } from "@/components/ui";
 import { usePrefs } from "@/lib/prefs";
 import { schoolYear, schoolYearStart } from "@/lib/schoolYear";
 import { flushWrites, useApp } from "@/lib/store";
+import { remote } from "@/lib/store/remote";
 import { supabase } from "@/lib/supabase/client";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -69,6 +71,47 @@ export default function SettingsPage() {
     setName(profile.displayName);
     setSchool(profile.schoolName);
   }, [profile.displayName, profile.schoolName]);
+
+  const [busy, setBusy] = useState<"" | "export" | "delete">("");
+  const userId = useApp((s) => s.userId);
+
+  const download = async () => {
+    setBusy("export");
+    try {
+      const st = useApp.getState();
+      const data =
+        mode === "cloud"
+          ? await remote.exportAll()
+          : { profile: st.profile, classes: st.classes, students: st.students, timetable: st.timetable, lessons: st.slots, materials: st.materials, attendance: st.attendance, tasks: st.tasks, notes: st.notes, studentNotes: st.studentNotes };
+      const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), email, ...data }, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `taxi-dedomena-${today}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast("Το αρχείο κατέβηκε");
+    } catch {
+      toast("Δεν ολοκληρώθηκε η λήψη. Δοκίμασε ξανά.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const removeAccount = async () => {
+    const answer = prompt("Η διαγραφή είναι οριστική και δεν αναιρείται. Γράψε ΔΙΑΓΡΑΦΗ για επιβεβαίωση.\n\nΣυμβουλή: κατέβασε πρώτα τα δεδομένα σου.");
+    if (answer?.trim().toUpperCase() !== "ΔΙΑΓΡΑΦΗ" || !userId) return;
+    setBusy("delete");
+    try {
+      await flushWrites();
+      await remote.deleteAccount(userId);
+      leave();
+      router.replace("/login");
+      toast("Ο λογαριασμός σου διαγράφηκε");
+    } catch {
+      toast("Η διαγραφή δεν ολοκληρώθηκε. Δοκίμασε ξανά ή επικοινώνησε μαζί μας.");
+      setBusy("");
+    }
+  };
 
   const country = profile.country;
   const year = schoolYear(country, schoolYearStart(today));
@@ -181,6 +224,7 @@ export default function SettingsPage() {
         <Row label="Μεγάλα γράμματα" hint="Όλο το κείμενο λίγο μεγαλύτερο.">
           <Toggle label="Μεγάλα γράμματα" checked={prefs.text === "large"} onChange={(v) => setPrefs({ text: v ? "large" : "normal" })} />
         </Row>
+        <InstallRow />
       </Section>
 
       <Section title="Λογαριασμός">
@@ -211,6 +255,24 @@ export default function SettingsPage() {
           </Row>
         )}
         <LinkRow href="/about" icon={<Info />} label="Τι λειτουργεί" hint="Τι είναι έτοιμο και τι έρχεται" />
+      </Section>
+
+      <Section title="Τα δεδομένα σου">
+        <Row label="Κατέβασε τα δεδομένα σου" hint="Όλα όσα έχεις καταχωρίσει, σε ένα αρχείο (JSON).">
+          <Button variant="secondary" disabled={busy !== ""} onClick={download}>
+            {busy === "export" ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} Λήψη
+          </Button>
+        </Row>
+        <LinkRow href="/legal/privacy" icon={<ShieldCheck />} label="Πολιτική απορρήτου" />
+        <LinkRow href="/legal/terms" icon={<FileText />} label="Όροι χρήσης" />
+        <LinkRow href="/legal/dpa" icon={<FileText />} label="Σύμβαση επεξεργασίας δεδομένων" hint="Για το σχολείο σου (ΓΚΠΔ, άρθρο 28)" />
+        {mode === "cloud" && (
+          <Row label="Διαγραφή λογαριασμού" hint="Σβήνει οριστικά τον λογαριασμό, τους μαθητές, το υλικό και τα αρχεία σου.">
+            <Button variant="danger" disabled={busy !== ""} onClick={removeAccount}>
+              {busy === "delete" ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />} Διαγραφή
+            </Button>
+          </Row>
+        )}
       </Section>
     </div>
   );

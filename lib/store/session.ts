@@ -6,8 +6,8 @@ import { useApp } from ".";
 import { cloudEnabled, supabase } from "../supabase/client";
 import { useHydrated } from "./hooks";
 
-export const PUBLIC_PATHS = ["/login", "/auth"];
-const BARE_PATHS = ["/login", "/onboarding", "/auth"];
+export const PUBLIC_PATHS = ["/login", "/auth", "/legal"];
+const BARE_PATHS = ["/login", "/onboarding", "/auth", "/legal"];
 
 export const isBarePath = (p: string) => BARE_PATHS.some((b) => p === b || p.startsWith(`${b}/`));
 

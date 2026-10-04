@@ -151,11 +151,58 @@ async function dark(name, viewport, mobile) {
   await ctx.close();
 }
 
+/** Legal pages, data export, installable app and offline behaviour. */
+async function trust(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR", acceptDownloads: true });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+
+  // Legal pages are public: no account, no redirect to /login.
+  for (const [path, heading] of [["/legal/privacy", "Πολιτική απορρήτου"], ["/legal/terms", "Όροι χρήσης"], ["/legal/dpa", /Σύμβαση επεξεργασίας/]]) {
+    await page.goto(BASE + path);
+    await page.getByRole("heading", { level: 1, name: heading }).waitFor();
+    assert(new URL(page.url()).pathname === path, `${path} opens without an account`);
+  }
+  await page.screenshot({ path: path.join(OUT, `${name}-01-privacy.png`), fullPage: true });
+
+  const manifest = await (await page.request.get(`${BASE}/manifest.webmanifest`)).json();
+  assert(manifest.name === "τάξη" && manifest.icons.length === 3, "manifest is served with name and icons");
+  assert((await page.request.get(`${BASE}/icons/icon-512.png`)).ok(), "app icon is served");
+
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  const sw = await page.evaluate(() => Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 8000))]));
+  assert(sw, "service worker is active");
+
+  // Export from the settings page.
+  await page.goto(BASE + "/settings");
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Λήψη" }).click()]);
+  const data = JSON.parse(fs.readFileSync(await download.path(), "utf8"));
+  assert(Array.isArray(data.classes) && data.classes.length > 0 && Array.isArray(data.students), `data export contains the classes and students (${download.suggestedFilename()})`);
+  await page.screenshot({ path: path.join(OUT, `${name}-02-settings.png`), fullPage: true });
+
+  // No signal: pages already opened come from the cache, unknown ones show the offline page.
+  await page.reload();
+  await ctx.setOffline(true);
+  await page.goto(BASE + "/settings").catch(() => undefined);
+  assert((await page.getByText("Σχολείο & χρονιά").count()) > 0, "a visited page opens offline");
+  await page.goto(BASE + "/students/d1-s2").catch(() => undefined);
+  await page.waitForTimeout(1000);
+  const body = await page.locator("body").innerText();
+  // Either the real page (when the worker still reaches the server) or our Greek offline page — never the browser's error screen.
+  assert(/Δεν υπάρχει σύνδεση|Χρονολόγιο/.test(body) && !/ERR_INTERNET_DISCONNECTED/.test(body), "an unvisited page never shows the browser's error screen");
+  await ctx.setOffline(false);
+  await ctx.close();
+}
+
 try {
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
   await dark("dark-mobile", { width: 390, height: 844 }, true);
   await dark("dark-desktop", { width: 1440, height: 900 }, false);
+  await trust("trust");
 } finally {
   await browser.close();
 }
