@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Check, ChevronDown, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, type ButtonHTMLAttributes, type ComponentProps, type ReactNode } from "react";
+import { revealOnFocus, useScrollLock, useVisibleViewport } from "@/lib/viewport";
 
 export { clsx as cx };
 
@@ -165,9 +166,9 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 
 export function Select({ className, children, ...props }: ComponentProps<"select">) {
   return (
-    <div className={clsx("relative", className)}>
+    <div className={clsx("relative min-w-0", className)}>
       <select
-        className="h-10 w-full appearance-none rounded-xl border border-line bg-surface pl-3 pr-9 text-sm font-medium text-ink outline-none transition-colors hover:border-ink/20 focus:border-brand-500"
+        className="h-10 w-full appearance-none rounded-xl border border-line bg-surface pl-3 pr-9 text-base font-medium text-ink sm:text-sm outline-none transition-colors hover:border-ink/20 focus:border-brand-500"
         {...props}
       >
         {children}
@@ -179,7 +180,7 @@ export function Select({ className, children, ...props }: ComponentProps<"select
 
 export function Field({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <label className={clsx("block", className)}>
+    <label className={clsx("block min-w-0", className)}>
       <span className="mb-1.5 block text-[13px] font-semibold text-ink-2">{label}</span>
       {children}
     </label>
@@ -187,7 +188,7 @@ export function Field({ label, children, className }: { label: string; children:
 }
 
 export const inputClass =
-  "w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none transition-colors placeholder:text-muted/70 hover:border-ink/20 focus:border-brand-500";
+  "w-full min-w-0 rounded-xl border border-line bg-surface px-3 text-base text-ink outline-none sm:text-sm transition-colors placeholder:text-muted/70 hover:border-ink/20 focus:border-brand-500";
 
 const AVATAR_TONES = [
   "bg-glossa-50 text-glossa",
@@ -244,20 +245,25 @@ export function Sheet({
       onClose();
     };
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+  useScrollLock(open);
+  // Follow the visible part of the screen, so the footer (Save) stays above the phone keyboard.
+  const view = useVisibleViewport(open);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal aria-label={title}>
+    <div
+      className="fixed inset-x-0 top-0 z-50 flex h-dvh items-end justify-center sm:items-center sm:p-6"
+      style={view ? { top: view.top, height: view.height } : undefined}
+      role="dialog"
+      aria-modal
+      aria-label={title}
+    >
       <div className="absolute inset-0 animate-fade-in bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
       <div
+        onFocus={revealOnFocus}
         className={clsx(
-          "relative flex max-h-[88dvh] w-full animate-slide-up flex-col rounded-t-3xl bg-surface shadow-pop sm:rounded-2xl",
+          "relative flex max-h-[calc(100%-1.5rem)] w-full animate-slide-up flex-col rounded-t-3xl bg-surface shadow-pop sm:max-h-[88dvh] sm:rounded-2xl",
           wide ? "sm:max-w-3xl" : "sm:max-w-lg",
         )}
       >
@@ -267,8 +273,8 @@ export function Sheet({
             <X className="size-5" />
           </IconButton>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="pb-safe border-t border-line-2 px-5 py-3">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
+        {footer && <div className="pb-safe shrink-0 border-t border-line-2 px-5 pt-3">{footer}</div>}
       </div>
     </div>
   );

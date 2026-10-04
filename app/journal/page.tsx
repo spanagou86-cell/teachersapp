@@ -112,6 +112,7 @@ function Journal() {
     <div className="mx-auto max-w-4xl">
       <div className="no-print">
         <PageHeader
+          back={classId ? `/classes/${classId}?tab=progress` : "/schedule"}
           title={docTitle}
           subtitle={view === "log" ? "Τι διδάχθηκε, από όσα σημειώνεις μετά από κάθε μάθημα. Έτοιμο για εκτύπωση." : "Τι θα διδάξεις την εβδομάδα, από τα θέματα των μαθημάτων σου."}
           actions={
@@ -508,7 +509,7 @@ function Gaps({
                   value={text[s.id] ?? ""}
                   onChange={(e) => setText((t) => ({ ...t, [s.id]: e.target.value }))}
                   placeholder={placeholder(s)}
-                  maxLength={500}
+                  maxLength={2000}
                   aria-label={label(s)}
                   className={cx(inputClass, "h-10 min-w-0 flex-1")}
                 />

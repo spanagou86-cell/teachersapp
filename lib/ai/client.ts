@@ -178,3 +178,33 @@ export async function toBase64(blob: Blob): Promise<string> {
   for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
   return btoa(s);
 }
+
+export interface RosterName {
+  firstName: string;
+  lastName: string;
+}
+
+const tidyName = (s: unknown) =>
+  typeof s === "string"
+    ? s
+        .trim()
+        .replace(/\s+/g, " ")
+        .slice(0, 60)
+    : "";
+
+/** Photo or PDF of a class list → names to review before adding. */
+export async function aiReadRoster(file: Blob, className: string): Promise<AiAnswer<{ students: RosterName[]; notes?: string }>> {
+  const isPdf = file.type === "application/pdf";
+  const blob = isPdf ? file : await shrinkImage(file, 2000, 0.85);
+  if (blob.size > 3_000_000) return { ok: false, error: "Το αρχείο είναι μεγάλο. Δοκίμασε φωτογραφία ή PDF μιας σελίδας." };
+  const mediaType = isPdf ? "application/pdf" : ["image/jpeg", "image/png", "image/webp"].includes(blob.type) ? blob.type : "";
+  if (!mediaType) return { ok: false, error: "Αυτή η φωτογραφία δεν διαβάζεται. Τράβηξέ τη ξανά από την κάμερα." };
+  const r = await post<{ students: unknown; notes?: string }>({ op: "roster", data: await toBase64(blob), mediaType, className });
+  if (!r.ok) return r.unavailable ? { ok: false, error: "Η ανάγνωση από φωτογραφία δεν είναι ενεργή αυτή τη στιγμή. Γράψε ή επικόλλησε τα ονόματα." } : r;
+  const seen = new Set<string>();
+  const students = (Array.isArray(r.data.students) ? (r.data.students as Record<string, unknown>[]) : [])
+    .map((x) => ({ firstName: tidyName(x?.firstName), lastName: tidyName(x?.lastName) }))
+    .filter((x) => x.firstName && !seen.has(`${x.firstName}|${x.lastName}`) && seen.add(`${x.firstName}|${x.lastName}`));
+  if (!students.length) return { ok: false, error: "Δεν βρήκα ονόματα σε αυτή την εικόνα. Δοκίμασε πιο καθαρή φωτογραφία, ίσια και με καλό φως." };
+  return { ok: true, data: { students, notes: r.data.notes } };
+}

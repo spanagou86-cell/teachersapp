@@ -1,13 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { COMPANY, LEGAL_UPDATED } from "@/lib/legal";
+import { BackButton } from "./shell/PageHeader";
 
 export function LegalPage({ title, children }: { title: string; children: ReactNode }) {
   return (
     <article className="mx-auto max-w-2xl px-4 py-10 text-[15px] leading-relaxed text-ink-2 [&_h2]:mb-2 [&_h2]:mt-8 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-ink [&_li]:mt-1 [&_p]:mt-2 [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5">
-      <Link href="/" className="text-sm font-semibold text-brand-500 hover:underline">
-        ← τάξη
-      </Link>
+      <BackButton fallback="/" />
       <h1 className="mt-4 text-[28px] font-extrabold leading-tight text-ink">{title}</h1>
       <p className="text-sm text-muted">Τελευταία ενημέρωση: {LEGAL_UPDATED}</p>
       {children}
@@ -35,4 +34,4 @@ export function Provider() {
   );
 }
 
-export const contact = COMPANY.email ? `στο ${COMPANY.email}` : "μέσα από τη σελίδα «Σχολείο & χρονιά» της εφαρμογής";
+export const contact = COMPANY.email ? `στο ${COMPANY.email}` : "μέσα από τις «Ρυθμίσεις» της εφαρμογής";

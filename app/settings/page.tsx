@@ -1,11 +1,12 @@
 "use client";
 
-import { CalendarClock, ChevronRight, Download, FileText, Info, Loader2, LogIn, LogOut, Monitor, ShieldCheck, Sun, Trash2 } from "lucide-react";
+import { CalendarClock, Check, ChevronRight, Download, FileText, Info, Loader2, LogIn, LogOut, Monitor, ShieldCheck, Sun, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { InstallRow } from "@/components/pwa";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { AutoText } from "@/components/text";
 import { toast } from "@/components/toast";
 import { Button, Card, cx, Field, inputClass, Segmented, Toggle } from "@/components/ui";
 import { usePrefs } from "@/lib/prefs";
@@ -65,12 +66,6 @@ export default function SettingsPage() {
   const timetable = useApp((s) => s.timetable);
   const leave = useApp((s) => s.leave);
   const router = useRouter();
-  const [name, setName] = useState(profile.displayName);
-  const [school, setSchool] = useState(profile.schoolName);
-  useEffect(() => {
-    setName(profile.displayName);
-    setSchool(profile.schoolName);
-  }, [profile.displayName, profile.schoolName]);
 
   const [busy, setBusy] = useState<"" | "export" | "delete">("");
   const userId = useApp((s) => s.userId);
@@ -115,31 +110,22 @@ export default function SettingsPage() {
 
   const country = profile.country;
   const year = schoolYear(country, schoolYearStart(today));
-  const dirty = name.trim() !== profile.displayName || school.trim() !== profile.schoolName;
 
   return (
     <div className="mx-auto grid max-w-2xl gap-6">
-      <PageHeader back="/" title="Σχολείο & χρονιά" subtitle={mode === "cloud" ? email : "Επίδειξη χωρίς λογαριασμό"} />
+      <PageHeader back="/" title="Ρυθμίσεις" subtitle={mode === "cloud" ? email : "Επίδειξη χωρίς λογαριασμό"} />
 
-      <Section title="Σχολείο">
+      <Section title="Το προφίλ μου">
         <div className="grid gap-3 px-4 py-4 sm:grid-cols-2">
           <Field label="Το όνομά σου">
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} className={cx(inputClass, "h-11")} />
+            <AutoText value={profile.displayName} onSave={(v) => update({ displayName: v })} maxLength={80} label="Το όνομά σου" placeholder="π.χ. Μαρία Παπαδοπούλου" className={cx(inputClass, "h-11")} />
           </Field>
-          <Field label="Σχολείο">
-            <input value={school} onChange={(e) => setSchool(e.target.value)} maxLength={120} placeholder="π.χ. 3ο Δημοτικό Σχολείο Πάτρας" className={cx(inputClass, "h-11")} />
+          <Field label="Το σχολείο σου">
+            <AutoText value={profile.schoolName} onSave={(v) => update({ schoolName: v })} allowEmpty maxLength={120} label="Το σχολείο σου" placeholder="π.χ. 3ο Δημοτικό Σχολείο Πάτρας" className={cx(inputClass, "h-11")} />
           </Field>
-          {dirty && (
-            <Button
-              className="sm:col-span-2 sm:justify-self-end"
-              onClick={() => {
-                update({ displayName: name.trim(), schoolName: school.trim() });
-                toast("Αποθηκεύτηκε");
-              }}
-            >
-              Αποθήκευση
-            </Button>
-          )}
+          <p className="flex items-center gap-1.5 text-[13px] text-muted sm:col-span-2">
+            <Check className="size-3.5" /> Αποθηκεύεται αυτόματα · το σχολείο εμφανίζεται στα φύλλα εργασίας και στις εκτυπώσεις
+          </p>
         </div>
         <Row label="Χώρα" hint="Αλλάζει αργίες, τρίμηνα και ορολογία (εφημερία / παιδονομία).">
           <Segmented<"gr" | "cy">

@@ -12,7 +12,9 @@ import { ButtonLink, Card, cx } from "@/components/ui";
 import { dayName, longDate, shortDate, timeToMin } from "@/lib/dates";
 import { slotsOn, sortSlots, upcomingLesson } from "@/lib/schedule";
 import { holidayOn, termOn, weekNumber } from "@/lib/schoolYear";
+import { vocative } from "@/lib/greek";
 import { useApp } from "@/lib/store";
+import { AutoText } from "@/components/text";
 
 function Tasks() {
   const tasks = useApp((s) => s.tasks);
@@ -37,17 +39,12 @@ function Tasks() {
               <input type="checkbox" checked={t.done} onChange={() => toggle(t.id)} aria-label={t.text} className="size-5 cursor-pointer accent-brand-500" />
             </label>
             <span className={cx("min-w-0 flex-1 py-2 text-[14px]", t.done && "text-muted line-through")}>
-              <input
-                defaultValue={t.text}
-                aria-label="Κείμενο εκκρεμότητας"
+              <AutoText
+                value={t.text}
+                onSave={(v) => edit(t.id, v)}
+                label="Κείμενο εκκρεμότητας"
                 maxLength={200}
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if (!v) e.target.value = t.text;
-                  else if (v !== t.text) edit(t.id, v);
-                }}
-                onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-                className={cx("w-full rounded-md bg-transparent outline-none focus:bg-line-2", t.done && "line-through")}
+                className={cx("w-full rounded-md bg-transparent px-1 outline-none focus:bg-line-2", t.done && "line-through")}
               />
               {(t.time || t.detail) && (
                 <span className="block text-[12px] text-muted">
@@ -64,7 +61,7 @@ function Tasks() {
                 remove(t.id);
                 toast("Η εκκρεμότητα διαγράφηκε", { label: "Αναίρεση", run: () => restore(t) });
               }}
-              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted hover:text-danger sm:opacity-0 sm:focus:opacity-100 sm:group-hover:opacity-100"
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted hover:text-danger hover-capable:opacity-0 focus:opacity-100 hover-capable:group-hover:opacity-100"
             >
               <Trash2 className="size-4" />
             </button>
@@ -115,7 +112,6 @@ function Backlog() {
 export default function TodayPage() {
   const slots = useApp((s) => s.slots);
   const profile = useApp((s) => s.profile);
-  const mode = useApp((s) => s.mode);
   const timetable = useApp((s) => s.timetable);
   const subjects = useApp((s) => s.subjects);
   const clock = useClock();
@@ -129,7 +125,7 @@ export default function TodayPage() {
   const term = termOn(country, today);
   const holiday = holidayOn(country, today);
   const next = upcomingLesson(slots, today, now);
-  const firstName = mode === "demo" ? "Σπύρο" : profile.displayName.split(" ")[0];
+  const firstName = vocative(profile.displayName.split(" ")[0] ?? "");
   const greeting = timeToMin(now) < timeToMin("12:00") ? "Καλημέρα" : "Καλησπέρα";
 
   const nothingToday = (

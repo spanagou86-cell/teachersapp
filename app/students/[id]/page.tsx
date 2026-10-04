@@ -1,15 +1,17 @@
 "use client";
 
 import clsx from "clsx";
-import { Clock, MessageSquareText, PhoneCall, Trash2, UserRound, UserX } from "lucide-react";
+import { Clock, MessageSquareText, Pencil, PhoneCall, Trash2, UserRound, UserX } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { toast } from "@/components/toast";
-import { Avatar, Button, ButtonLink, Card, cx, EmptyState, inputClass, Segmented } from "@/components/ui";
+import { Avatar, Button, ButtonLink, Card, cx, EmptyState, Field, inputClass, Segmented, Select, Sheet } from "@/components/ui";
 import { longDate } from "@/lib/dates";
 import { useApp } from "@/lib/store";
+import type { Student } from "@/lib/types";
+import { AutoText } from "@/components/text";
 
 type Item =
   | { type: "note" | "parent"; id: string; date: string; text: string }
@@ -17,6 +19,71 @@ type Item =
 
 const ICON = { note: MessageSquareText, parent: PhoneCall, absent: UserX, late: Clock };
 const LABEL = { note: "Σημείωση", parent: "Επαφή με γονέα", absent: "Απουσία", late: "Καθυστέρηση" };
+
+function EditStudentSheet({ student, onClose }: { student: Student; onClose: () => void }) {
+  const classes = useApp((s) => s.classes);
+  const update = useApp((s) => s.renameStudent);
+  const remove = useApp((s) => s.removeStudent);
+  const router = useRouter();
+  const [first, setFirst] = useState(student.firstName);
+  const [last, setLast] = useState(student.lastName);
+  const [classId, setClassId] = useState(student.classId);
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Στοιχεία μαθητή"
+      footer={
+        <div className="flex gap-2">
+          <Button
+            variant="danger"
+            aria-label="Διαγραφή μαθητή"
+            onClick={() => {
+              if (!confirm(`Διαγραφή του/της ${student.firstName} ${student.lastName}; Θα σβηστούν και οι σημειώσεις του/της.`)) return;
+              remove(student.id);
+              toast("Ο μαθητής διαγράφηκε");
+              router.replace(`/classes/${student.classId}?tab=students`);
+            }}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+          <Button
+            className="h-11 flex-1"
+            disabled={!first.trim()}
+            onClick={() => {
+              update({ ...student, firstName: first.trim().slice(0, 60), lastName: last.trim().slice(0, 60), classId });
+              toast(classId !== student.classId ? `Μεταφέρθηκε στο ${classes.find((c) => c.id === classId)?.name}` : "Αποθηκεύτηκε");
+              onClose();
+            }}
+          >
+            Αποθήκευση
+          </Button>
+        </div>
+      }
+    >
+      <div className="grid gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Όνομα">
+            <input value={first} onChange={(e) => setFirst(e.target.value)} maxLength={60} autoComplete="off" className={cx(inputClass, "h-11")} />
+          </Field>
+          <Field label="Επώνυμο">
+            <input value={last} onChange={(e) => setLast(e.target.value)} maxLength={60} autoComplete="off" className={cx(inputClass, "h-11")} />
+          </Field>
+        </div>
+        <Field label="Τμήμα">
+          <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.grade}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {classId !== student.classId && <p className="text-[13px] text-muted">Οι παλιές απουσίες μένουν στο ιστορικό του προηγούμενου τμήματος.</p>}
+      </div>
+    </Sheet>
+  );
+}
 
 export default function StudentPage() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +97,7 @@ export default function StudentPage() {
   const restoreNote = useApp((s) => s.restoreStudentNote);
   const [kind, setKind] = useState<"note" | "parent">("note");
   const [text, setText] = useState("");
+  const [editing, setEditing] = useState(false);
 
   const items = useMemo<Item[]>(() => {
     if (!student) return [];
@@ -65,7 +133,13 @@ export default function StudentPage() {
             {cls.name} · {cls.grade}
           </Link>
         }
+        actions={
+          <Button variant="secondary" onClick={() => setEditing(true)}>
+            <Pencil className="size-4" /> Επεξεργασία
+          </Button>
+        }
       />
+      {editing && <EditStudentSheet student={student} onClose={() => setEditing(false)} />}
 
       <div className="mb-5 grid grid-cols-3 gap-2">
         {[
@@ -135,20 +209,13 @@ export default function StudentPage() {
                 </p>
                 {"text" in it && (
                   <div className="mt-1 flex gap-2">
-                    <textarea
-                      defaultValue={it.text}
-                      aria-label="Κείμενο σημείωσης"
-                      rows={Math.min(6, it.text.split("\n").length + Math.floor(it.text.length / 60))}
+                    <AutoText
+                      multiline
+                      value={it.text}
+                      onSave={(v) => editNote(it.id, v)}
+                      label="Κείμενο σημείωσης"
                       maxLength={2000}
-                      onBlur={(e) => {
-                        const v = e.target.value.trim();
-                        if (!v) e.target.value = it.text;
-                        else if (v !== it.text) {
-                          editNote(it.id, v);
-                          toast("Η σημείωση διορθώθηκε");
-                        }
-                      }}
-                      className="flex-1 resize-none rounded-md bg-transparent text-[15px] outline-none focus:bg-line-2"
+                      className="min-w-0 flex-1 rounded-md bg-transparent px-1 text-[15px] leading-relaxed outline-none focus:bg-line-2"
                     />
                     <button
                       type="button"
@@ -158,7 +225,7 @@ export default function StudentPage() {
                         delNote(it.id);
                         if (n) toast("Διαγράφηκε", { label: "Αναίρεση", run: () => restoreNote(n) });
                       }}
-                      className="flex size-9 shrink-0 items-center justify-center self-start rounded-lg text-muted hover:text-danger sm:opacity-0 sm:focus:opacity-100 sm:group-hover:opacity-100"
+                      className="flex size-9 shrink-0 items-center justify-center self-start rounded-lg text-muted hover:text-danger hover-capable:opacity-0 focus:opacity-100 hover-capable:group-hover:opacity-100"
                     >
                       <Trash2 className="size-4" />
                     </button>

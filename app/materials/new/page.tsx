@@ -72,7 +72,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
             >
               {done ? <Check className="size-3.5" strokeWidth={3} /> : n}
             </span>
-            <span className={clsx("whitespace-nowrap", active ? "font-bold text-ink" : "text-muted")}>{label}</span>
+            <span className={clsx("whitespace-nowrap", active ? "font-bold text-ink" : "hidden text-muted sm:inline")}>{label}</span>
             {n < 3 && <span className="h-px flex-1 bg-line" />}
           </li>
         );

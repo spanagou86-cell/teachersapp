@@ -1,15 +1,16 @@
 "use client";
 
 import clsx from "clsx";
-import { BookOpenCheck, CalendarCog, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "lucide-react";
+import { BookOpenCheck, CalendarCog, Plus, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { StatusPill } from "@/components/lesson";
-import { PageHeader } from "@/components/shell/PageHeader";
+import { MobileBrandBar, PageHeader } from "@/components/shell/PageHeader";
 import { SUBJECT_STYLE } from "@/components/subject";
 import { Timeline } from "@/components/timeline";
-import { ButtonLink, Card, IconButton, Segmented } from "@/components/ui";
+import { Button, ButtonLink, Card, IconButton, Segmented } from "@/components/ui";
+import { LessonSheet } from "@/components/lessonForm";
 import { addDays, dayMonth, dayName, dayOfMonth, dayShort, isISODate, shortDate, startOfWeek, timeToMin, weekday, weekDates } from "@/lib/dates";
 import { dutyLabel, holidayOn, schoolYear, schoolYearStart, termOn, weekNumber, type Country } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
@@ -269,6 +270,7 @@ function Calendar() {
   const rawD = params.get("d");
   const anchor = isISODate(rawD) ? rawD : today;
   const go = (v: View, d: string) => router.replace(`/schedule?view=${v}&d=${d}`, { scroll: false });
+  const [adding, setAdding] = useState(false);
 
   const monday = startOfWeek(weekday(anchor) === 6 || weekday(anchor) === 0 ? addDays(anchor, 2) : anchor);
   const dates = weekDates(monday);
@@ -294,6 +296,7 @@ function Calendar() {
 
   return (
     <div>
+      <MobileBrandBar />
       <PageHeader
         title={title}
         subtitle={subtitle}
@@ -323,6 +326,9 @@ function Calendar() {
                 </IconButton>
               </div>
             )}
+            <Button variant="secondary" size="sm" className="h-9" onClick={() => setAdding(true)}>
+              <Plus className="size-4" /> Μάθημα
+            </Button>
             <ButtonLink href="/journal" variant="secondary" size="sm" className="h-9">
               <BookOpenCheck className="size-4" /> Ύλη
             </ButtonLink>
@@ -373,6 +379,7 @@ function Calendar() {
         </>
       )}
       {view === "month" && <MonthGrid year={y} month={m - 1} country={country} onPick={(d) => go("week", d)} />}
+      {adding && <LessonSheet open date={day < today ? today : day} onClose={() => setAdding(false)} />}
       {view === "year" && <YearView country={country} anchor={anchor} onPick={(d) => go("week", d)} />}
     </div>
   );

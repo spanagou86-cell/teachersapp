@@ -9,6 +9,8 @@ import { shortDate } from "@/lib/dates";
 import { useApp } from "@/lib/store";
 import { SUBJECTS } from "@/lib/seed";
 import { isBarePath, useSession } from "@/lib/store/session";
+import { trackVisit } from "@/lib/history";
+import { useKeyboardFlag } from "@/lib/viewport";
 import { Avatar } from "../ui";
 import { Toaster } from "../toast";
 import { CaptureSheet } from "../capture";
@@ -53,7 +55,7 @@ function Sidebar() {
       </nav>
       <div className="mt-auto grid gap-1">
         <Link href="/settings" className={item(pathname.startsWith("/settings"))}>
-          <Settings className="size-5" /> Σχολείο &amp; χρονιά
+          <Settings className="size-5" /> Ρυθμίσεις
         </Link>
         <Link href="/settings" className="mt-2 flex items-center gap-3 rounded-xl border-t border-line px-2 pt-4 hover:opacity-80">
           <Avatar name={profile.displayName || "?"} seed={3} />
@@ -243,7 +245,7 @@ function BottomNav({ onCapture }: { onCapture: () => void }) {
     );
   };
   return (
-    <nav className="no-print pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden" aria-label="Κύρια πλοήγηση">
+    <nav className="no-print kb-hide fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label="Κύρια πλοήγηση">
       <div className="mx-auto grid max-w-lg grid-cols-5 items-center">
         {NAV.slice(0, 2).map(tab)}
         <button
@@ -311,6 +313,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [capture, setCapture] = useState(false);
   const openCapture = useCallback(() => setCapture(true), []);
   useShortcuts(openCapture);
+  useKeyboardFlag();
+  // Remember the in-app trail, so "Πίσω" returns where the teacher actually came from.
+  useEffect(() => trackVisit(pathname + window.location.search), [pathname]);
   if (isBarePath(pathname))
     return (
       <div className="min-h-dvh">

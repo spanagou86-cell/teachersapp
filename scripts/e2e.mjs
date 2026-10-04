@@ -187,13 +187,162 @@ async function trust(name) {
   await page.reload();
   await ctx.setOffline(true);
   await page.goto(BASE + "/settings").catch(() => undefined);
-  assert((await page.getByText("Σχολείο & χρονιά").count()) > 0, "a visited page opens offline");
+  assert((await page.getByRole("heading", { name: "Ρυθμίσεις" }).count()) > 0, "a visited page opens offline");
   await page.goto(BASE + "/students/d1-s2").catch(() => undefined);
   await page.waitForTimeout(1000);
   const body = await page.locator("body").innerText();
   // Either the real page (when the worker still reaches the server) or our Greek offline page — never the browser's error screen.
   assert(/Δεν υπάρχει σύνδεση|Χρονολόγιο/.test(body) && !/ERR_INTERNET_DISCONNECTED/.test(body), "an unvisited page never shows the browser's error screen");
   await ctx.setOffline(false);
+  await ctx.close();
+}
+
+/**
+ * Phone quality gate, on every screen: no sideways panning, no field that makes iOS zoom
+ * (text under 16px), a way back on inner pages, no button hidden until hover, and sheet
+ * buttons still visible when the on-screen keyboard takes half the screen.
+ */
+async function mobileQuality(name) {
+  console.log(`\n## ${name}`);
+  for (const width of [360, 390]) {
+    const ctx = await browser.newContext({ viewport: { width, height: 800 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+    await page.goto(BASE + "/login");
+    await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+    await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+    await page.goto(`${BASE}/materials`);
+    const materialHref = await page.locator("a[href^='/materials/']").filter({ hasNotText: "Νέο" }).first().getAttribute("href");
+
+    const top = ["/", "/schedule", "/schedule?view=month", "/schedule?view=year", "/classes", "/materials"];
+    const inner = [
+      "/classes/d1",
+      "/classes/d1?tab=students",
+      "/classes/d1?tab=progress",
+      "/classes/d1?tab=notes",
+      "/students/d1-s1",
+      "/lessons/l-2026-10-05-0920",
+      "/materials/new",
+      materialHref,
+      "/journal?class=d1",
+      "/journal?view=plan&class=d1",
+      "/settings",
+      "/settings/timetable",
+      "/about",
+      "/legal/privacy",
+    ];
+    const problems = [];
+    for (const url of [...top, ...inner]) {
+      await page.goto(BASE + url);
+      await page.waitForTimeout(350);
+      const r = await page.evaluate(() => {
+        const doc = document.documentElement;
+        const small = [...document.querySelectorAll("input, textarea, select")]
+          .filter((el) => !["checkbox", "radio", "hidden", "file", "range"].includes(el.type) && el.offsetParent !== null)
+          .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16)
+          .map((el) => el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.tagName);
+        const hidden = [...document.querySelectorAll("button, a")]
+          .filter((el) => el.offsetParent !== null && getComputedStyle(el).opacity === "0")
+          .map((el) => el.getAttribute("aria-label") || el.textContent.trim().slice(0, 30));
+        return { overflow: doc.scrollWidth - doc.clientWidth, small, hidden, back: !!document.querySelector('[aria-label="Πίσω"]') };
+      });
+      if (r.overflow > 0) problems.push(`${url}: ${r.overflow}px sideways`);
+      if (r.small.length) problems.push(`${url}: zooming fields ${r.small.join(", ")}`);
+      if (r.hidden.length) problems.push(`${url}: hidden buttons ${r.hidden.join(", ")}`);
+      if (inner.includes(url) && !r.back) problems.push(`${url}: no back button`);
+    }
+    assert(problems.length === 0, `${width}px: ${top.length + inner.length} screens pass (sideways, zoom, back, hidden)${problems.length ? `\n    ${problems.join("\n    ")}` : ""}`);
+
+    // Sheets with the keyboard open (half the screen left): the save button stays reachable.
+    const sheets = [
+      ["/", async () => page.getByRole("button", { name: "Γρήγορη καταγραφή" }).click(), async () => page.getByRole("button", { name: "Σημείωση" }).first().click(), "Αποθήκευση"],
+      ["/classes", async () => page.getByRole("button", { name: /Νέο τμήμα/ }).click(), null, "Αποθήκευση"],
+      ["/lessons/l-2026-10-05-0920", async () => page.getByRole("button", { name: /Αλλαγή ώρας/ }).click(), null, "Αποθήκευση"],
+      ["/students/d1-s1", async () => page.getByRole("button", { name: "Επεξεργασία" }).click(), null, "Αποθήκευση"],
+    ];
+    for (const [url, open, next, save] of sheets) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(BASE + url);
+      await page.waitForTimeout(300);
+      await open();
+      if (next) await next();
+      const field = page.locator('[role="dialog"] input:not([type=checkbox]), [role="dialog"] textarea').first();
+      await field.click();
+      await page.setViewportSize({ width, height: 420 });
+      await page.waitForTimeout(350);
+      const box = await page.locator('[role="dialog"]').getByRole("button", { name: save, exact: true }).last().boundingBox();
+      assert(box && box.y >= 0 && box.y + box.height <= 420, `${width}px ${url}: «${save}» visible with the keyboard open (${box ? Math.round(box.y + box.height) : "none"} ≤ 420)`);
+    }
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(BASE + "/");
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(OUT, `${name}-${width}-today.png`), fullPage: true });
+    await ctx.close();
+  }
+}
+
+/** Editing everywhere keeps the text: block editor, lesson day/time, delete + undo, student move, school name. */
+async function editingFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  page.on("dialog", (d) => d.accept());
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+
+  // School name: saved by itself, shown at the top of the main screens.
+  await page.goto(BASE + "/settings");
+  const school = page.getByLabel("Το σχολείο σου");
+  await school.fill("12ο Δημοτικό Σχολείο Λάρισας");
+  await school.blur();
+  await page.goto(BASE + "/classes");
+  assert((await page.getByText("12ο Δημοτικό Σχολείο Λάρισας").count()) > 0, "school name shows in the phone header");
+
+  // Block editor: typing, then tapping another block, keeps the text.
+  await page.goto(`${BASE}/materials`);
+  await page.locator("a[href^='/materials/']").filter({ hasNotText: "Νέο" }).first().click();
+  await page.waitForURL(/\/materials\/[0-9a-z-]+$/);
+  const doc = page.locator("article");
+  const blocks = doc.locator("p.whitespace-pre-line");
+  await blocks.nth(1).click();
+  await page.getByRole("button", { name: "Επεξεργασία" }).click();
+  await page.getByLabel("Κείμενο", { exact: true }).fill("Γράψε τρία παραδείγματα με κλάσματα.");
+  await blocks.nth(2).click();
+  await page.waitForTimeout(200);
+  assert((await doc.getByText("Γράψε τρία παραδείγματα με κλάσματα.").count()) > 0, "block text kept after tapping another block");
+
+  // Lesson: change its time, then delete and undo.
+  await page.goto(`${BASE}/lessons/l-2026-10-08-1020`);
+  await page.getByRole("button", { name: /Αλλαγή ώρας/ }).click();
+  await page.getByLabel("Έναρξη").fill("13:00");
+  await page.getByRole("button", { name: "Αποθήκευση", exact: true }).click();
+  await page.getByText(/13:00–13:40/).waitFor();
+  assert(true, "lesson moved to 13:00 (length kept)");
+  await page.getByRole("button", { name: /Αλλαγή ώρας/ }).click();
+  await page.getByRole("button", { name: "Διαγραφή μαθήματος" }).click();
+  await page.waitForURL(/\/schedule/);
+  await page.getByRole("button", { name: "Αναίρεση" }).click();
+  await page.goto(`${BASE}/lessons/l-2026-10-08-1020`);
+  assert((await page.getByText(/13:00–13:40/).count()) > 0, "deleted lesson comes back with «Αναίρεση»");
+
+  // Long note: fully visible, no hidden text.
+  await page.goto(`${BASE}/classes/d1?tab=notes`);
+  const long = "Πολύ μεγάλη σημείωση. ".repeat(20).trim();
+  await page.getByLabel("Νέα σημείωση").fill(long);
+  await page.getByRole("button", { name: /Προσθήκη σημείωσης/ }).click();
+  const note = page.getByLabel("Κείμενο σημείωσης").first();
+  const fits = await note.evaluate((el) => el.scrollHeight <= el.clientHeight + 2);
+  assert(fits, "a long note is shown in full (no hidden text)");
+
+  // Student: move to another class.
+  await page.goto(`${BASE}/students/d1-s1`);
+  await page.getByRole("button", { name: "Επεξεργασία" }).click();
+  await page.locator('[role="dialog"] select').selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Αποθήκευση", exact: true }).click();
+  await page.getByText(/Μεταφέρθηκε στο/).waitFor();
+  assert(true, "student moved to another class");
   await ctx.close();
 }
 
@@ -245,6 +394,8 @@ try {
   await dark("dark-desktop", { width: 1440, height: 900 }, false);
   await trust("trust");
   await journalFlow("journal");
+  await mobileQuality("quality");
+  await editingFlow("editing");
 } finally {
   await browser.close();
 }

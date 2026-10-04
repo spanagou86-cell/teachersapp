@@ -1,11 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, CalendarArrowUp, Check, CloudUpload, CornerDownRight, FilePlus2, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarArrowUp, CalendarCog, Check, CloudUpload, CornerDownRight, FilePlus2, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { needsLog, STATUS_LABEL, useClock } from "@/components/lesson";
+import { LessonSheet } from "@/components/lessonForm";
+import { AutoText, GrowingTextarea } from "@/components/text";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { FileBadge, SubjectIcon } from "@/components/subject";
 import { toast } from "@/components/toast";
@@ -19,6 +21,7 @@ import { kindLabel, periodsFrom } from "@/lib/timetable";
 import { attendanceFor, useApp } from "@/lib/store";
 import type { LessonSlot, LessonStatus, TimeBlock } from "@/lib/types";
 
+const NOTE_MAX = 2000;
 const NOTE_CHIPS = ["Ολοκληρώθηκε η ενότητα", "Μέχρι την άσκηση 2", "Χρειάζεται επανάληψη", "Δόθηκε εργασία για το σπίτι"];
 
 function schoolDays(from: string, count: number, country: Country): string[] {
@@ -206,13 +209,13 @@ function TaughtCard({ slot, future, withStatus }: { slot: LessonSlot; future: bo
           size="sm"
         />
       )}
-      <textarea
+      <GrowingTextarea
         value={slot.taughtNote}
         onChange={(e) => updateSlot(slot.id, { taughtNote: e.target.value })}
-        rows={withStatus ? 3 : 5}
-        maxLength={1000}
+        rows={withStatus ? 3 : 4}
+        maxLength={NOTE_MAX}
         placeholder={future ? "Σημειώσεις προετοιμασίας…" : "π.χ. Κάναμε τις ασκήσεις 1–2. Η 3 έμεινε για την επόμενη φορά."}
-        className={cx(inputClass, "py-2.5 text-[15px] leading-relaxed")}
+        className={cx(inputClass, "min-h-24 py-2.5 text-[15px] leading-relaxed")}
         aria-label="Σημείωση μαθήματος"
       />
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -220,7 +223,7 @@ function TaughtCard({ slot, future, withStatus }: { slot: LessonSlot; future: bo
           <button
             key={c}
             type="button"
-            onClick={() => updateSlot(slot.id, { taughtNote: slot.taughtNote ? `${slot.taughtNote.trimEnd()} ${c}.` : `${c}.` })}
+            onClick={() => updateSlot(slot.id, { taughtNote: (slot.taughtNote ? `${slot.taughtNote.trimEnd()} ${c}.` : `${c}.`).slice(0, NOTE_MAX) })}
             className="min-h-9 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-ink-2 hover:bg-line-2"
           >
             + {c}
@@ -248,7 +251,7 @@ export default function LessonPage() {
   const detach = useApp((s) => s.detachMaterial);
   const clock = useClock();
   const [attachOpen, setAttachOpen] = useState(false);
-  const [editingTopic, setEditingTopic] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [stage, setStage] = useState<Stage>(() => {
     if (!slot) return "before";
     if (slot.date > clock.today || (slot.date === clock.today && timeToMin(clock.now) < timeToMin(slot.start))) return "before";
@@ -277,31 +280,32 @@ export default function LessonPage() {
           </span>
         }
         subtitle={
-          editingTopic ? (
-            <input
-              autoFocus
-              defaultValue={slot.topic}
-              aria-label="Θέμα μαθήματος"
-              onBlur={(e) => {
-                if (e.target.value.trim()) updateSlot(slot.id, { topic: e.target.value.trim() });
-                setEditingTopic(false);
-              }}
-              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-              className={cx(inputClass, "h-10 max-w-md text-base")}
+          <span className="flex items-center gap-2">
+            <AutoText
+              value={slot.topic}
+              onSave={(topic) => updateSlot(slot.id, { topic })}
+              allowEmpty
+              maxLength={200}
+              label="Θέμα μαθήματος"
+              placeholder="Πρόσθεσε θέμα μαθήματος"
+              className="-ml-1 h-10 w-full min-w-0 max-w-xl rounded-lg border border-transparent bg-transparent px-1 text-ink-2 outline-none placeholder:text-muted hover:border-line focus:border-brand-500 focus:bg-surface"
             />
-          ) : (
-            <button type="button" aria-label="Επεξεργασία θέματος" onClick={() => setEditingTopic(true)} className="group inline-flex min-h-9 items-center gap-2 text-left">
-              {slot.topic || <span className="text-muted">Πρόσθεσε θέμα μαθήματος</span>}
-              <Pencil className="size-4 text-muted opacity-60 group-hover:opacity-100" />
-            </button>
-          )
-        }
-        actions={
-          <span className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-sm font-semibold">
-            <Users className="size-4" /> {cls.name} · {cls.room}
+            <Pencil className="size-4 shrink-0 text-muted" aria-hidden />
           </span>
         }
+        actions={
+          <>
+            <span className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-semibold">
+              <Users className="size-4" /> {cls.name}
+              {cls.room && ` · ${cls.room}`}
+            </span>
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              <CalendarCog className="size-4" /> Αλλαγή ώρας / διαγραφή
+            </Button>
+          </>
+        }
       />
+      {editing && <LessonSheet open slot={slot} onClose={() => setEditing(false)} />}
 
       {carriedFrom && (
         <Link href={`/lessons/${carriedFrom.id}`} className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm">

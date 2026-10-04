@@ -9,11 +9,12 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AdaptPanel, type Suggestion } from "@/components/doc/AdaptPanel";
 import { DocPage } from "@/components/doc/DocPage";
+import { BackButton } from "@/components/shell/PageHeader";
 import { toast } from "@/components/toast";
-import { Button, ButtonLink, Card, EmptyState, IconButton, Segmented, Select, Sheet, Tabs } from "@/components/ui";
+import { Button, ButtonLink, Card, EmptyState, IconButton, Segmented, Select, Sheet, Tabs, Toggle } from "@/components/ui";
 import { dayName, relativeTime, shortDate } from "@/lib/dates";
 import { uid } from "@/lib/id";
-import { exerciseNumber, fileKindLabel, KIND_LABEL } from "@/lib/materials";
+import { exerciseNumber, fileKindLabel, KIND_LABEL, LEVEL_LABEL } from "@/lib/materials";
 import { sortSlots } from "@/lib/schedule";
 import { useApp } from "@/lib/store";
 import { loadBlob } from "@/lib/store/blobs";
@@ -108,6 +109,30 @@ function MaterialDetails({ material }: { material: Material }) {
           ))}
         </Select>
       </div>
+      {material.kind !== "file" && (
+        <>
+          <Select value={material.kind} onChange={(e) => patch(material.id, { kind: e.target.value as Material["kind"] })} aria-label="Είδος υλικού">
+            {(["worksheet", "quiz", "plan", "summary"] as const).map((k) => (
+              <option key={k} value={k}>
+                {KIND_LABEL[k]}
+              </option>
+            ))}
+          </Select>
+          <Segmented<Material["level"]>
+            value={material.level}
+            onChange={(level) => patch(material.id, { level })}
+            options={(["basic", "standard", "advanced"] as const).map((v) => ({ value: v, label: LEVEL_LABEL[v] }))}
+          />
+          <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
+            Φύλλο λύσεων
+            <Toggle label="Φύλλο λύσεων" checked={material.withSolutions} onChange={(v) => patch(material.id, { withSolutions: v })} />
+          </label>
+          <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
+            Ασπρόμαυρη εκτύπωση
+            <Toggle label="Ασπρόμαυρη εκτύπωση" checked={material.blackAndWhite} onChange={(v) => patch(material.id, { blackAndWhite: v })} />
+          </label>
+        </>
+      )}
       <Button
         variant="ghost"
         className="justify-self-start !text-danger"
@@ -227,7 +252,7 @@ function HistoryCard({ material }: { material: Material }) {
                   restore(material.id, v.id);
                   toast(`Επαναφέρθηκε: ${v.label}`);
                 }}
-                className="rounded-md px-2 py-1 text-xs font-semibold text-brand opacity-100 hover:bg-brand-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                className="rounded-md px-2 py-1 text-xs font-semibold text-brand hover:bg-brand-50 hover-capable:opacity-0 hover-capable:group-hover:opacity-100 focus:opacity-100"
               >
                 Επαναφορά
               </button>
@@ -361,6 +386,9 @@ function Editor() {
           <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid(), type: "exercise", text: "Νέα άσκηση", lines: 2, level: "standard" }], "Προσθήκη άσκησης")}>
             <Plus className="size-4" /> Άσκηση
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid(), type: "heading", text: "Νέα επικεφαλίδα" }], "Προσθήκη επικεφαλίδας")}>
+            <Plus className="size-4" /> Επικεφαλίδα
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid(), type: "text", text: "Νέο κείμενο" }], "Προσθήκη κειμένου")}>
             <Type className="size-4" /> Κείμενο
           </Button>
@@ -382,7 +410,8 @@ function Editor() {
                 : {
                     selectedId,
                     onSelect: setSelectedId,
-                    onSave: (bid, p) => commit(material.blocks.map((b) => (b.id === bid ? { ...b, ...p } : b)), `Επεξεργασία: ${blockLabel(bid)}`),
+                    // Hand-written wording replaces the generated variants, so later AI steps start from it.
+                    onSave: (bid, p) => commit(material.blocks.map((b) => (b.id === bid ? { ...b, ...p, variants: undefined, variantB: undefined } : b)), `Επεξεργασία: ${blockLabel(bid)}`),
                     onMove: (bid, dir) => {
                       const i = material.blocks.findIndex((b) => b.id === bid);
                       const next = [...material.blocks];
@@ -432,18 +461,12 @@ function Editor() {
 
   return (
     <div className="lg:-mx-2">
-      <nav className="no-print mb-2 flex items-center gap-1.5 text-sm text-muted" aria-label="Διαδρομή">
-        <Link href="/materials" className="hover:text-ink">
-          Υλικό & αρχεία
-        </Link>
-        <span>/</span>
-        <span className="hidden sm:inline">{subject?.name}</span>
-        <span className="hidden sm:inline">/</span>
-        <span className="truncate text-ink-2">{material.title}</span>
-      </nav>
-
       <div className="no-print mb-4 flex flex-wrap items-start gap-3">
+        <BackButton fallback="/materials" />
         <div className="min-w-0 flex-1">
+          <p className="mb-0.5 truncate text-[13px] text-muted">
+            Υλικό · {subject?.name}
+          </p>
           {editingTitle ? (
             <input
               autoFocus
@@ -454,7 +477,8 @@ function Editor() {
                 setEditingTitle(false);
               }}
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-              className="w-full rounded-lg border border-brand-500 bg-surface px-2 text-[28px] font-extrabold tracking-tight text-brand-700 outline-none sm:text-[36px]"
+              maxLength={200}
+              className="w-full rounded-lg border border-brand-500 bg-surface px-2 text-[24px] font-extrabold tracking-tight text-brand-700 outline-none sm:text-[34px]"
             />
           ) : (
             <h1
@@ -463,7 +487,7 @@ function Editor() {
               onClick={() => setEditingTitle(true)}
               onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setEditingTitle(true)}
               title="Πάτησε για μετονομασία"
-              className="cursor-text text-[28px] font-extrabold leading-tight tracking-tight text-brand-700 sm:text-[36px]">
+              className="cursor-text break-words text-[24px] font-extrabold leading-tight tracking-tight text-brand-700 sm:text-[34px]">
               {material.title}
             </h1>
           )}

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AiError, aiConfigured, callTool, type Part } from "@/lib/ai/claude";
-import { ADAPT_SYSTEM, ADAPT_TOOL, CREATE_SYSTEM, CREATE_TOOL, TIMETABLE_SYSTEM, TIMETABLE_TOOL } from "@/lib/ai/prompts";
+import { ADAPT_SYSTEM, ADAPT_TOOL, CREATE_SYSTEM, CREATE_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, TIMETABLE_SYSTEM, TIMETABLE_TOOL } from "@/lib/ai/prompts";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -25,6 +25,14 @@ async function fileParts(bytes: ArrayBuffer, type: string, name: string): Promis
     return [{ type: "text", text: `Περιεχόμενο εγγράφου «${name}»:\n\n${value.slice(0, 60_000)}` }];
   }
   return "Αυτή η μορφή δεν διαβάζεται. Αποθήκευσε το αρχείο ως PDF ή φωτογραφία και ξαναδοκίμασε.";
+}
+
+/** A photo or PDF sent straight from the browser (already shrunk there). */
+function inlineFile(type: string, data: string): Part | undefined {
+  if (!data) return undefined;
+  if (type === "application/pdf") return { type: "document", source: { type: "base64", media_type: "application/pdf", data } };
+  if (IMAGE_TYPES.includes(type)) return { type: "image", source: { type: "base64", media_type: type, data } };
+  return undefined;
 }
 
 export async function POST(req: NextRequest) {
@@ -102,14 +110,20 @@ export async function POST(req: NextRequest) {
         });
         return NextResponse.json(out);
       }
+      case "roster": {
+        const file = inlineFile(str("mediaType"), str("data", 16_000_000));
+        if (!file) return fail(415, "Ανέβασε φωτογραφία ή PDF της λίστας.");
+        const out = await callTool<{ students: unknown[]; className?: string; notes?: string }>({
+          system: ROSTER_SYSTEM,
+          content: [file, { type: "text", text: `Τμήμα για το οποίο προορίζεται: ${str("className") || "—"}` }],
+          tool: ROSTER_TOOL,
+          maxTokens: 4000,
+        });
+        return NextResponse.json(out);
+      }
       case "timetable": {
-        const type = str("mediaType");
-        const data = str("data", 16_000_000);
-        if (!data || !(IMAGE_TYPES.includes(type) || type === "application/pdf")) return fail(415, "Ανέβασε φωτογραφία ή PDF του προγράμματος.");
-        const file: Part =
-          type === "application/pdf"
-            ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
-            : { type: "image", source: { type: "base64", media_type: type, data } };
+        const file = inlineFile(str("mediaType"), str("data", 16_000_000));
+        if (!file) return fail(415, "Ανέβασε φωτογραφία ή PDF του προγράμματος.");
         const out = await callTool<{ entries: unknown[]; teacher?: string; notes?: string }>({
           system: TIMETABLE_SYSTEM,
           content: [

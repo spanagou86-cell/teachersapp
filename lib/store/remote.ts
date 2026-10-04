@@ -171,6 +171,7 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
       db
         .from("lesson_slots")
         .select("id, date, start_time, end_time, kind, class_id, subject_id, topic, status, taught_note, carried_from_id, carried_to_id, template_id")
+          .eq("cancelled", false)
         .gte("date", from)
         .lte("date", to)
         .order("date")
@@ -272,6 +273,7 @@ export const remote = {
         db()
           .from("lesson_slots")
           .select("id, date, start_time, end_time, kind, class_id, subject_id, topic, status, taught_note, carried_from_id, carried_to_id, template_id")
+          .eq("cancelled", false)
           .eq("kind", "lesson")
           .gte("date", from)
           .lte("date", to)
@@ -327,7 +329,7 @@ export const remote = {
         .from("students")
         .insert(list.map((s, i) => ({ id: s.id, class_id: s.classId, first_name: s.firstName, last_name: s.lastName, sort: firstSort + i }))),
     ),
-  updateStudent: (s: Student) => run(db().from("students").update({ first_name: s.firstName, last_name: s.lastName }).eq("id", s.id)),
+  updateStudent: (s: Student) => run(db().from("students").update({ first_name: s.firstName, last_name: s.lastName, class_id: s.classId }).eq("id", s.id)),
   deleteStudent: (id: string) => run(db().from("students").delete().eq("id", id)),
 
   /** `date` only on creation: the database default is UTC, not Athens. */
@@ -377,6 +379,50 @@ export const remote = {
       await run(db().from("slot_materials").insert(s.materialIds.map((m) => ({ slot_id: s.id, material_id: m }))));
   },
   deleteSlot: (id: string) => run(db().from("lesson_slots").delete().eq("id", id)),
+
+  /** "Διαγραφή μαθήματος": kept as cancelled, so the timetable never recreates it. */
+  cancelSlot: (id: string, cancelled = true) => run(db().from("lesson_slots").update({ cancelled }).eq("id", id)),
+
+  /**
+   * Changes a lesson's day, time, class or subject. A lesson that came from the timetable
+   * becomes a one-off, and its original place is marked cancelled so it isn't filled again.
+   */
+  editSlot: async (s: LessonSlot, original: LessonSlot) => {
+    const moved = s.date !== original.date || s.start !== original.start;
+    const { data, error } = await db().from("lesson_slots").select("template_id").eq("id", s.id).maybeSingle();
+    if (error) throw new Error(error.message);
+    const template = (data as { template_id: string | null } | null)?.template_id ?? null;
+    await run(
+      db()
+        .from("lesson_slots")
+        .update({
+          date: s.date,
+          start_time: s.start,
+          end_time: s.end,
+          class_id: s.classId,
+          subject_id: s.subjectId,
+          ...(moved && template && { template_id: null }),
+        })
+        .eq("id", s.id),
+    );
+    if (moved && template)
+      await run(
+        db().from("lesson_slots").upsert(
+          {
+            date: original.date,
+            start_time: original.start,
+            end_time: original.end,
+            kind: "lesson",
+            class_id: original.classId,
+            subject_id: original.subjectId,
+            topic: "",
+            template_id: template,
+            cancelled: true,
+          },
+          { onConflict: "owner,template_id,date", ignoreDuplicates: true },
+        ),
+      );
+  },
   attach: (slotId: string, materialId: string) =>
     run(db().from("slot_materials").upsert({ slot_id: slotId, material_id: materialId }, { ignoreDuplicates: true })),
   detach: (slotId: string, materialId: string) =>
@@ -406,7 +452,7 @@ export const remote = {
     await run(db().from("materials").update({ blocks: m.blocks }).eq("id", m.id));
     if (v) await run(db().from("material_versions").insert({ id: v.id, material_id: m.id, label: v.label.slice(0, 200), blocks: v.blocks }));
   },
-  patchMaterial: (id: string, p: Partial<Pick<Material, "title" | "withSolutions" | "blackAndWhite" | "classId" | "subjectId">>) =>
+  patchMaterial: (id: string, p: Partial<Pick<Material, "title" | "withSolutions" | "blackAndWhite" | "classId" | "subjectId" | "kind" | "level">>) =>
     run(
       db()
         .from("materials")
@@ -416,6 +462,8 @@ export const remote = {
           ...(p.blackAndWhite !== undefined && { black_and_white: p.blackAndWhite }),
           ...(p.classId !== undefined && { class_id: p.classId }),
           ...(p.subjectId !== undefined && { subject_id: p.subjectId }),
+          ...(p.kind !== undefined && { kind: p.kind }),
+          ...(p.level !== undefined && { level: p.level }),
         })
         .eq("id", id),
     ),

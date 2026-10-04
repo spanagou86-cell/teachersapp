@@ -7,7 +7,7 @@ import { buildBlocks } from "../ai/templates";
 import { addDays, DEMO_NOW, DEMO_TODAY } from "../dates";
 import { uid } from "../id";
 import { applyChange, restoreOriginal, restoreVersion } from "../materials";
-import { carryOverLesson, undoCarryOver, type CarryOverResult, type TimeWindow } from "../schedule";
+import { carryOverLesson, findConflicts, undoCarryOver, type CarryOverResult, type TimeWindow } from "../schedule";
 import { seed, type SeedState } from "../seed";
 import { isSchoolDay } from "../schoolYear";
 import { materialize } from "../timetable";
@@ -74,6 +74,8 @@ interface Actions {
   updateClass: (c: ClassGroup) => void;
   deleteClass: (id: string) => void;
   addStudents: (classId: string, names: string[]) => void;
+  /** Names already split into first and last (e.g. read from a photo of the class list). */
+  addStudentRecords: (classId: string, list: { firstName: string; lastName: string }[]) => void;
   renameStudent: (s: Student) => void;
   removeStudent: (id: string) => void;
   saveTimetable: (entries: TimetableEntry[]) => Promise<void>;
@@ -96,6 +98,13 @@ interface Actions {
   markAllPresent: (classId: string, date: string) => void;
 
   updateSlot: (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic">>) => void;
+  /** Day, time, class or subject of one lesson. Refuses times already taken. */
+  editSlot: (id: string, patch: Pick<LessonSlot, "date" | "start" | "end" | "classId" | "subjectId">) => { ok: true } | { ok: false; conflicts: TimeWindow[] };
+  /** Removes one lesson; returns it so "Αναίρεση" can bring it back. */
+  deleteSlot: (id: string) => LessonSlot | undefined;
+  restoreSlot: (slot: LessonSlot) => void;
+  /** A one-off lesson outside the timetable (e.g. an extra hour). */
+  addSlot: (input: Pick<LessonSlot, "date" | "start" | "end" | "classId" | "subjectId" | "topic">) => { ok: true; id: string } | { ok: false; conflicts: TimeWindow[] };
   attachMaterial: (slotId: string, materialId: string) => void;
   detachMaterial: (slotId: string, materialId: string) => void;
   carryOver: (slotId: string, target: TimeWindow) => CarryOverResult;
@@ -105,7 +114,7 @@ interface Actions {
   changeBlocks: (id: string, blocks: Block[], label: string) => void;
   restoreVersion: (id: string, versionId: string) => void;
   restoreOriginal: (id: string) => void;
-  patchMaterial: (id: string, patch: Partial<Pick<Material, "title" | "withSolutions" | "blackAndWhite" | "classId" | "subjectId">>) => void;
+  patchMaterial: (id: string, patch: Partial<Pick<Material, "title" | "withSolutions" | "blackAndWhite" | "classId" | "subjectId" | "kind" | "level">>) => void;
   duplicateMaterial: (id: string, blocks: Block[], suffix: string) => string;
   deleteMaterial: (id: string) => void;
 
@@ -148,7 +157,7 @@ const EMPTY: Omit<SeedState, "subjects"> = {
   studentNotes: [],
 };
 
-const DEMO_PROFILE: Profile = { displayName: "Σπύρος", schoolName: "Δημοτικό σχολείο", onboarded: true, country: "gr" };
+const DEMO_PROFILE: Profile = { displayName: "Σπύρος", schoolName: "3ο Δημοτικό Σχολείο Πάτρας", onboarded: true, country: "gr" };
 
 const noteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -289,6 +298,15 @@ export const useApp = create<AppState>()(
               const [first, ...rest] = n.split(" ");
               return { id: uid(), classId, firstName: first.slice(0, 60), lastName: rest.join(" ").slice(0, 60) };
             });
+          if (!list.length) return;
+          const firstSort = get().students.filter((x) => x.classId === classId).length;
+          set((s) => ({ students: [...s.students, ...list] }));
+          sync(() => remote.insertStudents(list, firstSort));
+        },
+        addStudentRecords: (classId, records) => {
+          const list: Student[] = records
+            .filter((r) => r.firstName.trim())
+            .map((r) => ({ id: uid(), classId, firstName: r.firstName.trim().slice(0, 60), lastName: r.lastName.trim().slice(0, 60) }));
           if (!list.length) return;
           const firstSort = get().students.filter((x) => x.classId === classId).length;
           set((s) => ({ students: [...s.students, ...list] }));
@@ -444,6 +462,51 @@ export const useApp = create<AppState>()(
         detachMaterial: (slotId, materialId) => {
           set((s) => ({ slots: s.slots.map((x) => (x.id === slotId ? { ...x, materialIds: x.materialIds.filter((m) => m !== materialId) } : x)) }));
           sync(() => remote.detach(slotId, materialId));
+        },
+        editSlot: (id, patch) => {
+          const { slots, blocks } = get();
+          const original = slots.find((x) => x.id === id);
+          if (!original) return { ok: false, conflicts: [] };
+          const busy = [...slots.filter((x) => x.id !== id), ...blocks.filter((b) => b.kind !== "free")];
+          const conflicts = findConflicts(busy, { date: patch.date, start: patch.start, end: patch.end });
+          if (conflicts.length) return { ok: false, conflicts };
+          const next = { ...original, ...patch };
+          set((s) => ({ slots: s.slots.map((x) => (x.id === id ? next : x)) }));
+          sync(() => remote.editSlot(next, original));
+          return { ok: true };
+        },
+        deleteSlot: (id) => {
+          const slot = get().slots.find((x) => x.id === id);
+          if (!slot) return undefined;
+          set((s) => ({
+            slots: s.slots
+              .filter((x) => x.id !== id)
+              // A deleted continuation frees the lesson it continued.
+              .map((x) => (x.id === slot.carriedFromId ? { ...x, carriedToId: undefined } : x)),
+          }));
+          sync(async () => {
+            await remote.cancelSlot(id);
+            if (slot.carriedFromId) await remote.updateSlot(slot.carriedFromId, { carriedToId: undefined });
+          });
+          return slot;
+        },
+        restoreSlot: (slot) => {
+          set((s) => ({
+            slots: [...s.slots.filter((x) => x.id !== slot.id), slot].map((x) => (x.id === slot.carriedFromId ? { ...x, carriedToId: slot.id } : x)),
+          }));
+          sync(async () => {
+            await remote.cancelSlot(slot.id, false);
+            if (slot.carriedFromId) await remote.updateSlot(slot.carriedFromId, { carriedToId: slot.id });
+          });
+        },
+        addSlot: (input) => {
+          const { slots, blocks } = get();
+          const conflicts = findConflicts([...slots, ...blocks.filter((b) => b.kind !== "free")], input);
+          if (conflicts.length) return { ok: false, conflicts };
+          const slot: LessonSlot = { ...input, id: uid(), materialIds: [], status: "planned", taughtNote: "" };
+          set((s) => ({ slots: [...s.slots, slot] }));
+          sync(() => remote.insertSlot(slot));
+          return { ok: true, id: slot.id };
         },
         carryOver: (slotId, target) => {
           const { slots, blocks, today } = get();

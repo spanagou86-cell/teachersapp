@@ -2,7 +2,8 @@
 
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, BookOpen, GripVertical, Pencil, Trash2, Target } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { GrowingTextarea } from "../text";
 import { buttonClass, cx, inputClass } from "../ui";
 import { SUBJECTS } from "@/lib/seed";
 import { useApp } from "@/lib/store";
@@ -62,29 +63,90 @@ function AnswerLines({ n }: { n: number }) {
   return <div aria-hidden className="ruled mt-1" style={{ height: n * 28 }} />;
 }
 
+export type BlockPatch = Pick<Block, "text" | "answer" | "lines">;
+
 export interface DocEditHandlers {
   selectedId?: string;
   onSelect: (id?: string) => void;
-  onSave: (id: string, patch: Pick<Block, "text" | "answer">) => void;
+  onSave: (id: string, patch: BlockPatch) => void;
   onMove: (id: string, dir: -1 | 1) => void;
   onDelete: (id: string) => void;
 }
 
-function BlockEditor({ block, onCancel, onSave }: { block: Block; onCancel: () => void; onSave: (p: Pick<Block, "text" | "answer">) => void }) {
+/**
+ * Editing one block. What is typed is kept: it is saved with «Έτοιμο», and also when the
+ * teacher taps another block, switches tab or leaves the page. Only «Άκυρο» discards it.
+ */
+function BlockEditor({ block, onCancel, onSave }: { block: Block; onCancel: () => void; onSave: (p: BlockPatch) => void }) {
   const [text, setText] = useState(block.text);
   const [answer, setAnswer] = useState(block.answer ?? "");
+  const [lines, setLines] = useState(block.lines ?? 2);
+  const discarded = useRef(false);
+  const latest = useRef({ text, answer, lines });
+  latest.current = { text, answer, lines };
+  const save = useRef(onSave);
+  save.current = onSave;
+
+  const patch = (): BlockPatch | undefined => {
+    const { text: t, answer: a, lines: l } = latest.current;
+    if (!t.trim()) return undefined;
+    const p: BlockPatch = { text: t.trim(), answer: a.trim() || undefined, lines: block.type === "exercise" ? l : block.lines };
+    const same = p.text === block.text && (p.answer ?? "") === (block.answer ?? "") && (p.lines ?? 2) === (block.lines ?? 2);
+    return same ? undefined : p;
+  };
+
+  // Leaving the editor any other way than «Άκυρο» keeps the changes.
+  useEffect(
+    () => () => {
+      if (discarded.current) return;
+      const p = patch();
+      if (p) save.current(p);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   return (
     <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-      <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={Math.max(2, text.split("\n").length + 1)} aria-label="Κείμενο" className={cx(inputClass, "py-2 text-[15px]")} />
+      <GrowingTextarea autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={4000} aria-label="Κείμενο" className={cx(inputClass, "py-2 text-[15px] leading-relaxed")} />
       {block.type === "exercise" && (
-        <input value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Λύση (προαιρετικά)" aria-label="Λύση" className={cx(inputClass, "h-9")} />
+        <>
+          <GrowingTextarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={1} maxLength={2000} placeholder="Λύση (προαιρετικά)" aria-label="Λύση" className={cx(inputClass, "py-2")} />
+          <div className="flex items-center gap-2 text-[13px] text-ink-2">
+            <span className="flex-1">Γραμμές απάντησης</span>
+            <button type="button" aria-label="Λιγότερες γραμμές" disabled={lines <= 0} onClick={() => setLines((n) => Math.max(0, n - 1))} className="flex size-10 items-center justify-center rounded-lg border border-line text-lg disabled:opacity-30">
+              −
+            </button>
+            <span className="w-6 text-center font-bold tabular-nums">{lines}</span>
+            <button type="button" aria-label="Περισσότερες γραμμές" disabled={lines >= 12} onClick={() => setLines((n) => Math.min(12, n + 1))} className="flex size-10 items-center justify-center rounded-lg border border-line text-lg disabled:opacity-30">
+              +
+            </button>
+          </div>
+        </>
       )}
       <div className="flex justify-end gap-2">
-        <button type="button" className={buttonClass("ghost", "sm")} onClick={onCancel}>
+        <button
+          type="button"
+          className={buttonClass("ghost", "md")}
+          onClick={() => {
+            discarded.current = true;
+            onCancel();
+          }}
+        >
           Άκυρο
         </button>
-        <button type="button" className={buttonClass("primary", "sm")} disabled={!text.trim()} onClick={() => onSave({ text: text.trim(), answer: answer.trim() || undefined })}>
-          Αποθήκευση
+        <button
+          type="button"
+          className={buttonClass("primary", "md")}
+          disabled={!text.trim()}
+          onClick={() => {
+            discarded.current = true;
+            const p = patch();
+            if (p) onSave(p);
+            else onCancel();
+          }}
+        >
+          Έτοιμο
         </button>
       </div>
     </div>
@@ -150,7 +212,7 @@ export function DocPage({
                   onCancel={() => setEditingId(undefined)}
                   onSave={(p) => {
                     edit.onSave(b.id, p);
-                    setEditingId(undefined);
+                    setEditingId((cur) => (cur === b.id ? undefined : cur));
                   }}
                 />
               );
@@ -200,17 +262,19 @@ export function DocPage({
                 )}
               >
                 {interactive && selected && !editing && (
-                  <div className="no-print absolute -top-4 right-2 z-10 flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 shadow-pop" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-semibold hover:bg-line-2" onClick={() => setEditingId(b.id)}>
-                      <Pencil className="size-3.5" /> Επεξεργασία
-                    </button>
-                    <button type="button" aria-label="Μετακίνηση πάνω" className="flex size-7 items-center justify-center rounded-md hover:bg-line-2 disabled:opacity-30" disabled={i === 0} onClick={() => edit.onMove(b.id, -1)}>
+                  <div className="no-print absolute -top-6 right-1 z-10 flex items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 shadow-pop" onClick={(e) => e.stopPropagation()}>
+                    {b.type !== "chart" && (
+                      <button type="button" className="flex h-9 items-center gap-1 rounded-md px-2.5 text-[13px] font-semibold hover:bg-line-2" onClick={() => setEditingId(b.id)}>
+                        <Pencil className="size-4" /> Επεξεργασία
+                      </button>
+                    )}
+                    <button type="button" aria-label="Μετακίνηση πάνω" className="flex size-9 items-center justify-center rounded-md hover:bg-line-2 disabled:opacity-30" disabled={i === 0} onClick={() => edit.onMove(b.id, -1)}>
                       <ArrowUp className="size-3.5" />
                     </button>
-                    <button type="button" aria-label="Μετακίνηση κάτω" className="flex size-7 items-center justify-center rounded-md hover:bg-line-2 disabled:opacity-30" disabled={i === blocks.length - 1} onClick={() => edit.onMove(b.id, 1)}>
+                    <button type="button" aria-label="Μετακίνηση κάτω" className="flex size-9 items-center justify-center rounded-md hover:bg-line-2 disabled:opacity-30" disabled={i === blocks.length - 1} onClick={() => edit.onMove(b.id, 1)}>
                       <ArrowDown className="size-3.5" />
                     </button>
-                    <button type="button" aria-label="Διαγραφή" className="flex size-7 items-center justify-center rounded-md text-danger hover:bg-danger-50" onClick={() => edit.onDelete(b.id)}>
+                    <button type="button" aria-label="Διαγραφή" className="flex size-9 items-center justify-center rounded-md text-danger hover:bg-danger-50" onClick={() => edit.onDelete(b.id)}>
                       <Trash2 className="size-3.5" />
                     </button>
                   </div>

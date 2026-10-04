@@ -119,7 +119,7 @@ export default function MaterialsPage() {
                       del(m.id);
                       toast("Το υλικό διαγράφηκε");
                     }}
-                    className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-line-2 hover:text-danger sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                    className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-line-2 hover:text-danger hover-capable:opacity-0 hover-capable:group-hover:opacity-100 focus:opacity-100"
                   >
                     <Trash2 className="size-4" />
                   </button>

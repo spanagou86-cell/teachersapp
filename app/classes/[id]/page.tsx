@@ -16,6 +16,7 @@ import { sortSlots } from "@/lib/schedule";
 import { holidayOn } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
 import type { ClassGroup, Student } from "@/lib/types";
+import { AutoText } from "@/components/text";
 
 type Tab = "attendance" | "students" | "progress" | "notes";
 
@@ -303,20 +304,13 @@ function Notes({ cls }: { cls: ClassGroup }) {
               <Card className="group flex gap-3 p-4">
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-muted">{longDate(n.date)}</p>
-                  <textarea
-                    defaultValue={n.text}
-                    aria-label="Κείμενο σημείωσης"
-                    rows={Math.min(6, n.text.split("\n").length + Math.floor(n.text.length / 70))}
+                  <AutoText
+                    multiline
+                    value={n.text}
+                    onSave={(v) => edit(n.id, v)}
+                    label="Κείμενο σημείωσης"
                     maxLength={2000}
-                    onBlur={(e) => {
-                      const v = e.target.value.trim();
-                      if (!v) e.target.value = n.text;
-                      else if (v !== n.text) {
-                        edit(n.id, v);
-                        toast("Η σημείωση διορθώθηκε");
-                      }
-                    }}
-                    className="mt-1 w-full resize-none rounded-md bg-transparent text-[15px] outline-none focus:bg-line-2"
+                    className="mt-1 w-full rounded-md bg-transparent px-1 text-[15px] leading-relaxed outline-none focus:bg-line-2"
                   />
                 </div>
                 <button

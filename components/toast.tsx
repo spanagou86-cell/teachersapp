@@ -25,9 +25,9 @@ function ToastItem({ t }: { t: Toast }) {
     return () => clearTimeout(h);
   }, [t, dismiss]);
   return (
-    <div role="status" className="pointer-events-auto flex animate-slide-up items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-bg shadow-pop">
+    <div role="status" className="pointer-events-auto flex w-full max-w-md animate-slide-up items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-bg shadow-pop">
       <CheckCircle2 className="size-5 shrink-0 text-brand-500" />
-      <span className="flex-1">{t.text}</span>
+      <span className="min-w-0 flex-1 break-words">{t.text}</span>
       {t.action && (
         <button
           type="button"

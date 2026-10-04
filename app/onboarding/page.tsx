@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/shell/AppShell";
 import { toast } from "@/components/toast";
 import { Button, Card, cx, Field, IconButton, inputClass, Segmented, Select } from "@/components/ui";
+import { RosterImport } from "@/components/roster";
+import { GrowingTextarea } from "@/components/text";
 import { GRADES } from "@/lib/grades";
 import { flushWrites, useApp } from "@/lib/store";
 
@@ -112,11 +114,19 @@ export default function OnboardingPage() {
                   <input value={d.room} onChange={(e) => patch(d.key, { room: e.target.value })} maxLength={60} placeholder="π.χ. Αίθουσα 3" className={cx(inputClass, "h-10")} />
                 </Field>
               </div>
+              <div className="mt-3">
+                <RosterImport
+                  className={d.name}
+                  onAdd={(list) =>
+                    patch(d.key, { students: [d.students.trim(), ...list.map((x) => `${x.firstName} ${x.lastName}`.trim())].filter(Boolean).join("\n") })
+                  }
+                />
+              </div>
               <Field label={`Μαθητές${count ? ` · ${count}` : ""}`} className="mt-3">
-                <textarea
+                <GrowingTextarea
                   value={d.students}
                   onChange={(e) => patch(d.key, { students: e.target.value })}
-                  rows={5}
+                  rows={4}
                   placeholder={"Ένα όνομα ανά γραμμή, π.χ.\nΜαρία Κ.\nΝίκος Π."}
                   className={cx(inputClass, "py-2.5")}
                 />
