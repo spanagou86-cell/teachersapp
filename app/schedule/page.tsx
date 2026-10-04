@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { CalendarCog, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "lucide-react";
+import { BookOpenCheck, CalendarCog, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo } from "react";
@@ -323,6 +323,9 @@ function Calendar() {
                 </IconButton>
               </div>
             )}
+            <ButtonLink href="/journal" variant="secondary" size="sm" className="h-9">
+              <BookOpenCheck className="size-4" /> Ύλη
+            </ButtonLink>
             <ButtonLink href="/settings/timetable" variant="secondary" size="sm" className="h-9">
               <CalendarCog className="size-4" /> Ωρολόγιο
             </ButtonLink>

@@ -197,12 +197,54 @@ async function trust(name) {
   await ctx.close();
 }
 
+/** Ημερολόγιο ύλης and Εβδομαδιαίος προγραμματισμός: gaps, filling in place, printing. */
+async function journalFlow(name) {
+  console.log(`\n## ${name}`);
+  for (const [vp, mobile, tag] of [[{ width: 390, height: 844 }, true, "mobile"], [{ width: 1280, height: 900 }, false, "desktop"]]) {
+    const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 2, isMobile: mobile, hasTouch: mobile, locale: "el-GR" });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+    await page.goto(BASE + "/login");
+    await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+    await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+
+    // From the class page, through the "Πρόοδος" tab.
+    await page.goto(`${BASE}/classes/d1?tab=progress`);
+    await page.getByRole("link", { name: "Ημερολόγιο ύλης" }).click();
+    await page.waitForURL(/\/journal\?class=d1/);
+    await page.getByText("1 μάθημα δεν έχει καταγραφή").waitFor();
+    assert(true, `${tag}: the month shows the lesson without a record`);
+
+    await page.getByRole("button", { name: "Συμπλήρωση" }).click();
+    await page.getByLabel(/Δευτέρα 5 Οκτ · 08:00 · Γλώσσα/).fill("Ασκήσεις ορθογραφίας 1–4");
+    await page.getByRole("button", { name: "Αποθήκευση" }).click();
+    await page.getByText("Καταγράφηκε").first().waitFor();
+    assert((await page.getByText(/δεν (έχει|έχουν) καταγραφή/).count()) === 0, `${tag}: filled in place, no gaps left`);
+    assert((await page.getByText("Ασκήσεις ορθογραφίας 1–4").count()) > 0, `${tag}: the new line appears in the journal`);
+    await page.screenshot({ path: path.join(OUT, `${name}-${tag}-01-log.png`), fullPage: true });
+
+    await page.getByRole("radio", { name: "Τρίμηνο" }).click();
+    await page.getByText(/Α΄ τρίμηνο|τρίμηνο/).first().waitFor();
+    await page.getByRole("radio", { name: "Εβδομαδιαίος προγραμματισμός" }).click();
+    await page.waitForURL(/view=plan/);
+    await page.screenshot({ path: path.join(OUT, `${name}-${tag}-02-plan.png`), fullPage: true });
+    if (!mobile) {
+      await page.goto(`${BASE}/journal?class=d1&period=term`);
+      await page.waitForTimeout(400);
+      await page.pdf({ path: path.join(OUT, `${name}-term.pdf`), format: "A4" });
+      assert(fs.statSync(path.join(OUT, `${name}-term.pdf`)).size > 10_000, "term journal prints to an A4 PDF");
+    }
+    await ctx.close();
+  }
+}
+
 try {
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
   await dark("dark-mobile", { width: 390, height: 844 }, true);
   await dark("dark-desktop", { width: 1440, height: 900 }, false);
   await trust("trust");
+  await journalFlow("journal");
 } finally {
   await browser.close();
 }

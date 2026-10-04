@@ -265,6 +265,25 @@ async function deleteUntouched(slots: FutureSlot[]) {
 const TABLES = ["profiles", "classes", "students", "timetable_entries", "lesson_slots", "materials", "material_versions", "slot_materials", "attendance", "tasks", "class_notes", "student_notes"] as const;
 
 export const remote = {
+  /** Lessons of any period (the app keeps only the months around today in memory). */
+  fetchSlots: async (from: string, to: string): Promise<LessonSlot[]> => {
+    const [rows, links] = await Promise.all([
+      all<SlotRow>((a, b) =>
+        db()
+          .from("lesson_slots")
+          .select("id, date, start_time, end_time, kind, class_id, subject_id, topic, status, taught_note, carried_from_id, carried_to_id, template_id")
+          .eq("kind", "lesson")
+          .gte("date", from)
+          .lte("date", to)
+          .order("date")
+          .order("start_time")
+          .range(a, b),
+      ),
+      all<{ slot_id: string; material_id: string }>((a, b) => db().from("slot_materials").select("slot_id, material_id").range(a, b)),
+    ]);
+    return splitSlots(rows, links).slots;
+  },
+
   /** Everything the teacher has stored, for "Κατέβασε τα δεδομένα μου" (GDPR portability). */
   exportAll: async (): Promise<Record<string, unknown[]>> => {
     const out: Record<string, unknown[]> = {};

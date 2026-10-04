@@ -10,7 +10,7 @@ export const NAV = [
 
 export function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
-  if (href === "/schedule") return pathname.startsWith("/schedule") || pathname.startsWith("/lessons");
+  if (href === "/schedule") return pathname.startsWith("/schedule") || pathname.startsWith("/lessons") || pathname.startsWith("/journal");
   if (href === "/classes") return pathname.startsWith("/classes") || pathname.startsWith("/students");
   return pathname === href || pathname.startsWith(`${href}/`);
 }

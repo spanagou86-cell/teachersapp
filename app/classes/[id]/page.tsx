@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { CalendarDays, CheckCheck, ChevronLeft, ChevronRight, Info, NotebookPen, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { BookOpenCheck, CalendarDays, CheckCheck, ChevronLeft, ChevronRight, Info, NotebookPen, Pencil, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -234,7 +234,12 @@ function Progress({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
       </Card>
 
       <Card className="p-5 lg:col-span-2">
-        <h2 className="mb-3 text-lg font-bold">Τι διδάχθηκε</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-bold">Τι διδάχθηκε</h2>
+          <ButtonLink href={`/journal?class=${cls.id}`} variant="secondary" size="sm">
+            <BookOpenCheck className="size-4" /> Ημερολόγιο ύλης
+          </ButtonLink>
+        </div>
         <ol className="relative space-y-4 border-l border-line pl-5">
           {[...past].reverse().slice(0, 10).map((s) => (
             <li key={s.id} className="relative">
