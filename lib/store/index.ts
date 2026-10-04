@@ -9,6 +9,7 @@ import { uid } from "../id";
 import { applyChange, restoreOriginal, restoreVersion } from "../materials";
 import { carryOverLesson, undoCarryOver, type CarryOverResult, type TimeWindow } from "../schedule";
 import { seed, type SeedState } from "../seed";
+import { holidayOn } from "../schoolYear";
 import { materialize } from "../timetable";
 import type {
   Block,
@@ -22,6 +23,7 @@ import type {
   MaterialKind,
   Profile,
   Student,
+  StudentNote,
   SubjectId,
   TimeBlock,
   TimetableEntry,
@@ -76,7 +78,10 @@ interface Actions {
   addTask: (text: string) => void;
   removeTask: (id: string) => void;
 
-  toggleAbsent: (classId: string, date: string, studentId: string) => void;
+  /** Present → absent → late → present. */
+  cycleAttendance: (classId: string, date: string, studentId: string) => void;
+  addStudentNote: (studentId: string, kind: StudentNote["kind"], text: string) => void;
+  deleteStudentNote: (id: string) => void;
   markAllPresent: (classId: string, date: string) => void;
 
   updateSlot: (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic">>) => void;
@@ -129,7 +134,10 @@ const EMPTY: Omit<SeedState, "subjects"> = {
   notes: [],
   timetable: [],
   blocks: [],
+  studentNotes: [],
 };
+
+const DEMO_PROFILE: Profile = { displayName: "Σπύρος", schoolName: "Δημοτικό σχολείο", onboarded: true, country: "gr" };
 
 const noteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -167,19 +175,19 @@ export const useApp = create<AppState>()(
       return {
         ...seed(),
         mode: null,
-        profile: { displayName: "Σπύρος", schoolName: "Δημοτικό σχολείο", onboarded: true },
+        profile: DEMO_PROFILE,
         today: DEMO_TODAY,
         now: DEMO_NOW,
         syncing: false,
 
         startDemo: () =>
-          set({ ...seed(), mode: "demo", userId: undefined, email: undefined, today: DEMO_TODAY, now: DEMO_NOW, profile: { displayName: "Σπύρος", schoolName: "Δημοτικό σχολείο", onboarded: true } }),
+          set({ ...seed(), mode: "demo", userId: undefined, email: undefined, today: DEMO_TODAY, now: DEMO_NOW, profile: DEMO_PROFILE }),
         loadCloud: async (userId, email) => {
           const clock = athensClock();
           const data = await loadAll(userId, clock.today);
           set({ ...data, mode: "cloud", userId, email, ...clock });
         },
-        leave: () => set({ ...seed(), mode: null, userId: undefined, email: undefined, today: DEMO_TODAY, now: DEMO_NOW }),
+        leave: () => set({ ...seed(), mode: null, userId: undefined, email: undefined, today: DEMO_TODAY, now: DEMO_NOW, profile: DEMO_PROFILE }),
         tick: () => {
           if (get().mode === "cloud") set(athensClock());
         },
@@ -237,7 +245,7 @@ export const useApp = create<AppState>()(
             await flushWrites();
             set({ syncing: true });
             try {
-              await remote.saveTimetable(entries, previous, today);
+              await remote.saveTimetable(entries, previous, today, get().profile.country);
               await remote.updateProfile(get().userId!, { onboarded: true });
               await reload();
             } finally {
@@ -247,7 +255,8 @@ export const useApp = create<AppState>()(
           }
           // Demo: rebuild the coming three weeks locally from the new template.
           const keep = (s: LessonSlot) => s.date < today || s.status !== "planned" || s.taughtNote || s.materialIds.length || s.carriedFromId;
-          const occ = materialize(entries, today, addDays(today, 20));
+          const country = get().profile.country;
+          const occ = materialize(entries, today, addDays(today, 20), new Set(), (d) => !!holidayOn(country, d));
           set((s) => ({
             timetable: entries,
             slots: [
@@ -291,15 +300,30 @@ export const useApp = create<AppState>()(
           sync(() => remote.deleteTask(id));
         },
 
-        toggleAbsent: (classId, date, studentId) => {
+        cycleAttendance: (classId, date, studentId) => {
           const key = attendanceKey(classId, date);
-          const absent = get().attendance[key]?.absentIds ?? [];
-          const record = { absentIds: absent.includes(studentId) ? absent.filter((x) => x !== studentId) : [...absent, studentId], recordedAt: Date.now() };
+          const cur = get().attendance[key];
+          const absent = cur?.absentIds ?? [];
+          const late = cur?.lateIds ?? [];
+          const record = absent.includes(studentId)
+            ? { absentIds: absent.filter((x) => x !== studentId), lateIds: [...late, studentId], recordedAt: Date.now() }
+            : late.includes(studentId)
+              ? { absentIds: absent, lateIds: late.filter((x) => x !== studentId), recordedAt: Date.now() }
+              : { absentIds: [...absent, studentId], lateIds: late, recordedAt: Date.now() };
           set((s) => ({ attendance: { ...s.attendance, [key]: record } }));
           sync(() => remote.setAttendance(classId, date, record));
         },
+        addStudentNote: (studentId, kind, text) => {
+          const n: StudentNote = { id: uid(), studentId, kind, date: get().today, text: text.slice(0, 2000), createdAt: Date.now() };
+          set((s) => ({ studentNotes: [n, ...s.studentNotes] }));
+          sync(() => remote.addStudentNote(n));
+        },
+        deleteStudentNote: (id) => {
+          set((s) => ({ studentNotes: s.studentNotes.filter((n) => n.id !== id) }));
+          sync(() => remote.deleteStudentNote(id));
+        },
         markAllPresent: (classId, date) => {
-          const record = { absentIds: [], recordedAt: Date.now() };
+          const record = { absentIds: [], lateIds: [], recordedAt: Date.now() };
           set((s) => ({ attendance: { ...s.attendance, [attendanceKey(classId, date)]: record } }));
           sync(() => remote.setAttendance(classId, date, record));
         },
@@ -459,7 +483,7 @@ export const useApp = create<AppState>()(
       // Only the demo lives in the browser; a teacher's real data stays in the database.
       partialize: (s) =>
         s.mode === "demo"
-          ? { mode: s.mode, slots: s.slots, blocks: s.blocks, timetable: s.timetable, materials: s.materials, attendance: s.attendance, tasks: s.tasks, notes: s.notes, classes: s.classes, students: s.students }
+          ? { mode: s.mode, profile: s.profile, studentNotes: s.studentNotes, slots: s.slots, blocks: s.blocks, timetable: s.timetable, materials: s.materials, attendance: s.attendance, tasks: s.tasks, notes: s.notes, classes: s.classes, students: s.students }
           : { mode: null },
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Partial<AppState>;
@@ -472,7 +496,7 @@ export const useApp = create<AppState>()(
         if (p.mode !== "demo") return { ...current, ...EMPTY, mode: null };
         const s = seed();
         // Older saves don't have the timetable fields.
-        return { ...current, ...p, timetable: p.timetable ?? s.timetable, blocks: p.blocks ?? s.blocks, classes: p.classes ?? s.classes, students: p.students ?? s.students };
+        return { ...current, ...p, profile: { ...DEMO_PROFILE, ...p.profile }, studentNotes: p.studentNotes ?? s.studentNotes, timetable: p.timetable ?? s.timetable, blocks: p.blocks ?? s.blocks, classes: p.classes ?? s.classes, students: p.students ?? s.students };
       },
     },
   ),

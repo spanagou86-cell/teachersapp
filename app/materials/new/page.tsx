@@ -34,7 +34,7 @@ function guessSubject(name: string): SubjectId | undefined {
 
 function SampleSheet() {
   return (
-    <div className="mx-auto w-40 rotate-[-1deg] rounded-sm bg-white p-3 text-[7px] leading-tight text-ink shadow-paper">
+    <div className="paper mx-auto w-40 rotate-[-1deg] rounded-sm bg-white p-3 text-[7px] leading-tight text-ink shadow-paper">
       <p className="font-bold">Μαθηματικά</p>
       <p className="text-muted">Δ΄ Δημοτικού</p>
       <p className="mt-2">1. Υπολόγισε:</p>

@@ -64,7 +64,49 @@ export function fileKindLabel(type: string, name: string): "PDF" | "Word" | "Ε�
   return "Αρχείο";
 }
 
+/** Subjects teachers often type in Latin letters (greeklish) in file names. */
+const GREEKLISH: [RegExp, string][] = [
+  [/^math(imatika|s)?$/, "Μαθηματικά"],
+  [/^gl(o|w)ssa$/, "Γλώσσα"],
+  [/^meleti$/, "Μελέτη Περιβάλλοντος"],
+  [/^istoria$/, "Ιστορία"],
+  [/^fysika|^fusika|^physics$/, "Φυσικά"],
+  [/^geografia$/, "Γεωγραφία"],
+  [/^aggl?ika|^english$/, "Αγγλικά"],
+  [/^thriskeftika|^thriskeutika$/, "Θρησκευτικά"],
+  [/^eikastika$/, "Εικαστικά"],
+  [/^mousiki$/, "Μουσική"],
+  [/^fyllo|^fullo$/, "Φύλλο"],
+  [/^ergasias|^ergasia$/, "εργασίας"],
+  [/^diagwnisma|^diagonisma$/, "Διαγώνισμα"],
+  [/^test$/, "Τεστ"],
+  [/^askiseis|^askhseis$/, "Ασκήσεις"],
+  [/^kef(alaio)?$/, "Κεφάλαιο"],
+  [/^enotita$/, "Ενότητα"],
+];
+const GRADE: Record<string, string> = { a: "Α΄", b: "Β΄", g: "Γ΄", c: "Γ΄", d: "Δ΄", e: "Ε΄", st: "ΣΤ΄", f: "ΣΤ΄" };
+
+/** "mathimatika_d.pdf" → "Μαθηματικά Δ΄"; anything unrecognised is kept, tidied. */
 export function titleFromFileName(name: string): string {
-  const base = name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
-  return base ? base.charAt(0).toUpperCase() + base.slice(1) : "Νέο υλικό";
+  const words = name
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_\-.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+  if (!words.length) return "Νέο υλικό";
+  let known = 0;
+  const out = words.map((w, i) => {
+    const low = w.toLowerCase();
+    const hit = GREEKLISH.find(([re]) => re.test(low));
+    if (hit) {
+      known++;
+      return hit[1];
+    }
+    if (i > 0 && known && GRADE[low]) return GRADE[low];
+    return w;
+  });
+  const title = out.join(" ");
+  return title.charAt(0).toUpperCase() + title.slice(1);
 }

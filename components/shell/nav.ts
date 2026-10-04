@@ -1,25 +1,16 @@
-import { BarChart3, CalendarDays, CalendarRange, FileText, Folder, Home, MessageCircle, Sparkles, Users } from "lucide-react";
+import { CalendarDays, Clock3, FileText, Users } from "lucide-react";
 
-export const SIDEBAR_NAV = [
-  { href: "/", label: "Σήμερα", Icon: CalendarDays },
-  { href: "/schedule", label: "Πρόγραμμα", Icon: CalendarRange },
-  { href: "/classes", label: "Οι τάξεις μου", Icon: Users },
-  { href: "/materials", label: "Υλικό & αρχεία", Icon: Folder },
-  { href: "/materials/new", label: "Εργαστήριο AI", Icon: Sparkles },
-  { href: "/assessment", label: "Αξιολόγηση", Icon: BarChart3 },
-  { href: "/messages", label: "Επικοινωνία", Icon: MessageCircle },
-] as const;
-
-export const MOBILE_NAV = [
-  { href: "/", label: "Σήμερα", Icon: Home },
-  { href: "/classes", label: "Τάξεις", Icon: Users },
-  { href: "/materials", label: "Υλικό", Icon: FileText },
-  { href: "/schedule", label: "Πρόγραμμα", Icon: CalendarRange },
+/** Four places, the same on phone and computer. */
+export const NAV = [
+  { href: "/", label: "Σήμερα", Icon: Clock3, key: "t" },
+  { href: "/schedule", label: "Ημερολόγιο", Icon: CalendarDays, key: "h" },
+  { href: "/classes", label: "Τάξεις", Icon: Users, key: "c" },
+  { href: "/materials", label: "Υλικό", Icon: FileText, key: "m" },
 ] as const;
 
 export function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
-  if (href === "/materials") return pathname.startsWith("/materials") && pathname !== "/materials/new";
   if (href === "/schedule") return pathname.startsWith("/schedule") || pathname.startsWith("/lessons");
+  if (href === "/classes") return pathname.startsWith("/classes") || pathname.startsWith("/students");
   return pathname === href || pathname.startsWith(`${href}/`);
 }

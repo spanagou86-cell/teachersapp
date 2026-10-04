@@ -3,21 +3,21 @@ import { Atom, BookOpen, Calculator, Church, Dumbbell, FileImage, FileText, File
 import { fileKindLabel } from "@/lib/materials";
 import type { FileMeta, SubjectId } from "@/lib/types";
 
-export const SUBJECT_STYLE: Record<SubjectId, { bar: string; soft: string; text: string; Icon: typeof BookOpen }> = {
-  glossa: { bar: "bg-glossa", soft: "bg-glossa-50", text: "text-glossa", Icon: BookOpen },
-  math: { bar: "bg-math", soft: "bg-math-50", text: "text-amber", Icon: Calculator },
-  meleti: { bar: "bg-meleti", soft: "bg-meleti-50", text: "text-meleti", Icon: Leaf },
-  eikastika: { bar: "bg-eikastika", soft: "bg-eikastika-50", text: "text-eikastika", Icon: Palette },
-  istoria: { bar: "bg-amber", soft: "bg-amber-50", text: "text-amber", Icon: Landmark },
-  fysika: { bar: "bg-brand-500", soft: "bg-brand-50", text: "text-brand-500", Icon: Atom },
-  geografia: { bar: "bg-info", soft: "bg-info-50", text: "text-info", Icon: Globe2 },
-  agglika: { bar: "bg-danger", soft: "bg-danger-50", text: "text-danger", Icon: Languages },
-  thriskeftika: { bar: "bg-glossa", soft: "bg-glossa-50", text: "text-glossa", Icon: Church },
-  mousiki: { bar: "bg-eikastika", soft: "bg-eikastika-50", text: "text-eikastika", Icon: Music },
-  fa: { bar: "bg-brand-500", soft: "bg-brand-50", text: "text-brand-500", Icon: Dumbbell },
-  tpe: { bar: "bg-meleti", soft: "bg-meleti-50", text: "text-meleti", Icon: Monitor },
-  ergastiria: { bar: "bg-math", soft: "bg-math-50", text: "text-amber", Icon: Puzzle },
-  allo: { bar: "bg-muted", soft: "bg-line-2", text: "text-ink-2", Icon: Shapes },
+export const SUBJECT_STYLE: Record<SubjectId, { bar: string; soft: string; text: string; border: string; Icon: typeof BookOpen }> = {
+  glossa: { bar: "bg-glossa", soft: "bg-glossa-50", text: "text-glossa", border: "border-glossa", Icon: BookOpen },
+  math: { bar: "bg-math", soft: "bg-math-50", text: "text-math", border: "border-math", Icon: Calculator },
+  meleti: { bar: "bg-meleti", soft: "bg-meleti-50", text: "text-meleti", border: "border-meleti", Icon: Leaf },
+  eikastika: { bar: "bg-eikastika", soft: "bg-eikastika-50", text: "text-eikastika", border: "border-eikastika", Icon: Palette },
+  istoria: { bar: "bg-istoria", soft: "bg-istoria-50", text: "text-istoria", border: "border-istoria", Icon: Landmark },
+  fysika: { bar: "bg-fysika", soft: "bg-fysika-50", text: "text-fysika", border: "border-fysika", Icon: Atom },
+  geografia: { bar: "bg-geografia", soft: "bg-geografia-50", text: "text-geografia", border: "border-geografia", Icon: Globe2 },
+  agglika: { bar: "bg-agglika", soft: "bg-agglika-50", text: "text-agglika", border: "border-agglika", Icon: Languages },
+  thriskeftika: { bar: "bg-thriskeftika", soft: "bg-thriskeftika-50", text: "text-thriskeftika", border: "border-thriskeftika", Icon: Church },
+  mousiki: { bar: "bg-mousiki", soft: "bg-mousiki-50", text: "text-mousiki", border: "border-mousiki", Icon: Music },
+  fa: { bar: "bg-fa", soft: "bg-fa-50", text: "text-fa", border: "border-fa", Icon: Dumbbell },
+  tpe: { bar: "bg-tpe", soft: "bg-tpe-50", text: "text-tpe", border: "border-tpe", Icon: Monitor },
+  ergastiria: { bar: "bg-ergastiria", soft: "bg-ergastiria-50", text: "text-ergastiria", border: "border-ergastiria", Icon: Puzzle },
+  allo: { bar: "bg-allo", soft: "bg-allo-50", text: "text-allo", border: "border-allo", Icon: Shapes },
 };
 
 export function SubjectIcon({ id, size = "md", className }: { id: SubjectId; size?: "sm" | "md" | "lg"; className?: string }) {

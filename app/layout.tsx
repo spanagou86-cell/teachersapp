@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
 import { AppShell } from "@/components/shell/AppShell";
+import { PREFS_BOOT } from "@/lib/prefs-boot";
 import "./globals.css";
 
 const manrope = Manrope({ subsets: ["latin", "greek"], variable: "--font-manrope", display: "swap" });
@@ -11,7 +12,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f6f6f1",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f6f1" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1612" },
+  ],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -19,7 +23,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="el" className={manrope.variable}>
+    <html lang="el" className={manrope.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: PREFS_BOOT }} />
+      </head>
       <body className="font-sans antialiased">
         <AppShell>{children}</AppShell>
       </body>

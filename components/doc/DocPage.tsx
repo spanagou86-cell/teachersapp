@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, BookOpen, GripVertical, Pencil, Trash2, Target } fr
 import { useState } from "react";
 import { buttonClass, cx, inputClass } from "../ui";
 import { SUBJECTS } from "@/lib/seed";
+import { useApp } from "@/lib/store";
 import type { Block, Material } from "@/lib/types";
 
 const BAR_COLORS = ["#ef8f9d", "#f6d36b", "#f4a259", "#5f9fdc", "#9b7fd6"];
@@ -107,15 +108,24 @@ export function DocPage({
 }) {
   const [editingId, setEditingId] = useState<string>();
   const subject = SUBJECTS.find((x) => x.id === material.subjectId)?.name;
+  const school = useApp((s) => s.profile.schoolName);
+  const grade = useApp((s) => s.classes.find((c) => c.id === material.classId)?.grade);
   const isSheet = material.kind === "worksheet" || material.kind === "quiz";
   let exNo = 0;
 
   return (
-    <article className={clsx("mx-auto w-full max-w-[680px] bg-white px-5 py-6 text-ink shadow-paper sm:px-10 sm:py-9", className)}>
+    <article className={clsx("paper mx-auto w-full max-w-[680px] bg-white px-5 py-6 text-ink shadow-paper sm:px-10 sm:py-9", className)}>
       <header className="flex items-center justify-between border-b-2 border-brand-100 pb-3">
-        <span className="flex items-center gap-1.5 text-lg font-extrabold text-brand">
-          <BookOpen className="size-5" strokeWidth={2.4} /> τάξη
-        </span>
+        {school ? (
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-sm font-bold">{school}</span>
+            {grade && <span className="block text-xs text-ink-2">{grade}</span>}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-lg font-extrabold text-brand">
+            <BookOpen className="size-5" strokeWidth={2.4} /> τάξη
+          </span>
+        )}
         <span className="flex items-center gap-2 text-xs">
           <span className="text-ink-2">{subject}</span>
           <span className={clsx("rounded-md px-2 py-0.5 font-semibold", material.blackAndWhite ? "bg-line-2 text-ink" : "bg-info-50 text-info")}>{material.level === "basic" ? "Επίπεδο Α" : material.level === "advanced" ? "Επίπεδο Γ" : "Επίπεδο Β"}</span>

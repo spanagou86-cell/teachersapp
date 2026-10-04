@@ -25,13 +25,13 @@ function ToastItem({ t }: { t: Toast }) {
     return () => clearTimeout(h);
   }, [t, dismiss]);
   return (
-    <div role="status" className="pointer-events-auto flex animate-slide-up items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-white shadow-pop">
-      <CheckCircle2 className="size-5 shrink-0 text-brand-100" />
+    <div role="status" className="pointer-events-auto flex animate-slide-up items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-bg shadow-pop">
+      <CheckCircle2 className="size-5 shrink-0 text-brand-500" />
       <span className="flex-1">{t.text}</span>
       {t.action && (
         <button
           type="button"
-          className="rounded-lg px-2 py-1 font-semibold text-brand-100 hover:bg-white/10"
+          className="rounded-lg px-2 py-1 font-semibold text-brand-500 hover:bg-bg/10"
           onClick={() => {
             t.action!.run();
             dismiss(t.id);
@@ -40,7 +40,7 @@ function ToastItem({ t }: { t: Toast }) {
           {t.action.label}
         </button>
       )}
-      <button type="button" aria-label="Κλείσιμο" className="text-white/60 hover:text-white" onClick={() => dismiss(t.id)}>
+      <button type="button" aria-label="Κλείσιμο" className="text-bg/60 hover:text-bg" onClick={() => dismiss(t.id)}>
         <X className="size-4" />
       </button>
     </div>

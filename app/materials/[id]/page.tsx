@@ -115,7 +115,7 @@ function LessonLinks({ material }: { material: Material }) {
         </Select>
         <IconButton
           label="Προσθήκη"
-          className="size-10 shrink-0 bg-brand text-white hover:bg-brand-700"
+          className="size-10 shrink-0 bg-brand text-white hover:bg-brand-hover"
           disabled={!chosen}
           onClick={() => {
             attach(chosen, material.id);

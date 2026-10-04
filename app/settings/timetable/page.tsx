@@ -9,8 +9,9 @@ import { SUBJECT_STYLE } from "@/components/subject";
 import { toast } from "@/components/toast";
 import { Button, Card, cx, Field, IconButton, inputClass, Segmented, Select, Sheet } from "@/components/ui";
 import { uid } from "@/lib/id";
+import { dutyLabel } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
-import { isValidTime, KIND_LABEL, overlappingEntries, periodsFrom, schoolYearEnd, type Period } from "@/lib/timetable";
+import { isValidTime, kindLabel, overlappingEntries, periodsFrom, schoolYearEnd, type Period } from "@/lib/timetable";
 import { shortDate, timeToMin } from "@/lib/dates";
 import type { SubjectId, TimetableEntry } from "@/lib/types";
 
@@ -43,6 +44,7 @@ interface Row extends Period {
 }
 
 function CellView({ cell, onClick, label }: { cell?: Cell; onClick: () => void; label: string }) {
+  const country = useApp((s) => s.profile.country);
   const classes = useApp((s) => s.classes);
   const subjects = useApp((s) => s.subjects);
   const base = "flex h-14 w-full flex-col items-start justify-center rounded-lg border px-2 text-left text-xs leading-tight transition hover:shadow-pop";
@@ -72,7 +74,7 @@ function CellView({ cell, onClick, label }: { cell?: Cell; onClick: () => void; 
   return (
     <button type="button" aria-label={label} onClick={onClick} className={clsx(base, map.cls)}>
       <span className="flex items-center gap-1 font-bold">
-        <map.Icon className={clsx("size-3.5", map.icon)} /> {KIND_LABEL[cell.kind]}
+        <map.Icon className={clsx("size-3.5", map.icon)} /> {kindLabel(cell.kind, country)}
       </span>
       {cell.label && <span className="mt-0.5 truncate text-muted">{cell.label}</span>}
     </button>
@@ -94,6 +96,7 @@ function CellEditor({
 }) {
   const classes = useApp((s) => s.classes);
   const subjects = useApp((s) => s.subjects);
+  const country = useApp((s) => s.profile.country);
   const [kind, setKind] = useState<Kind>(cell?.kind ?? "lesson");
   const [classId, setClassId] = useState(cell?.classId ?? classes[0]?.id ?? "");
   const [subjectId, setSubjectId] = useState<SubjectId>(cell?.subjectId ?? "glossa");
@@ -127,7 +130,7 @@ function CellEditor({
         size="sm"
         options={[
           { value: "lesson", label: "Μάθημα" },
-          { value: "duty", label: "Παιδονομία" },
+          { value: "duty", label: dutyLabel(country) },
           { value: "free", label: "Κενό" },
           { value: "meeting", label: "Σύσκεψη" },
           { value: "none", label: "Τίποτα" },
@@ -183,6 +186,7 @@ function Editor() {
   const router = useRouter();
   const params = useSearchParams();
   const welcome = params.get("welcome") === "1";
+  const country = useApp((s) => s.profile.country);
   const timetable = useApp((s) => s.timetable);
   const today = useApp((s) => s.today);
   const mode = useApp((s) => s.mode);
@@ -263,7 +267,7 @@ function Editor() {
       <PageHeader
         back={welcome ? undefined : "/schedule"}
         title="Ωρολόγιο πρόγραμμα"
-        subtitle={welcome ? "Τελευταίο βήμα: συμπλήρωσε την εβδομάδα σου όπως στο πρόγραμμα του σχολείου." : "Η εβδομάδα σου: μαθήματα, παιδονομίες, κενά."}
+        subtitle={welcome ? "Τελευταίο βήμα: συμπλήρωσε την εβδομάδα σου όπως στο πρόγραμμα του σχολείου." : `Η εβδομάδα σου: μαθήματα, ${country === "cy" ? "παιδονομίες" : "εφημερίες"}, κενά.`}
       />
 
       <Card className="mb-5 flex items-center gap-3 border-dashed p-4 text-sm">

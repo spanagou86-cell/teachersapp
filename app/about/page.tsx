@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCog, CheckCircle2, CircleDashed, Crown, FlaskConical, LogIn, LogOut, RotateCcw, Rocket } from "lucide-react";
+import { CalendarCog, CheckCircle2, CircleDashed, FlaskConical, LogIn, LogOut, RotateCcw, Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { toast } from "@/components/toast";
@@ -10,7 +10,11 @@ import { useApp } from "@/lib/store";
 
 const REAL = [
   "Λογαριασμός με email: τα δεδομένα σου αποθηκεύονται με ασφάλεια και φαίνονται σε κινητό και υπολογιστή",
-  "Ωρολόγιο πρόγραμμα με μαθήματα, παιδονομίες, κενά και συσκέψεις — δημιουργεί όλη τη σχολική χρονιά",
+  "Ωρολόγιο πρόγραμμα με μαθήματα, εφημερίες/παιδονομίες, κενά και συσκέψεις — δημιουργεί όλη τη σχολική χρονιά",
+  "Σχολικό ημερολόγιο Ελλάδας και Κύπρου: αργίες (και του Πάσχα), διακοπές, τρίμηνα, αρίθμηση εβδομάδων",
+  "Ημερολόγιο σε όψη εβδομάδας, μήνα και χρονιάς",
+  "Παρουσίες με ένα πάτημα (παρών / απών / καθυστέρηση) και καρτέλα μαθητή με σημειώσεις και επαφές με γονείς",
+  "Φωτεινό θέμα ή θέμα συσκευής (και σκούρο), μεγάλα γράμματα",
   "Ανέβασμα PDF, Word και φωτογραφιών (και από την κάμερα του κινητού)",
   "Υλικό οργανωμένο ανά τμήμα και μάθημα, με αναζήτηση και φίλτρα",
   "Επεξεργασία φύλλου: κείμενο, λύσεις, σειρά ασκήσεων, αναίρεση/επανάληψη",
@@ -25,13 +29,12 @@ const REAL = [
 const MOCK = [
   "Η προσαρμογή με AI είναι δείγμα: καταλαβαίνει βασικές οδηγίες (πιο απλό/δύσκολο, άσκηση Ν, λύσεις, χώρος, εκδοχή Α/Β) και δεν διαβάζει ακόμη το περιεχόμενο του αρχείου",
   "Στην επίδειξη χωρίς λογαριασμό η ημερομηνία είναι σταθερή (Δευτέρα 5 Οκτωβρίου, 09:05) και τα δεδομένα μένουν μόνο στον browser",
-  "Πακέτα και πληρωμές δεν έχουν συνδεθεί· η «Δοκιμή» είναι ενδεικτική",
 ];
 
 const NEXT = [
   "Αυτόματη συμπλήρωση του ωρολογίου από φωτογραφία του προγράμματος του σχολείου",
   "Ανάγνωση PDF/Word/φωτογραφιών και προσαρμογή με πραγματικό μοντέλο Claude",
-  "Αργίες και διακοπές στο πρόγραμμα",
+  "Βιβλίο ύλης και ετήσιος προγραμματισμός ύλης, έτοιμα για εκτύπωση",
   "Πακέτα συνδρομής με Stripe",
 ];
 
@@ -44,7 +47,7 @@ export default function AboutPage() {
   const router = useRouter();
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader back="/" title="Τι λειτουργεί" subtitle="Πρωτότυπο της «τάξης» — τι είναι πραγματικό και τι ακόμη δείγμα." />
+      <PageHeader back="/settings" title="Τι λειτουργεί" subtitle="Πρωτότυπο της «τάξης» — τι είναι πραγματικό και τι ακόμη δείγμα." />
       <div className="space-y-5">
         <Card className="flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center">
           <div className="flex-1">
@@ -113,9 +116,6 @@ export default function AboutPage() {
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm">
-            <Crown className="size-4 text-amber" /> Τα πακέτα θα εμφανιστούν εδώ μόλις συνδεθούν οι πληρωμές.
-          </div>
         </Card>
         {mode === "demo" && <Card className="flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center">
           <div className="flex-1">

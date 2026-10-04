@@ -5,6 +5,7 @@ import { ArrowRight, Check, ChevronRight, CircleDashed, Coffee, CornerDownRight,
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { timeToMin } from "@/lib/dates";
+import { dutyLabel } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
 import type { LessonSlot, LessonStatus, TimeBlock } from "@/lib/types";
 import { SUBJECT_STYLE } from "./subject";
@@ -118,6 +119,7 @@ const BLOCK_STYLE: Record<TimeBlock["kind"], { cls: string; Icon: typeof Check; 
 };
 
 export function BlockRow({ block }: { block: TimeBlock }) {
+  const country = useApp((s) => s.profile.country);
   const st = BLOCK_STYLE[block.kind];
   return (
     <div className={clsx("flex items-center gap-3 rounded-xl border px-3 py-2.5 sm:gap-4 sm:px-4", st.cls)}>
@@ -127,7 +129,7 @@ export function BlockRow({ block }: { block: TimeBlock }) {
       </div>
       <st.Icon className={clsx("size-5 shrink-0", block.kind === "duty" ? "text-amber" : block.kind === "meeting" ? "text-info" : "text-muted")} />
       <p className="min-w-0 flex-1 truncate text-sm">
-        <span className="font-semibold">{st.label}</span>
+        <span className="font-semibold">{block.kind === "duty" ? dutyLabel(country) : st.label}</span>
         {block.label && <span className="text-muted"> · {block.label}</span>}
       </p>
     </div>

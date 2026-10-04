@@ -81,10 +81,21 @@ export interface Profile {
   displayName: string;
   schoolName: string;
   onboarded: boolean;
+  country: "gr" | "cy";
+}
+
+export interface StudentNote {
+  id: string;
+  studentId: string;
+  kind: "note" | "parent";
+  date: ISODate;
+  text: string;
+  createdAt: number;
 }
 
 export interface AttendanceRecord {
   absentIds: string[];
+  lateIds?: string[];
   recordedAt: number;
 }
 

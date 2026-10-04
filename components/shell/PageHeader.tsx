@@ -13,7 +13,7 @@ export function MobileBrandBar() {
   return (
     <div className="mb-4 flex items-center justify-between lg:hidden">
       <Logo />
-      <Link href="/about" aria-label="Προφίλ και πληροφορίες">
+      <Link href="/settings" aria-label="Σχολείο και ρυθμίσεις">
         <Avatar name={name || "?"} seed={3} />
       </Link>
     </div>

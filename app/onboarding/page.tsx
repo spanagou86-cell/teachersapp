@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/shell/AppShell";
 import { toast } from "@/components/toast";
-import { Button, Card, cx, Field, IconButton, inputClass, Select } from "@/components/ui";
+import { Button, Card, cx, Field, IconButton, inputClass, Segmented, Select } from "@/components/ui";
 import { GRADES } from "@/lib/grades";
 import { flushWrites, useApp } from "@/lib/store";
 
@@ -29,6 +29,7 @@ export default function OnboardingPage() {
   const addStudents = useApp((s) => s.addStudents);
   const [name, setName] = useState(profile.displayName);
   const [school, setSchool] = useState(profile.schoolName);
+  const [country, setCountry] = useState(profile.country);
   const [drafts, setDrafts] = useState<Draft[]>([blank(1)]);
   const [busy, setBusy] = useState(false);
 
@@ -42,7 +43,7 @@ export default function OnboardingPage() {
 
   const save = async () => {
     setBusy(true);
-    updateProfile({ displayName: name.trim(), schoolName: school.trim() });
+    updateProfile({ displayName: name.trim(), schoolName: school.trim(), country });
     for (const d of drafts) {
       const id = addClass({ name: d.name.trim(), grade: d.grade, room: d.room.trim() });
       addStudents(id, d.students.split(/\n|,/));
@@ -62,6 +63,16 @@ export default function OnboardingPage() {
       <Card className="mt-8 p-5">
         <h2 className="text-lg font-bold">1. Τα στοιχεία σου</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Field label="Χώρα" className="sm:col-span-2">
+            <Segmented<"gr" | "cy">
+              value={country}
+              onChange={setCountry}
+              options={[
+                { value: "gr", label: "Ελλάδα" },
+                { value: "cy", label: "Κύπρος" },
+              ]}
+            />
+          </Field>
           <Field label="Το όνομά σου">
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="π.χ. Σπύρος" className={cx(inputClass, "h-10")} />
           </Field>
@@ -122,7 +133,7 @@ export default function OnboardingPage() {
       </Button>
 
       <div className="mt-10 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted">Επόμενο βήμα: το ωρολόγιο πρόγραμμα (μαθήματα, παιδονομίες, κενά).</p>
+        <p className="text-sm text-muted">Επόμενο βήμα: το ωρολόγιο πρόγραμμα (μαθήματα, {country === "cy" ? "παιδονομίες" : "εφημερίες"}, κενά).</p>
         <Button size="lg" disabled={!valid || busy} onClick={save}>
           {busy ? <Loader2 className="size-5 animate-spin" /> : null} Συνέχεια <ArrowRight className="size-5" />
         </Button>

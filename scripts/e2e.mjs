@@ -23,20 +23,24 @@ async function flow(name, viewport, mobile) {
   console.log(`\n## ${name}`);
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, isMobile: mobile, hasTouch: mobile, locale: "el-GR" });
   const page = await ctx.newPage();
-  page.on("console", (m) => m.type() === "error" && errors.push(`${name}: ${m.text()}`));
+  page.on("console", (m) => m.type() === "error" && errors.push(`${name}: ${m.text()} ${m.location()?.url ?? ""}`));
   page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
   page.on("dialog", (d) => d.accept());
+  page.on("response", (r) => r.status() === 404 && console.log(`  · 404 ${r.url()}`));
   const shot = (n) => page.screenshot({ path: path.join(OUT, `${name}-${n}.png`), fullPage: true });
 
   await page.goto(BASE);
   // No account: start the demo from the login screen.
   await page.waitForURL("**/login");
   await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
-  await page.getByText("Καλημέρα, Σπύρο.").waitFor();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
   await shot("01-today");
+  const todayHeight = await page.evaluate(() => document.documentElement.scrollHeight / window.innerHeight);
+  console.log(`  · Today is ${todayHeight.toFixed(2)} screens tall`);
 
-  // 1. Upload → wizard
-  await page.locator('input[type=file]').first().setInputFiles(pdf);
+  // 1. Upload → wizard (from the materials library)
+  await page.goto(`${BASE}/materials`);
+  await page.locator("input[type=file]").first().setInputFiles(pdf);
   await page.waitForURL("**/materials/new");
   await page.getByText("Το αρχείο ανέβηκε").waitFor();
   await page.getByRole("radio", { name: "Προχωρημένο" }).click();
@@ -75,7 +79,7 @@ async function flow(name, viewport, mobile) {
   await shot("05-linked");
 
   await page.goto(`${BASE}/lessons/l-2026-10-05-0920`);
-  await page.getByText("Υλικό μαθήματος").waitFor();
+  await page.getByText("Υλικό μαθήματος").waitFor(); // lesson hasn't started: "Πριν" stage
   assert((await page.getByText("2 αρχεία").count()) > 0, "lesson shows 2 files");
 
   // 4. Attendance: mark 2 absent, survives reload
@@ -85,11 +89,16 @@ async function flow(name, viewport, mobile) {
   await page.reload();
   await page.getByText("παρόντες").first().waitFor();
   const counts = await page.locator("p.text-2xl").allTextContents();
-  assert(counts[0] === "22" && counts[1] === "2", `attendance 22/2 after reload (got ${counts})`);
+  assert(counts[0] === "22" && counts[1] === "2" && counts[2] === "0", `attendance 22/2/0 after reload (got ${counts})`);
+  await page.getByRole("button", { name: /Πέτρος Σ\./ }).click(); // absent → late
+  await page.waitForTimeout(150);
+  const late = await page.locator("p.text-2xl").allTextContents();
+  assert(late[0] === "23" && late[1] === "1" && late[2] === "1", `second tap marks late (got ${late})`);
   await shot("06-attendance");
 
   // 5. Lesson log + carry over with conflict check
   await page.goto(`${BASE}/lessons/l-2026-10-05-0920`);
+  await page.getByRole("button", { name: /Μετά/ }).click();
   await page.getByRole("radio", { name: "Μερικώς" }).click();
   await page.getByLabel("Σημείωση μαθήματος").fill("Κάναμε τις ασκήσεις 1–2.");
   await page.getByRole("button", { name: /ΤΡΙ\s*6/ }).click();
@@ -105,7 +114,7 @@ async function flow(name, viewport, mobile) {
   assert((await page.getByText("«Κάναμε τις ασκήσεις 1–2.»").count()) > 0, "continuation links back with the note");
   await shot("08-continuation");
 
-  for (const [n, url] of [["09-schedule", "/schedule"], ["10-materials", "/materials"], ["11-progress", "/classes/d1?tab=progress"], ["12-today-after", "/"], ["13-about", "/about"]]) {
+  for (const [n, url] of [["09-schedule", "/schedule"], ["09b-month", "/schedule?view=month"], ["09c-year", "/schedule?view=year"], ["10-materials", "/materials"], ["11-progress", "/classes/d1?tab=progress"], ["11b-student", "/students/d1-s1"], ["12-today-after", "/"], ["13-settings", "/settings"], ["13b-about", "/about"]]) {
     await page.goto(BASE + url);
     await page.waitForTimeout(400);
     await shot(n);
@@ -116,9 +125,37 @@ async function flow(name, viewport, mobile) {
   await ctx.close();
 }
 
+/** Same screens on a device set to dark mode ("Συσκευής" theme). */
+async function dark(name, viewport, mobile) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, isMobile: mobile, hasTouch: mobile, locale: "el-GR", colorScheme: "dark" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE);
+  await page.waitForURL("**/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  assert(bg === "rgb(15, 22, 18)", `dark background follows the device (${bg})`);
+  for (const [n, url] of [["01-today", "/"], ["02-schedule", "/schedule"], ["03-attendance", "/classes/d1"], ["04-lesson", "/lessons/l-2026-10-05-0920"], ["05-settings", "/settings"]]) {
+    await page.goto(BASE + url);
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: path.join(OUT, `${name}-${n}.png`), fullPage: true });
+  }
+  // "Φωτεινό" overrides the device.
+  await page.getByRole("radio", { name: /Φωτεινό/ }).click();
+  const light = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  assert(light === "rgb(246, 246, 241)", `"Φωτεινό" forces the light theme (${light})`);
+  await page.reload();
+  assert((await page.evaluate(() => document.documentElement.dataset.theme)) === "light", "theme choice survives reload");
+  await ctx.close();
+}
+
 try {
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
+  await dark("dark-mobile", { width: 390, height: 844 }, true);
+  await dark("dark-desktop", { width: 1440, height: 900 }, false);
 } finally {
   await browser.close();
 }

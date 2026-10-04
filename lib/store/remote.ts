@@ -2,6 +2,7 @@
 
 import { addDays } from "../dates";
 import { supabase } from "../supabase/client";
+import { holidayOn, type Country } from "../schoolYear";
 import { materialize, schoolYearEnd } from "../timetable";
 import type {
   AttendanceRecord,
@@ -14,6 +15,7 @@ import type {
   MaterialVersion,
   Profile,
   Student,
+  StudentNote,
   SubjectId,
   Task,
   TimeBlock,
@@ -153,6 +155,7 @@ export interface CloudData {
   attendance: Record<string, AttendanceRecord>;
   tasks: Task[];
   notes: ClassNote[];
+  studentNotes: StudentNote[];
 }
 
 /** Everything a teacher needs, in one round of parallel requests. */
@@ -160,8 +163,8 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
   const db = supabase();
   const from = addDays(today, -120);
   const to = addDays(today, 240);
-  const [profile, classes, students, slotRows, links, entries, materials, versions, attendance, tasks, notes] = await Promise.all([
-    db.from("profiles").select("display_name, school_name, onboarded").eq("id", userId).maybeSingle().then(check),
+  const [profile, classes, students, slotRows, links, entries, materials, versions, attendance, tasks, notes, studentNotes] = await Promise.all([
+    db.from("profiles").select("display_name, school_name, onboarded, country").eq("id", userId).maybeSingle().then(check),
     db.from("classes").select("id, name, grade, room").order("name").then(check),
     db.from("students").select("id, class_id, first_name, last_name").order("sort").order("first_name").then(check),
     all<SlotRow>((a, b) =>
@@ -180,9 +183,12 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
     all<{ id: string; material_id: string; label: string; blocks: Block[]; created_at: string }>((a, b) =>
       db.from("material_versions").select("id, material_id, label, blocks, created_at").order("created_at", { ascending: false }).range(a, b),
     ),
-    db.from("attendance").select("class_id, date, absent_ids, recorded_at").gte("date", from).then(check),
+    db.from("attendance").select("class_id, date, absent_ids, late_ids, recorded_at").gte("date", from).then(check),
     db.from("tasks").select("id, date, text, done, time, detail").or(`done.eq.false,date.gte.${addDays(today, -7)}`).order("created_at").then(check),
     db.from("class_notes").select("id, class_id, date, text, created_at").order("created_at", { ascending: false }).limit(500).then(check),
+    all<{ id: string; student_id: string; kind: StudentNote["kind"]; date: string; text: string; created_at: string }>((a, b) =>
+      db.from("student_notes").select("id, student_id, kind, date, text, created_at").order("date", { ascending: false }).range(a, b),
+    ),
   ]);
 
   const versionsBy = new Map<string, MaterialVersion[]>();
@@ -191,8 +197,8 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
 
   return {
     profile: profile
-      ? { displayName: profile.display_name, schoolName: profile.school_name, onboarded: profile.onboarded }
-      : { displayName: "", schoolName: "", onboarded: false },
+      ? { displayName: profile.display_name, schoolName: profile.school_name, onboarded: profile.onboarded, country: profile.country as Country }
+      : { displayName: "", schoolName: "", onboarded: false, country: "gr" },
     classes: (classes as { id: string; name: string; grade: string; room: string }[]).map((c) => ({ ...c })),
     students: (students as { id: string; class_id: string; first_name: string; last_name: string }[]).map((s) => ({
       id: s.id,
@@ -204,9 +210,9 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
     timetable: (entries as EntryRow[]).map(toEntry),
     materials: (materials as MaterialRow[]).map((m) => toMaterial(m, versionsBy.get(m.id) ?? [])),
     attendance: Object.fromEntries(
-      (attendance as { class_id: string; date: string; absent_ids: string[]; recorded_at: string }[]).map((a) => [
+      (attendance as { class_id: string; date: string; absent_ids: string[]; late_ids: string[]; recorded_at: string }[]).map((a) => [
         `${a.class_id}|${a.date}`,
-        { absentIds: a.absent_ids, recordedAt: Date.parse(a.recorded_at) },
+        { absentIds: a.absent_ids, lateIds: a.late_ids, recordedAt: Date.parse(a.recorded_at) },
       ]),
     ),
     tasks: (tasks as { id: string; text: string; done: boolean; time: string | null; detail: string }[]).map((t) => ({
@@ -223,6 +229,7 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
       text: n.text,
       createdAt: Date.parse(n.created_at),
     })),
+    studentNotes: studentNotes.map((n) => ({ id: n.id, studentId: n.student_id, kind: n.kind, date: n.date, text: n.text, createdAt: Date.parse(n.created_at) })),
   };
 }
 
@@ -242,6 +249,7 @@ export const remote = {
           ...(p.displayName !== undefined && { display_name: p.displayName }),
           ...(p.schoolName !== undefined && { school_name: p.schoolName }),
           ...(p.onboarded !== undefined && { onboarded: p.onboarded }),
+          ...(p.country !== undefined && { country: p.country }),
         })
         .eq("id", userId),
     ),
@@ -266,7 +274,7 @@ export const remote = {
       db()
         .from("attendance")
         .upsert(
-          { class_id: classId, date, absent_ids: r.absentIds, recorded_at: new Date(r.recordedAt).toISOString() },
+          { class_id: classId, date, absent_ids: r.absentIds, late_ids: r.lateIds ?? [], recorded_at: new Date(r.recordedAt).toISOString() },
           { onConflict: "owner,class_id,date" },
         ),
     ),
@@ -352,6 +360,9 @@ export const remote = {
 
   addNote: (n: ClassNote) => run(db().from("class_notes").insert({ id: n.id, class_id: n.classId, date: n.date, text: n.text })),
   deleteNote: (id: string) => run(db().from("class_notes").delete().eq("id", id)),
+  addStudentNote: (n: StudentNote) =>
+    run(db().from("student_notes").insert({ id: n.id, student_id: n.studentId, kind: n.kind, date: n.date, text: n.text })),
+  deleteStudentNote: (id: string) => run(db().from("student_notes").delete().eq("id", id)),
 
   uploadFile: async (userId: string, file: File): Promise<string> => {
     const safe = file.name.normalize("NFD").replace(/[^\w.-]+/g, "_").slice(-80) || "file";
@@ -370,7 +381,7 @@ export const remote = {
    * entries are deleted unless the teacher already touched them (note, status,
    * material or carry-over); then the new template is expanded to the end of the year.
    */
-  saveTimetable: async (entries: TimetableEntry[], previous: TimetableEntry[], today: string) => {
+  saveTimetable: async (entries: TimetableEntry[], previous: TimetableEntry[], today: string, country: Country) => {
     const same = (a: TimetableEntry, b: TimetableEntry) =>
       a.weekday === b.weekday && a.start === b.start && a.end === b.end && a.kind === b.kind && a.classId === b.classId && a.subjectId === b.subjectId && a.label === b.label;
     const kept = entries.filter((e) => previous.some((p) => p.id === e.id && same(p, e)));
@@ -410,7 +421,7 @@ export const remote = {
           ),
       );
 
-    const occ = materialize(added, today, schoolYearEnd(today));
+    const occ = materialize(added, today, schoolYearEnd(today), new Set(), (d) => !!holidayOn(country, d));
     const rows = occ.map((o) => ({
       date: o.date,
       start_time: o.entry.start,

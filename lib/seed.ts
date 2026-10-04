@@ -1,7 +1,7 @@
 import { buildBlocks } from "./ai/templates";
 import { addDays, DEMO_TODAY, startOfWeek } from "./dates";
 import { PERIODS } from "./schedule";
-import type { AttendanceRecord, ClassGroup, ClassNote, LessonSlot, Material, Student, Subject, SubjectId, Task, TimeBlock, TimetableEntry } from "./types";
+import type { AttendanceRecord, ClassGroup, ClassNote, LessonSlot, Material, Student, StudentNote, Subject, SubjectId, Task, TimeBlock, TimetableEntry } from "./types";
 
 export const SUBJECTS: Subject[] = [
   { id: "glossa", name: "Γλώσσα", short: "ΓΛ" },
@@ -196,6 +196,7 @@ export interface SeedState {
   notes: ClassNote[];
   timetable: TimetableEntry[];
   blocks: TimeBlock[];
+  studentNotes: StudentNote[];
 }
 
 export function seed(): SeedState {
@@ -205,6 +206,11 @@ export function seed(): SeedState {
   return {
     timetable,
     blocks: seedBlocks(timetable),
+    studentNotes: [
+      { id: "sn1", studentId: "d1-s1", kind: "parent", date: addDays(DEMO_TODAY, -6), text: "Τηλεφώνημα με τη μητέρα: ζητά επιπλέον ασκήσεις στην προπαίδεια. Συμφωνήσαμε φύλλο κάθε Παρασκευή.", createdAt: Date.UTC(2026, 8, 29, 13, 0) },
+      { id: "sn2", studentId: "d1-s1", kind: "note", date: addDays(DEMO_TODAY, -3), text: "Πολύ καλή συμμετοχή στη Γλώσσα· βοήθησε την ομάδα της.", createdAt: Date.UTC(2026, 9, 2, 11, 0) },
+      { id: "sn3", studentId: "d1-s4", kind: "note", date: addDays(DEMO_TODAY, -7), text: "Δυσκολεύεται με την ανάγνωση μεγάλων κειμένων· θέση κοντά στον πίνακα.", createdAt: Date.UTC(2026, 8, 28, 11, 0) },
+    ],
     subjects: SUBJECTS,
     classes: CLASSES,
     students: STUDENTS,

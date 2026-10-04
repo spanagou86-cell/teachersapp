@@ -14,15 +14,16 @@ import { UploadTrigger } from "@/components/upload";
 import { addDays, dayName, dayShort, dayOfMonth, longDate, shortDate, timeToMin, weekday } from "@/lib/dates";
 import { KIND_LABEL } from "@/lib/materials";
 import { findConflicts, sortSlots } from "@/lib/schedule";
-import { KIND_LABEL as BLOCK_LABEL, periodsFrom } from "@/lib/timetable";
+import { holidayOn, type Country } from "@/lib/schoolYear";
+import { kindLabel, periodsFrom } from "@/lib/timetable";
 import { attendanceFor, useApp } from "@/lib/store";
 import type { LessonSlot, LessonStatus, TimeBlock } from "@/lib/types";
 
 const NOTE_CHIPS = ["Ολοκληρώθηκε η ενότητα", "Μέχρι την άσκηση 2", "Χρειάζεται επανάληψη", "Δόθηκε εργασία για το σπίτι"];
 
-function schoolDays(from: string, count: number): string[] {
+function schoolDays(from: string, count: number, country: Country): string[] {
   const out: string[] = [];
-  for (let d = from; out.length < count; d = addDays(d, 1)) if (weekday(d) >= 1 && weekday(d) <= 5) out.push(d);
+  for (let d = from, n = 0; out.length < count && n < 120; d = addDays(d, 1), n++) if (weekday(d) >= 1 && weekday(d) <= 5 && !holidayOn(country, d)) out.push(d);
   return out;
 }
 
@@ -30,6 +31,7 @@ function CarryOverPanel({ slot }: { slot: LessonSlot }) {
   const lessons = useApp((s) => s.slots);
   const blocks = useApp((s) => s.blocks);
   const timetable = useApp((s) => s.timetable);
+  const country = useApp((s) => s.profile.country);
   const { today, now } = useClock();
   // Κενά don't block a move; παιδονομία and συσκέψεις do.
   const slots = useMemo(() => [...lessons, ...blocks.filter((b) => b.kind !== "free")], [lessons, blocks]);
@@ -37,7 +39,7 @@ function CarryOverPanel({ slot }: { slot: LessonSlot }) {
   const subjects = useApp((s) => s.subjects);
   const carryOver = useApp((s) => s.carryOver);
   const undo = useApp((s) => s.undoCarryOver);
-  const days = useMemo(() => schoolDays(today, 10), [today]);
+  const days = useMemo(() => schoolDays(today, 10, country), [today, country]);
   const firstFree = useMemo(() => {
     for (const date of days)
       for (const p of PERIODS) {
@@ -50,7 +52,7 @@ function CarryOverPanel({ slot }: { slot: LessonSlot }) {
   const period = PERIODS.find((p) => p.start === start);
   const conflicts = period ? findConflicts(slots, { date, ...period }, slot.id) : [];
   const busyLabel = (x: LessonSlot | TimeBlock) =>
-    "subjectId" in x ? subjects.find((s) => s.id === x.subjectId)?.name : `${BLOCK_LABEL[x.kind]}${x.label ? ` · ${x.label}` : ""}`;
+    "subjectId" in x ? subjects.find((s) => s.id === x.subjectId)?.name : `${kindLabel(x.kind, country)}${x.label ? ` · ${x.label}` : ""}`;
 
   const confirm = () => {
     if (!period) return;
@@ -178,6 +180,60 @@ function AttachSheet({ slot, open, onClose }: { slot: LessonSlot; open: boolean;
   );
 }
 
+type Stage = "before" | "class" | "after";
+const STAGES: { value: Stage; label: string }[] = [
+  { value: "before", label: "Πριν" },
+  { value: "class", label: "Στην τάξη" },
+  { value: "after", label: "Μετά" },
+];
+
+/** "Τι διδάχθηκε": one big field (the phone keyboard can dictate), quick chips, and the status after the lesson. */
+function TaughtCard({ slot, future, withStatus }: { slot: LessonSlot; future: boolean; withStatus?: boolean }) {
+  const updateSlot = useApp((s) => s.updateSlot);
+  const clock = useClock();
+  return (
+    <Card className="p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold">{withStatus ? "Πώς πήγε" : "Τι κάναμε"}</h2>
+        {needsLog(slot, clock) && <span className="rounded-md bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger">Εκκρεμεί καταγραφή</span>}
+      </div>
+      {withStatus && (
+        <Segmented<LessonStatus>
+          value={slot.status}
+          onChange={(status) => updateSlot(slot.id, { status })}
+          options={(["planned", "done", "partial", "skipped"] as const).map((v) => ({ value: v, label: v === "planned" ? (future ? "Προγραμμ." : "Εκκρεμεί") : STATUS_LABEL[v] }))}
+          className="mb-3"
+          size="sm"
+        />
+      )}
+      <textarea
+        value={slot.taughtNote}
+        onChange={(e) => updateSlot(slot.id, { taughtNote: e.target.value })}
+        rows={withStatus ? 3 : 5}
+        maxLength={1000}
+        placeholder={future ? "Σημειώσεις προετοιμασίας…" : "π.χ. Κάναμε τις ασκήσεις 1–2. Η 3 έμεινε για την επόμενη φορά."}
+        className={cx(inputClass, "py-2.5 text-[15px] leading-relaxed")}
+        aria-label="Σημείωση μαθήματος"
+      />
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {NOTE_CHIPS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => updateSlot(slot.id, { taughtNote: slot.taughtNote ? `${slot.taughtNote.trimEnd()} ${c}.` : `${c}.` })}
+            className="min-h-9 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-ink-2 hover:bg-line-2"
+          >
+            + {c}
+          </button>
+        ))}
+      </div>
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-muted">
+        <Check className="size-3.5" /> Αποθηκεύεται αυτόματα · μπορείς να υπαγορεύσεις με το μικρόφωνο του πληκτρολογίου
+      </p>
+    </Card>
+  );
+}
+
 export default function LessonPage() {
   const { id } = useParams<{ id: string }>();
   const slot = useApp((s) => s.slots.find((x) => x.id === id));
@@ -193,6 +249,12 @@ export default function LessonPage() {
   const clock = useClock();
   const [attachOpen, setAttachOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState(false);
+  const [stage, setStage] = useState<Stage>(() => {
+    if (!slot) return "before";
+    if (slot.date > clock.today || (slot.date === clock.today && timeToMin(clock.now) < timeToMin(slot.start))) return "before";
+    if (slot.date === clock.today && timeToMin(clock.now) < timeToMin(slot.end)) return "class";
+    return "after";
+  });
 
   if (!slot || !subject || !cls)
     return <EmptyState icon={<History className="size-6" />} title="Το μάθημα δεν βρέθηκε" action={<ButtonLink href="/schedule">Στο πρόγραμμα</ButtonLink>} />;
@@ -260,127 +322,142 @@ export default function LessonPage() {
         </Link>
       )}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-5">
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-bold">Τι διδάχθηκε</h2>
-              {needsLog(slot, clock) && <span className="rounded-md bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger">Εκκρεμεί καταγραφή</span>}
-            </div>
-            <Segmented<LessonStatus>
-              value={slot.status}
-              onChange={(status) => updateSlot(slot.id, { status })}
-              options={(["planned", "done", "partial", "skipped"] as const).map((v) => ({ value: v, label: v === "planned" ? (future ? "Προγραμμ." : "Εκκρεμεί") : STATUS_LABEL[v] }))}
-              size="sm"
-            />
-            <textarea
-              value={slot.taughtNote}
-              onChange={(e) => updateSlot(slot.id, { taughtNote: e.target.value })}
-              rows={4}
-              maxLength={1000}
-              placeholder={future ? "Σημειώσεις προετοιμασίας…" : "π.χ. Κάναμε τις ασκήσεις 1–2. Η 3 έμεινε για την επόμενη φορά."}
-              className={cx(inputClass, "mt-3 py-2.5 leading-relaxed")}
-              aria-label="Σημείωση μαθήματος"
-            />
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {NOTE_CHIPS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => updateSlot(slot.id, { taughtNote: slot.taughtNote ? `${slot.taughtNote.trimEnd()} ${c}.` : `${c}.` })}
-                  className="rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-ink-2 hover:bg-line-2"
-                >
-                  + {c}
-                </button>
-              ))}
-            </div>
-            <p className="mt-3 flex items-center gap-1.5 text-xs text-muted">
-              <Check className="size-3.5" /> Αποθηκεύεται αυτόματα
-            </p>
+      <nav aria-label="Στάδια μαθήματος" className="mb-5 grid grid-cols-3 gap-1 rounded-2xl border border-line bg-surface p-1">
+        {STAGES.map((st, i) => {
+          const on = stage === st.value;
+          const done = st.value === "before" ? linked.length > 0 : st.value === "class" ? !!slot.taughtNote.trim() : slot.status !== "planned";
+          return (
+            <button
+              key={st.value}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setStage(st.value)}
+              className={clsx(
+                "flex min-h-11 items-center justify-center gap-2 rounded-xl px-2 text-sm font-semibold transition-colors",
+                on ? "bg-brand-50 text-brand shadow-[inset_0_0_0_1px_var(--color-brand-100)]" : "text-ink-2 hover:bg-line-2",
+              )}
+            >
+              <span
+                className={clsx(
+                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                  done ? "bg-brand-500 text-white" : on ? "bg-brand text-white" : "bg-line-2 text-muted",
+                )}
+              >
+                {done ? <Check className="size-3" strokeWidth={3} /> : i + 1}
+              </span>
+              {st.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="mx-auto grid max-w-3xl grid-cols-1 gap-5">
+        {stage === "before" && (
+          <>
             {previous && previous.id !== carriedFrom?.id && (
-              <div className="mt-4 rounded-xl bg-line-2 p-3 text-sm">
+              <Card className="p-5">
                 <p className="text-xs font-semibold text-muted">
-                  Προηγούμενο μάθημα · {shortDate(previous.date)} · {previous.topic}
+                  Την προηγούμενη φορά · {dayName(previous.date)} {shortDate(previous.date)} · {previous.topic}
                 </p>
-                <p className="mt-0.5 text-ink-2">«{previous.taughtNote}»</p>
-              </div>
+                <p className="mt-1 text-[15px] text-ink-2">«{previous.taughtNote}»</p>
+              </Card>
             )}
-          </Card>
-
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-bold">Υλικό μαθήματος</h2>
-              <span className="text-sm text-muted">{linked.length} {linked.length === 1 ? "αρχείο" : "αρχεία"}</span>
-            </div>
-            {linked.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-line p-4 text-center text-sm text-muted">Δεν έχει συνδεθεί υλικό ακόμη.</p>
-            ) : (
-              <ul className="space-y-2">
-                {linked.map((m) => (
-                  <li key={m.id} className="flex items-center gap-3 rounded-xl border border-line-2 p-2.5">
-                    <FileBadge file={m.file} />
-                    <Link href={`/materials/${m.id}`} className="min-w-0 flex-1 hover:underline">
-                      <span className="block truncate font-semibold">{m.title}</span>
-                      <span className="text-xs text-muted">{KIND_LABEL[m.kind]}</span>
-                    </Link>
-                    <button
-                      type="button"
-                      aria-label={`Αποσύνδεση: ${m.title}`}
-                      title="Αποσύνδεση από το μάθημα"
-                      onClick={() => detach(slot.id, m.id)}
-                      className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-line-2 hover:text-danger"
-                    >
-                      <Link2Off className="size-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <Button variant="secondary" onClick={() => setAttachOpen(true)}>
-                <Paperclip className="size-4" /> Από βιβλιοθήκη
-              </Button>
-              <UploadTrigger slotId={slot.id} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold hover:bg-line-2">
-                <CloudUpload className="size-4" /> Ανέβασμα
-              </UploadTrigger>
-              <ButtonLink href={`/materials/new?slot=${slot.id}`} variant="soft">
-                <FilePlus2 className="size-4" /> Νέο με AI
-              </ButtonLink>
-            </div>
-          </Card>
-        </div>
-
-        <div className="space-y-5">
-          <Card className="p-5">
-            <h2 className="mb-3 text-lg font-bold">Παρουσίες</h2>
-            {attendance ? (
-              <div className="flex gap-3">
-                <div className="flex-1 rounded-xl bg-brand-50 p-3">
-                  <p className="text-2xl font-extrabold text-brand">{students.length - attendance.absentIds.length}</p>
-                  <p className="text-sm text-ink-2">παρόντες</p>
-                </div>
-                <div className="flex-1 rounded-xl bg-danger-50 p-3">
-                  <p className="text-2xl font-extrabold text-danger">{attendance.absentIds.length}</p>
-                  <p className="text-sm text-ink-2">απόντες</p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted">{future ? "Θα καταγραφούν την ημέρα του μαθήματος." : "Δεν έχουν καταγραφεί ακόμη."}</p>
-            )}
-            {!future && (
-              <ButtonLink href={`/classes/${slot.classId}?date=${slot.date}`} variant="secondary" className="mt-3 w-full">
-                <UserCheck className="size-4" /> {attendance ? "Επεξεργασία" : "Καταγραφή παρουσιών"}
-              </ButtonLink>
-            )}
-          </Card>
-
-          {canCarry && (
             <Card className="p-5">
-              <h2 className="mb-1 text-lg font-bold">Δεν ολοκληρώθηκε;</h2>
-              <CarryOverPanel slot={slot} />
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-lg font-bold">Υλικό μαθήματος</h2>
+                <span className="text-sm text-muted">{linked.length} {linked.length === 1 ? "αρχείο" : "αρχεία"}</span>
+              </div>
+              {linked.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-line p-4 text-center text-sm text-muted">Δεν έχει συνδεθεί υλικό ακόμη.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {linked.map((m) => (
+                    <li key={m.id} className="flex items-center gap-3 rounded-xl border border-line-2 p-2.5">
+                      <FileBadge file={m.file} />
+                      <Link href={`/materials/${m.id}`} className="min-w-0 flex-1 hover:underline">
+                        <span className="block truncate font-semibold">{m.title}</span>
+                        <span className="text-xs text-muted">{KIND_LABEL[m.kind]}</span>
+                      </Link>
+                      <button
+                        type="button"
+                        aria-label={`Αποσύνδεση: ${m.title}`}
+                        title="Αποσύνδεση από το μάθημα"
+                        onClick={() => detach(slot.id, m.id)}
+                        className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-line-2 hover:text-danger"
+                      >
+                        <Link2Off className="size-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <Button variant="secondary" onClick={() => setAttachOpen(true)}>
+                  <Paperclip className="size-4" /> Από βιβλιοθήκη
+                </Button>
+                <UploadTrigger slotId={slot.id} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold hover:bg-line-2">
+                  <CloudUpload className="size-4" /> Ανέβασμα
+                </UploadTrigger>
+                <ButtonLink href={`/materials/new?slot=${slot.id}`} variant="soft">
+                  <FilePlus2 className="size-4" /> Νέο με AI
+                </ButtonLink>
+              </div>
             </Card>
-          )}
-        </div>
+          </>
+        )}
+
+        {stage === "class" && (
+          <>
+            <Card className="p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-lg font-bold">Παρουσίες</h2>
+                {!future && (
+                  <ButtonLink href={`/classes/${slot.classId}?date=${slot.date}`} variant="secondary" size="sm">
+                    <UserCheck className="size-4" /> {attendance ? "Επεξεργασία" : "Καταγραφή"}
+                  </ButtonLink>
+                )}
+              </div>
+              {attendance ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { n: students.length - attendance.absentIds.length, label: "παρόντες", cls: "text-brand" },
+                    { n: attendance.absentIds.length, label: "απόντες", cls: "text-danger" },
+                    { n: attendance.lateIds?.length ?? 0, label: "καθυστέρηση", cls: "text-amber" },
+                  ].map((x) => (
+                    <div key={x.label} className="rounded-xl bg-bg p-3">
+                      <p className={cx("text-2xl font-extrabold tabular-nums", x.cls)}>{x.n}</p>
+                      <p className="text-sm text-ink-2">{x.label}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">{future ? "Θα καταγραφούν την ημέρα του μαθήματος." : "Δεν έχουν καταγραφεί ακόμη."}</p>
+              )}
+            </Card>
+            {linked.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {linked.map((m) => (
+                  <Link key={m.id} href={`/materials/${m.id}`} className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm font-semibold hover:bg-line-2">
+                    <FileBadge file={m.file} className="size-7" /> {m.title}
+                  </Link>
+                ))}
+              </div>
+            )}
+            <TaughtCard slot={slot} future={future} />
+          </>
+        )}
+
+        {stage === "after" && (
+          <>
+            <TaughtCard slot={slot} future={future} withStatus />
+            {canCarry && (
+              <Card className="p-5">
+                <h2 className="mb-1 text-lg font-bold">Δεν ολοκληρώθηκε;</h2>
+                <CarryOverPanel slot={slot} />
+              </Card>
+            )}
+          </>
+        )}
       </div>
       <AttachSheet slot={slot} open={attachOpen} onClose={() => setAttachOpen(false)} />
     </div>

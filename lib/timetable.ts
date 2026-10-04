@@ -1,3 +1,4 @@
+import { dutyLabel, type Country } from "./schoolYear";
 import { addDays, timeToMin, weekday } from "./dates";
 import { PERIODS } from "./schedule";
 import type { HHMM, ISODate, TimetableEntry } from "./types";
@@ -13,6 +14,9 @@ export const KIND_LABEL: Record<TimetableEntry["kind"], string> = {
   free: "Κενό",
   meeting: "Σύσκεψη",
 };
+
+/** Same as KIND_LABEL, with the duty wording of the teacher's country. */
+export const kindLabel = (kind: TimetableEntry["kind"], country: Country) => (kind === "duty" ? dutyLabel(country) : KIND_LABEL[kind]);
 
 /** Rows of the weekly grid: every distinct time window in the template, or the default school day. */
 export function periodsFrom(entries: TimetableEntry[]): Period[] {
@@ -35,11 +39,19 @@ export interface Occurrence {
 }
 
 /** Every weekday occurrence of the template between `from` and `to`, skipping ones that already exist. */
-export function materialize(entries: TimetableEntry[], from: ISODate, to: ISODate, existing: Set<string> = new Set()): Occurrence[] {
+export function materialize(
+  entries: TimetableEntry[],
+  from: ISODate,
+  to: ISODate,
+  existing: Set<string> = new Set(),
+  /** Days with no school (holidays). */
+  skip: (date: ISODate) => boolean = () => false,
+): Occurrence[] {
   const byDay = new Map<number, TimetableEntry[]>();
   for (const e of entries) byDay.set(e.weekday, [...(byDay.get(e.weekday) ?? []), e]);
   const out: Occurrence[] = [];
   for (let d = from; d <= to; d = addDays(d, 1)) {
+    if (skip(d)) continue;
     for (const entry of byDay.get(weekday(d)) ?? []) {
       if (!existing.has(`${entry.id}|${d}`)) out.push({ templateId: entry.id, date: d, entry });
     }

@@ -1,19 +1,19 @@
 "use client";
 
 import clsx from "clsx";
-import { Bell, BookOpen, ChevronDown, Crown, FileUp, Info, Plus, Search, Sparkles, StickyNote, ArrowRight, School } from "lucide-react";
+import { Bell, BookOpen, Plus, Search, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { shortDate } from "@/lib/dates";
 import { useApp } from "@/lib/store";
 import { isBarePath, useSession } from "@/lib/store/session";
 import { Avatar } from "../ui";
 import { Toaster } from "../toast";
-import { UploadTrigger } from "../upload";
+import { CaptureSheet } from "../capture";
 import { SubjectIcon } from "../subject";
 import { needsLog, useClock } from "../lesson";
-import { isActive, MOBILE_NAV, SIDEBAR_NAV } from "./nav";
+import { isActive, NAV } from "./nav";
 
 export function Logo({ className }: { className?: string }) {
   return (
@@ -29,52 +29,37 @@ function Sidebar() {
   const profile = useApp((s) => s.profile);
   const mode = useApp((s) => s.mode);
   const syncing = useApp((s) => s.syncing);
+  const item = (active: boolean) =>
+    clsx("flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] transition-colors", active ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-2 hover:bg-line-2");
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface/80 px-4 py-6 backdrop-blur lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface px-3 py-6 lg:flex">
       <div className="flex items-center justify-between px-2">
         <Logo />
         {mode === "cloud" && (
           <span title={syncing ? "Αποθήκευση…" : "Όλα αποθηκεύτηκαν"} className={clsx("size-2 rounded-full", syncing ? "animate-pulse-soft bg-amber" : "bg-brand-500")} />
         )}
+        {mode === "demo" && <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber">Επίδειξη</span>}
       </div>
-      <div className="mt-6 flex h-11 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium text-ink-2">
-        <School className="size-4 text-muted" />
-        <span className="flex-1 truncate">{profile.schoolName || "Το σχολείο μου"}</span>
-      </div>
-      <nav className="mt-5 flex flex-col gap-1">
-        {SIDEBAR_NAV.map(({ href, label, Icon }) => {
-          const active = isActive(pathname, href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={clsx(
-                "flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] transition-colors",
-                active ? "bg-brand-50 font-semibold text-brand" : "text-ink-2 hover:bg-line-2",
-              )}
-            >
-              <Icon className="size-5" />
-              {label}
-            </Link>
-          );
-        })}
+      {profile.schoolName && <p className="mt-1 truncate px-2 text-[13px] text-muted">{profile.schoolName}</p>}
+      <nav className="mt-6 flex flex-col gap-1">
+        {NAV.map(({ href, label, Icon, key }) => (
+          <Link key={href} href={href} className={item(isActive(pathname, href))}>
+            <Icon className="size-5" />
+            {label}
+            <kbd className="ml-auto rounded border border-line px-1.5 text-[11px] font-medium uppercase text-muted">{key}</kbd>
+          </Link>
+        ))}
       </nav>
-      <div className="mt-auto space-y-3">
-        <Link href="/about#plans" className="block rounded-xl bg-amber-50 p-3 text-sm">
-          <span className="flex items-center gap-2 font-semibold text-ink">
-            <Crown className="size-4 text-amber" /> Δοκιμή · 5 ημέρες ακόμη
-          </span>
-          <span className="mt-1 inline-flex items-center gap-1 text-[13px] font-semibold text-brand underline underline-offset-2">
-            Δες τα πακέτα <ArrowRight className="size-3.5" />
-          </span>
+      <div className="mt-auto grid gap-1">
+        <Link href="/settings" className={item(pathname.startsWith("/settings"))}>
+          <Settings className="size-5" /> Σχολείο &amp; χρονιά
         </Link>
-        <Link href="/about" className="flex items-center gap-3 rounded-xl border-t border-line px-2 pt-4 hover:opacity-80">
+        <Link href="/settings" className="mt-2 flex items-center gap-3 rounded-xl border-t border-line px-2 pt-4 hover:opacity-80">
           <Avatar name={profile.displayName || "?"} seed={3} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold">{profile.displayName || "Λογαριασμός"}</span>
-            <span className="block truncate text-xs text-muted">{mode === "demo" ? "Επίδειξη" : profile.schoolName || "Εκπαιδευτικός"}</span>
+            <span className="block truncate text-xs text-muted">{mode === "demo" ? "Χωρίς λογαριασμό" : "Ο λογαριασμός μου"}</span>
           </span>
-          <Info className="size-4 text-muted" />
         </Link>
       </div>
     </aside>
@@ -181,41 +166,16 @@ function SearchBox() {
   );
 }
 
-function CreateMenu() {
-  const firstClass = useApp((s) => s.classes[0]?.id);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
-  const item = "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium hover:bg-line-2";
+function CaptureButton({ onOpen }: { onOpen: () => void }) {
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex h-11 items-center gap-2 rounded-xl bg-brand pl-4 pr-3 text-[15px] font-semibold text-white shadow-sm hover:bg-brand-700"
-      >
-        <Plus className="size-5" /> Δημιουργία <ChevronDown className="size-4 opacity-80" />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-12 z-40 w-64 animate-fade-in rounded-2xl border border-line bg-surface p-1.5 shadow-pop" onClick={() => setOpen(false)}>
-          <Link href="/materials/new" className={item}>
-            <Sparkles className="size-4 text-brand" /> Νέο υλικό με AI
-          </Link>
-          <UploadTrigger className={item}>
-            <FileUp className="size-4 text-brand" /> Ανέβασμα αρχείου
-          </UploadTrigger>
-          <Link href={firstClass ? `/classes/${firstClass}?tab=notes` : "/classes"} className={item}>
-            <StickyNote className="size-4 text-brand" /> Σημείωση τάξης
-          </Link>
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex h-11 items-center gap-2 rounded-xl bg-brand pl-3.5 pr-4 text-[15px] font-semibold text-white shadow-sm hover:bg-brand-hover"
+    >
+      <Plus className="size-5" /> Καταγραφή
+      <kbd className="ml-1 rounded border border-white/30 px-1.5 text-[11px] font-medium">N</kbd>
+    </button>
   );
 }
 
@@ -258,39 +218,67 @@ function Notifications() {
   );
 }
 
-function TopBar() {
+function TopBar({ onCapture }: { onCapture: () => void }) {
   return (
     <header className="no-print sticky top-0 z-20 hidden items-center gap-4 bg-bg/85 px-8 py-4 backdrop-blur lg:flex">
       <SearchBox />
       <div className="ml-auto flex items-center gap-2">
         <Notifications />
-        <CreateMenu />
+        <CaptureButton onOpen={onCapture} />
       </div>
     </header>
   );
 }
 
-function BottomNav() {
+function BottomNav({ onCapture }: { onCapture: () => void }) {
   const pathname = usePathname();
+  const tab = ({ href, label, Icon }: (typeof NAV)[number]) => {
+    const active = isActive(pathname, href);
+    return (
+      <Link key={href} href={href} className={clsx("flex flex-col items-center gap-1 pb-2 pt-2.5 text-[11px]", active ? "font-bold text-brand-700" : "text-muted")}>
+        <Icon className="size-[22px]" strokeWidth={active ? 2.4 : 1.8} />
+        {label}
+      </Link>
+    );
+  };
   return (
-    <nav className="no-print pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden">
-      <div className="mx-auto grid max-w-lg grid-cols-4">
-        {MOBILE_NAV.map(({ href, label, Icon }) => {
-          const active = isActive(pathname, href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={clsx("flex flex-col items-center gap-1 pb-2 pt-2.5 text-[11px]", active ? "font-bold text-brand" : "text-muted")}
-            >
-              <Icon className="size-[22px]" strokeWidth={active ? 2.4 : 1.8} fill={active ? "currentColor" : "none"} fillOpacity={0.15} />
-              {label}
-            </Link>
-          );
-        })}
+    <nav className="no-print pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden" aria-label="Κύρια πλοήγηση">
+      <div className="mx-auto grid max-w-lg grid-cols-5 items-center">
+        {NAV.slice(0, 2).map(tab)}
+        <button
+          type="button"
+          onClick={onCapture}
+          aria-label="Γρήγορη καταγραφή"
+          className="mx-auto -mt-6 flex size-14 items-center justify-center rounded-2xl bg-brand text-white shadow-pop hover:bg-brand-hover"
+        >
+          <Plus className="size-7" strokeWidth={2.4} />
+        </button>
+        {NAV.slice(2).map(tab)}
       </div>
     </nav>
   );
+}
+
+/** Single-key shortcuts on a keyboard: T Σήμερα, H Ημερολόγιο, C Τάξεις, M Υλικό, N καταγραφή. */
+function useShortcuts(onCapture: () => void) {
+  const router = useRouter();
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.metaKey || e.ctrlKey || e.altKey || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      const k = e.key.toLowerCase();
+      if (k === "n") {
+        e.preventDefault();
+        onCapture();
+        return;
+      }
+      const hit = NAV.find((n) => n.key === k);
+      if (hit) router.push(hit.href);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router, onCapture]);
 }
 
 function Skeleton() {
@@ -306,6 +294,9 @@ function Skeleton() {
 export function AppShell({ children }: { children: ReactNode }) {
   const ready = useSession();
   const pathname = usePathname();
+  const [capture, setCapture] = useState(false);
+  const openCapture = useCallback(() => setCapture(true), []);
+  useShortcuts(openCapture);
   if (isBarePath(pathname))
     return (
       <div className="min-h-dvh">
@@ -316,11 +307,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh">
       <Sidebar />
-      <div className="lg:pl-64">
-        <TopBar />
+      <div className="lg:pl-60">
+        <TopBar onCapture={openCapture} />
         <main className="mx-auto max-w-6xl px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-12 lg:pt-2">{ready ? children : <Skeleton />}</main>
       </div>
-      <BottomNav />
+      <BottomNav onCapture={openCapture} />
+      {capture && <CaptureSheet open onClose={() => setCapture(false)} />}
       <Toaster />
     </div>
   );

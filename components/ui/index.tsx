@@ -11,7 +11,7 @@ type Variant = "primary" | "secondary" | "ghost" | "soft" | "danger";
 type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-700 shadow-sm disabled:bg-brand/40",
+  primary: "bg-brand text-white hover:bg-brand-hover shadow-sm disabled:bg-brand/40",
   secondary: "bg-surface text-ink border border-line hover:bg-line-2 disabled:text-muted",
   ghost: "text-ink-2 hover:bg-line-2 disabled:text-muted",
   soft: "bg-brand-50 text-brand hover:bg-brand-100 disabled:opacity-50",
@@ -248,7 +248,7 @@ export function Sheet({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal aria-label={title}>
-      <div className="absolute inset-0 animate-fade-in bg-ink/30 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="absolute inset-0 animate-fade-in bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
       <div
         className={clsx(
           "relative flex max-h-[88dvh] w-full animate-slide-up flex-col rounded-t-3xl bg-surface shadow-pop sm:rounded-2xl",

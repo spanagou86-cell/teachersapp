@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Pencil, ChevronLeft, ChevronRight, CalendarDays, Info, NotebookPen, Plus, Trash2, Users } from "lucide-react";
+import { CalendarDays, CheckCheck, ChevronLeft, ChevronRight, Info, NotebookPen, Pencil, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -10,13 +10,14 @@ import { StatusPill } from "@/components/lesson";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { SubjectIcon } from "@/components/subject";
 import { toast } from "@/components/toast";
-import { Avatar, Button, ButtonLink, Card, CheckCircle, cx, EmptyState, inputClass, Segmented } from "@/components/ui";
+import { Avatar, Button, ButtonLink, Card, cx, EmptyState, inputClass, Segmented } from "@/components/ui";
 import { addDays, dayName, longDate, shortDate, weekday } from "@/lib/dates";
 import { sortSlots } from "@/lib/schedule";
+import { holidayOn } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
 import type { ClassGroup, Student } from "@/lib/types";
 
-type Tab = "attendance" | "progress" | "notes";
+type Tab = "attendance" | "students" | "progress" | "notes";
 
 function prevSchoolDay(d: string, dir: -1 | 1): string {
   let x = addDays(d, dir);
@@ -24,17 +25,24 @@ function prevSchoolDay(d: string, dir: -1 | 1): string {
   return x;
 }
 
+function initials(st: Student) {
+  return `${st.firstName[0] ?? ""}${st.lastName[0] ?? ""}`.toUpperCase();
+}
+
 function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
   const router = useRouter();
   const params = useSearchParams();
   const today = useApp((s) => s.today);
+  const country = useApp((s) => s.profile.country);
   const date = params.get("date") ?? today;
   const record = useApp((s) => s.attendance[`${cls.id}|${date}`]);
-  const toggle = useApp((s) => s.toggleAbsent);
+  const cycle = useApp((s) => s.cycleAttendance);
   const allPresent = useApp((s) => s.markAllPresent);
   const absent = record?.absentIds ?? [];
+  const late = record?.lateIds ?? [];
   const go = (d: string) => router.replace(`/classes/${cls.id}?date=${d}`, { scroll: false });
   const recordedAt = record ? new Date(record.recordedAt) : undefined;
+  const holiday = holidayOn(country, date);
 
   return (
     <div className="space-y-4">
@@ -56,68 +64,106 @@ function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
           <ChevronRight className="size-5" />
         </button>
       </Card>
+      {holiday && <p className="rounded-xl bg-line-2 px-3 py-2 text-sm text-muted">Αργία · {holiday}</p>}
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex items-center gap-3 rounded-2xl bg-brand-50 p-4">
-          <Users className="size-6 text-brand-500" />
-          <div>
-            <p className="text-2xl font-extrabold leading-none text-brand">{record ? roster.length - absent.length : "—"}</p>
-            <p className="text-sm text-ink-2">παρόντες</p>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { n: record ? roster.length - absent.length : "—", label: "παρόντες", cls: "text-brand-500" },
+          { n: record ? absent.length : "—", label: "απόντες", cls: "text-danger" },
+          { n: record ? late.length : "—", label: "καθυστέρηση", cls: "text-amber" },
+        ].map((x) => (
+          <div key={x.label} className="rounded-2xl border border-line bg-surface px-3 py-2.5">
+            <p className={cx("text-2xl font-extrabold leading-none tabular-nums", x.cls)}>{x.n}</p>
+            <p className="mt-1 text-[12px] text-muted">{x.label}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl bg-danger-50 p-4">
-          <Users className="size-6 text-danger" />
-          <div>
-            <p className="text-2xl font-extrabold leading-none text-danger">{record ? absent.length : "—"}</p>
-            <p className="text-sm text-ink-2">απόντες</p>
-          </div>
-        </div>
+        ))}
       </div>
 
-      <Card className="overflow-hidden">
-        <div className="flex items-center gap-3 border-b border-line-2 px-4 py-3">
-          <button
-            type="button"
-            onClick={() => {
-              allPresent(cls.id, date);
-              toast("Όλοι παρόντες");
-            }}
-            className="flex items-center gap-3 text-[15px] font-medium"
-          >
-            <CheckCircle checked={!!record && absent.length === 0} />
-            Όλοι παρόντες
-          </button>
-          <span className="ml-auto text-xs text-muted">
-            {recordedAt ? `Καταγράφηκε ${recordedAt.getHours().toString().padStart(2, "0")}:${recordedAt.getMinutes().toString().padStart(2, "0")}` : "Δεν έχει καταγραφεί"}
-          </span>
-        </div>
-        <ul className="divide-y divide-line-2">
-          {roster.map((st, i) => {
-            const isAbsent = absent.includes(st.id);
-            const name = `${st.firstName} ${st.lastName}`;
-            return (
-              <li key={st.id}>
-                <button
-                  type="button"
-                  onClick={() => toggle(cls.id, date, st.id)}
-                  aria-pressed={!isAbsent && !!record}
-                  aria-label={`${name}: ${isAbsent ? "απών" : "παρών"}`}
-                  className={clsx("flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-line-2/60", isAbsent && "bg-danger-50/40")}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            allPresent(cls.id, date);
+            toast("Όλοι παρόντες");
+          }}
+        >
+          <CheckCheck className="size-4" /> Όλοι παρόντες
+        </Button>
+        <span className="ml-auto text-xs text-muted">
+          {recordedAt ? `Καταγράφηκε ${recordedAt.getHours().toString().padStart(2, "0")}:${recordedAt.getMinutes().toString().padStart(2, "0")}` : "Δεν έχει καταγραφεί"}
+        </span>
+      </div>
+
+      <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        {roster.map((st) => {
+          const state = absent.includes(st.id) ? "absent" : late.includes(st.id) ? "late" : "present";
+          const name = `${st.firstName} ${st.lastName}`.trim();
+          return (
+            <li key={st.id}>
+              <button
+                type="button"
+                onClick={() => cycle(cls.id, date, st.id)}
+                aria-label={`${name}: ${state === "absent" ? "απών" : state === "late" ? "καθυστέρηση" : "παρών"}`}
+                className={cx(
+                  "grid w-full justify-items-center gap-1.5 rounded-2xl border px-1 pb-2 pt-3 transition-colors",
+                  state === "absent" && "border-danger bg-danger-50",
+                  state === "late" && "border-amber bg-amber-50",
+                  state === "present" && "border-line bg-surface hover:bg-line-2",
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cx(
+                    "flex size-10 items-center justify-center rounded-full text-[13px] font-extrabold",
+                    state === "absent" ? "bg-danger text-surface" : state === "late" ? "bg-amber text-surface" : "bg-brand-50 text-brand-500",
+                  )}
                 >
-                  <Avatar name={name} seed={i} />
-                  <span className="flex-1 text-[15px] font-medium">{name}</span>
-                  {isAbsent && <span className="text-xs font-semibold text-danger">απών</span>}
-                  <CheckCircle checked={!!record && !isAbsent} tone={isAbsent ? "danger" : "brand"} />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
-      <p className="flex items-center justify-center gap-1.5 text-sm text-muted">
-        <Info className="size-4" /> Πάτησε έναν μαθητή για απουσία · οι αλλαγές αποθηκεύονται αυτόματα
+                  {initials(st)}
+                </span>
+                <span className="line-clamp-2 text-center text-[12px] font-semibold leading-tight">{name}</span>
+                <span className={cx("h-3.5 text-[10.5px] font-bold", state === "absent" ? "text-danger" : "text-amber")}>
+                  {state === "absent" ? "απών" : state === "late" ? "αργοπορία" : ""}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="flex items-center justify-center gap-1.5 text-center text-sm text-muted">
+        <Info className="size-4 shrink-0" /> Ένα πάτημα: απών · δεύτερο: καθυστέρηση · τρίτο: παρών. Αποθηκεύεται μόνο του.
       </p>
     </div>
+  );
+}
+
+function Students({ roster }: { roster: Student[] }) {
+  const notes = useApp((s) => s.studentNotes);
+  const attendance = useApp((s) => s.attendance);
+  return (
+    <Card className="overflow-hidden">
+      <ul className="divide-y divide-line-2">
+        {roster.map((st, i) => {
+          const name = `${st.firstName} ${st.lastName}`.trim();
+          const absences = Object.values(attendance).filter((r) => r.absentIds.includes(st.id)).length;
+          const count = notes.filter((n) => n.studentId === st.id).length;
+          return (
+            <li key={st.id}>
+              <Link href={`/students/${st.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-line-2">
+                <Avatar name={name} seed={i} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold">{name}</span>
+                  <span className="text-[12px] text-muted">
+                    {absences} {absences === 1 ? "απουσία" : "απουσίες"} · {count} {count === 1 ? "σημείωση" : "σημειώσεις"}
+                  </span>
+                </span>
+                <ChevronRight className="size-4 text-muted" />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }
 
@@ -297,20 +343,22 @@ export default function ClassPage() {
       <Segmented<Tab>
         value={tab}
         onChange={setTab}
-        className="mb-5 lg:max-w-md"
+        className="mb-5 lg:max-w-xl"
         options={[
           { value: "attendance", label: "Παρουσίες" },
+          { value: "students", label: "Μαθητές" },
           { value: "progress", label: "Πρόοδος" },
           { value: "notes", label: "Σημειώσεις" },
         ]}
       />
-      <div className={clsx(tab === "attendance" && "lg:max-w-2xl")}>
+      <div className={clsx(tab === "students" && "lg:max-w-2xl")}>
         {tab === "attendance" && <Attendance cls={cls} roster={roster} />}
+        {tab === "students" && <Students roster={roster} />}
         {tab === "progress" && <Progress cls={cls} roster={roster} />}
         {tab === "notes" && <Notes cls={cls} />}
       </div>
       {tab === "attendance" && (
-        <Button size="lg" className="mt-4 w-full lg:max-w-2xl" onClick={() => setTab("notes")}>
+        <Button size="lg" className="mt-4 w-full lg:max-w-sm" onClick={() => setTab("notes")}>
           <NotebookPen className="size-5" /> Προσθήκη σημείωσης
         </Button>
       )}

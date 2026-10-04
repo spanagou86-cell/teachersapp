@@ -7,32 +7,58 @@
   --color-surface: #ffffff;
   --color-ink: #12241b;
   --color-ink-2: #34443b;
-  --color-muted: #6a756e;
-  --color-line: #e5e7e1;
+  --color-muted: #66746c;
+  --color-line: #e3e6e0;
   --color-line-2: #eef0ea;
 
   --color-brand: #1d4a37;
+  --color-brand-hover: #163a2b;
   --color-brand-700: #163a2b;
   --color-brand-500: #2f6b51;
   --color-brand-100: #dcebe0;
   --color-brand-50: #edf5ef;
 
-  --color-amber: #b88a12;
+  --color-amber: #9a6f00;
   --color-amber-50: #fbf4dc;
-  --color-amber-100: #f7e8b4;
-  --color-danger: #d4493f;
-  --color-danger-50: #fdeeec;
-  --color-info: #3c7bc4;
-  --color-info-50: #eaf2fb;
+  --color-amber-100: #f2e2ae;
+  --color-danger: #c23b30;
+  --color-danger-50: #fbe8e5;
+  --color-info: #2f6fb8;
+  --color-info-50: #e8f0fa;
+  --color-now: #d8432f;
+  --color-duty: #5b4a1c;
+  --color-duty-50: #f5edd8;
+  --color-holiday: #d5d9d2;
 
-  --color-glossa: #9b7fd6;
-  --color-glossa-50: #f1ecfb;
-  --color-math: #ecbf3a;
-  --color-math-50: #fcf5dc;
-  --color-meleti: #5f9fdc;
-  --color-meleti-50: #e7f1fb;
-  --color-eikastika: #ef8f9d;
-  --color-eikastika-50: #fdecee;
+  /* One hue per subject: bar colour and soft fill. */
+  --color-glossa: #7457d1;
+  --color-glossa-50: #efeafc;
+  --color-math: #c98a06;
+  --color-math-50: #fcf3dc;
+  --color-meleti: #2f80cf;
+  --color-meleti-50: #e5f0fb;
+  --color-eikastika: #d9506c;
+  --color-eikastika-50: #fce8ec;
+  --color-istoria: #a65a26;
+  --color-istoria-50: #f7ebe1;
+  --color-fysika: #138f7c;
+  --color-fysika-50: #e0f3ef;
+  --color-geografia: #4d9431;
+  --color-geografia-50: #e8f3e1;
+  --color-agglika: #d2462a;
+  --color-agglika-50: #fbe7e1;
+  --color-thriskeftika: #85659a;
+  --color-thriskeftika-50: #f1eaf5;
+  --color-mousiki: #b8429f;
+  --color-mousiki-50: #f9e6f5;
+  --color-fa: #1797b0;
+  --color-fa-50: #def3f7;
+  --color-tpe: #4659cc;
+  --color-tpe-50: #e8ebfb;
+  --color-ergastiria: #7f8c1c;
+  --color-ergastiria-50: #f1f4dc;
+  --color-allo: #6f7b74;
+  --color-allo-50: #eef0ee;
 
   --shadow-card: 0 1px 2px rgb(18 36 27 / 0.04), 0 1px 1px rgb(18 36 27 / 0.02);
   --shadow-pop: 0 12px 32px -8px rgb(18 36 27 / 0.18), 0 2px 6px rgb(18 36 27 / 0.06);
@@ -54,6 +80,130 @@
     0%, 100% { opacity: 0.55; }
     50% { opacity: 1; }
   }
+}
+
+
+/* Dark palette: follows the device unless the teacher picked "Φωτεινό" (data-theme="light"). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --color-bg: #0f1612;
+  --color-surface: #17211b;
+  --color-ink: #e6ede8;
+  --color-ink-2: #c4cfc8;
+  --color-muted: #93a29a;
+  --color-line: #27352d;
+  --color-line-2: #1d2a23;
+  --color-brand: #3d8c66;
+  --color-brand-hover: #4a9c74;
+  --color-brand-700: #a6dcbd;
+  --color-brand-500: #6cc296;
+  --color-brand-100: #24402f;
+  --color-brand-50: #1a2e23;
+  --color-amber: #f0c14d;
+  --color-amber-50: #33290f;
+  --color-amber-100: #4a3c14;
+  --color-danger: #ff8b7e;
+  --color-danger-50: #3a1f1c;
+  --color-info: #8db8ea;
+  --color-info-50: #18263a;
+  --color-now: #ff7a66;
+  --color-duty: #f0d79a;
+  --color-duty-50: #2e2715;
+  --color-holiday: #2c3832;
+  --color-glossa: #a690f0;
+  --color-glossa-50: #261f3d;
+  --color-math: #f2c14b;
+  --color-math-50: #33290f;
+  --color-meleti: #78b6f2;
+  --color-meleti-50: #142538;
+  --color-eikastika: #f58aa0;
+  --color-eikastika-50: #3a1d24;
+  --color-istoria: #e39a66;
+  --color-istoria-50: #34231a;
+  --color-fysika: #52cdb6;
+  --color-fysika-50: #12302b;
+  --color-geografia: #8fd06d;
+  --color-geografia-50: #1b2e15;
+  --color-agglika: #f58f74;
+  --color-agglika-50: #3a1e17;
+  --color-thriskeftika: #c4a5d8;
+  --color-thriskeftika-50: #2b2232;
+  --color-mousiki: #ec88d6;
+  --color-mousiki-50: #361a31;
+  --color-fa: #62d2e6;
+  --color-fa-50: #11303a;
+  --color-tpe: #94a2f5;
+  --color-tpe-50: #1b2040;
+  --color-ergastiria: #cad65a;
+  --color-ergastiria-50: #2a2e10;
+  --color-allo: #a6b1ab;
+  --color-allo-50: #222b26;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-pop: 0 12px 32px -8px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.3);
+  color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --color-bg: #0f1612;
+  --color-surface: #17211b;
+  --color-ink: #e6ede8;
+  --color-ink-2: #c4cfc8;
+  --color-muted: #93a29a;
+  --color-line: #27352d;
+  --color-line-2: #1d2a23;
+  --color-brand: #3d8c66;
+  --color-brand-hover: #4a9c74;
+  --color-brand-700: #a6dcbd;
+  --color-brand-500: #6cc296;
+  --color-brand-100: #24402f;
+  --color-brand-50: #1a2e23;
+  --color-amber: #f0c14d;
+  --color-amber-50: #33290f;
+  --color-amber-100: #4a3c14;
+  --color-danger: #ff8b7e;
+  --color-danger-50: #3a1f1c;
+  --color-info: #8db8ea;
+  --color-info-50: #18263a;
+  --color-now: #ff7a66;
+  --color-duty: #f0d79a;
+  --color-duty-50: #2e2715;
+  --color-holiday: #2c3832;
+  --color-glossa: #a690f0;
+  --color-glossa-50: #261f3d;
+  --color-math: #f2c14b;
+  --color-math-50: #33290f;
+  --color-meleti: #78b6f2;
+  --color-meleti-50: #142538;
+  --color-eikastika: #f58aa0;
+  --color-eikastika-50: #3a1d24;
+  --color-istoria: #e39a66;
+  --color-istoria-50: #34231a;
+  --color-fysika: #52cdb6;
+  --color-fysika-50: #12302b;
+  --color-geografia: #8fd06d;
+  --color-geografia-50: #1b2e15;
+  --color-agglika: #f58f74;
+  --color-agglika-50: #3a1e17;
+  --color-thriskeftika: #c4a5d8;
+  --color-thriskeftika-50: #2b2232;
+  --color-mousiki: #ec88d6;
+  --color-mousiki-50: #361a31;
+  --color-fa: #62d2e6;
+  --color-fa-50: #11303a;
+  --color-tpe: #94a2f5;
+  --color-tpe-50: #1b2040;
+  --color-ergastiria: #cad65a;
+  --color-ergastiria-50: #2a2e10;
+  --color-allo: #a6b1ab;
+  --color-allo-50: #222b26;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-pop: 0 12px 32px -8px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.3);
+  color-scheme: dark;
+}
+
+/* "Μεγάλα γράμματα": everything is sized in rem, so one switch scales the app. */
+:root[data-text="large"] {
+  font-size: 112.5%;
 }
 
 html {
@@ -112,4 +262,29 @@ body {
   .no-print {
     display: none !important;
   }
+}
+
+/* Printed pages (worksheets, tests) stay black on white whatever the theme. */
+.paper {
+  --color-surface: #ffffff;
+  --color-bg: #f6f6f1;
+  --color-ink: #12241b;
+  --color-ink-2: #34443b;
+  --color-muted: #66746c;
+  --color-line: #e3e6e0;
+  --color-line-2: #eef0ea;
+  --color-brand: #1d4a37;
+  --color-brand-700: #163a2b;
+  --color-brand-500: #2f6b51;
+  --color-brand-100: #dcebe0;
+  --color-brand-50: #edf5ef;
+  --color-amber: #9a6f00;
+  --color-amber-50: #fbf4dc;
+  --color-amber-100: #f2e2ae;
+  --color-danger: #c23b30;
+  --color-danger-50: #fbe8e5;
+  --color-info: #2f6fb8;
+  --color-info-50: #e8f0fa;
+  color-scheme: light;
+  color: var(--color-ink);
 }
