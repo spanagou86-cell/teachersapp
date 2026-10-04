@@ -1,0 +1,59 @@
+"use client";
+
+import { CheckCircle2, X } from "lucide-react";
+import { useEffect } from "react";
+import { create } from "zustand";
+
+interface Toast {
+  id: number;
+  text: string;
+  action?: { label: string; run: () => void };
+}
+
+const useToasts = create<{ items: Toast[]; push: (t: Omit<Toast, "id">) => void; dismiss: (id: number) => void }>((set) => ({
+  items: [],
+  push: (t) => set((s) => ({ items: [...s.items.slice(-2), { ...t, id: Date.now() + Math.random() }] })),
+  dismiss: (id) => set((s) => ({ items: s.items.filter((x) => x.id !== id) })),
+}));
+
+export const toast = (text: string, action?: Toast["action"]) => useToasts.getState().push({ text, action });
+
+function ToastItem({ t }: { t: Toast }) {
+  const dismiss = useToasts((s) => s.dismiss);
+  useEffect(() => {
+    const h = setTimeout(() => dismiss(t.id), t.action ? 7000 : 3500);
+    return () => clearTimeout(h);
+  }, [t, dismiss]);
+  return (
+    <div role="status" className="pointer-events-auto flex animate-slide-up items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-white shadow-pop">
+      <CheckCircle2 className="size-5 shrink-0 text-brand-100" />
+      <span className="flex-1">{t.text}</span>
+      {t.action && (
+        <button
+          type="button"
+          className="rounded-lg px-2 py-1 font-semibold text-brand-100 hover:bg-white/10"
+          onClick={() => {
+            t.action!.run();
+            dismiss(t.id);
+          }}
+        >
+          {t.action.label}
+        </button>
+      )}
+      <button type="button" aria-label="Κλείσιμο" className="text-white/60 hover:text-white" onClick={() => dismiss(t.id)}>
+        <X className="size-4" />
+      </button>
+    </div>
+  );
+}
+
+export function Toaster() {
+  const items = useToasts((s) => s.items);
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-[60] flex flex-col items-center gap-2 px-4 lg:bottom-6">
+      {items.map((t) => (
+        <ToastItem key={t.id} t={t} />
+      ))}
+    </div>
+  );
+}
