@@ -9,7 +9,7 @@ import { uid } from "../id";
 import { applyChange, restoreOriginal, restoreVersion } from "../materials";
 import { carryOverLesson, undoCarryOver, type CarryOverResult, type TimeWindow } from "../schedule";
 import { seed, type SeedState } from "../seed";
-import { holidayOn } from "../schoolYear";
+import { isSchoolDay } from "../schoolYear";
 import { materialize } from "../timetable";
 import type {
   Block,
@@ -24,6 +24,8 @@ import type {
   Profile,
   Student,
   StudentNote,
+  ClassNote,
+  Task,
   SubjectId,
   TimeBlock,
   TimetableEntry,
@@ -66,6 +68,8 @@ interface Actions {
   reset: () => void;
 
   updateProfile: (p: Partial<Profile>) => void;
+  /** Changes country and moves the calendar to its holidays. */
+  setCountry: (country: Profile["country"]) => Promise<void>;
   addClass: (c: Omit<ClassGroup, "id">) => string;
   updateClass: (c: ClassGroup) => void;
   deleteClass: (id: string) => void;
@@ -77,6 +81,13 @@ interface Actions {
   toggleTask: (id: string) => void;
   addTask: (text: string) => void;
   removeTask: (id: string) => void;
+  editTask: (id: string, text: string) => void;
+  /** Puts back something just deleted (the "Αναίρεση" of a toast). */
+  restoreTask: (t: Task) => void;
+  restoreNote: (n: ClassNote) => void;
+  restoreStudentNote: (n: StudentNote) => void;
+  editNote: (id: string, text: string) => void;
+  editStudentNote: (id: string, text: string) => void;
 
   /** Present → absent → late → present. */
   cycleAttendance: (classId: string, date: string, studentId: string) => void;
@@ -156,8 +167,19 @@ export const useApp = create<AppState>()(
         if (get().mode !== "cloud") return;
         pending++;
         set({ syncing: true });
+        // A dropped connection shouldn't lose work: try again a couple of times before telling the teacher.
+        const attempt = async () => {
+          for (let i = 0; ; i++) {
+            try {
+              return await write();
+            } catch (err) {
+              if (i >= 2 || get().mode !== "cloud") throw err;
+              await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+            }
+          }
+        };
         queue = queue
-          .then(write)
+          .then(attempt)
           .catch((err) => {
             console.error(err);
             toast("Δεν αποθηκεύτηκε. Έλεγξε τη σύνδεση.", { label: "Ανανέωση", run: () => void reload() });
@@ -166,7 +188,23 @@ export const useApp = create<AppState>()(
             if (--pending === 0) set({ syncing: false });
           });
       };
-      flushWrites = () => queue;
+      flushWrites = () => {
+        // Notes still waiting for a pause in typing go out now.
+        for (const [id, timer] of noteTimers) {
+          clearTimeout(timer);
+          noteTimers.delete(id);
+          const slot = get().slots.find((x) => x.id === id);
+          if (slot) sync(() => remote.updateSlot(id, { taughtNote: slot.taughtNote }));
+        }
+        return queue;
+      };
+      if (typeof window !== "undefined")
+        window.addEventListener("beforeunload", (e) => {
+          if (pending > 0 || noteTimers.size > 0) {
+            void flushWrites();
+            e.preventDefault();
+          }
+        });
       const reload = async () => {
         const { userId, email } = get();
         if (userId) await get().loadCloud(userId, email);
@@ -184,7 +222,9 @@ export const useApp = create<AppState>()(
           set({ ...seed(), mode: "demo", userId: undefined, email: undefined, today: DEMO_TODAY, now: DEMO_NOW, profile: DEMO_PROFILE }),
         loadCloud: async (userId, email) => {
           const clock = athensClock();
-          const data = await loadAll(userId, clock.today);
+          let data = await loadAll(userId, clock.today);
+          // A new school year (or days missing after an interruption): fill the calendar from the template.
+          if (data.timetable.length && (await remote.fillYear(data.timetable, clock.today, clock.now, data.profile.country)) > 0) data = await loadAll(userId, clock.today);
           set({ ...data, mode: "cloud", userId, email, ...clock });
         },
         leave: () => set({ ...seed(), mode: null, userId: undefined, email: undefined, today: DEMO_TODAY, now: DEMO_NOW, profile: DEMO_PROFILE }),
@@ -195,6 +235,28 @@ export const useApp = create<AppState>()(
           if (get().mode === "demo") set(seed());
         },
 
+        setCountry: async (country) => {
+          const { mode, today, now, timetable } = get();
+          if (country === get().profile.country) return;
+          set((s) => ({ profile: { ...s.profile, country } }));
+          if (mode === "cloud") {
+            await flushWrites();
+            set({ syncing: true });
+            try {
+              await remote.updateProfile(get().userId!, { country });
+              await remote.changeCountry(timetable, today, now, country);
+            } finally {
+              await reload().catch(() => undefined);
+              set({ syncing: false });
+            }
+            return;
+          }
+          const untouched = (x: LessonSlot) => x.status === "planned" && !x.taughtNote && !x.topic && !x.materialIds.length && !x.carriedFromId && !x.carriedToId;
+          set((s) => ({
+            slots: s.slots.filter((x) => x.date < today || isSchoolDay(country, x.date) || !untouched(x)),
+            blocks: s.blocks.filter((b) => b.date < today || isSchoolDay(country, b.date)),
+          }));
+        },
         updateProfile: (p) => {
           set((s) => ({ profile: { ...s.profile, ...p } }));
           sync(() => remote.updateProfile(get().userId!, p));
@@ -228,8 +290,9 @@ export const useApp = create<AppState>()(
               return { id: uid(), classId, firstName: first.slice(0, 60), lastName: rest.join(" ").slice(0, 60) };
             });
           if (!list.length) return;
+          const firstSort = get().students.filter((x) => x.classId === classId).length;
           set((s) => ({ students: [...s.students, ...list] }));
-          sync(() => remote.insertStudents(list));
+          sync(() => remote.insertStudents(list, firstSort));
         },
         renameStudent: (st) => {
           set((s) => ({ students: s.students.map((x) => (x.id === st.id ? st : x)) }));
@@ -240,23 +303,24 @@ export const useApp = create<AppState>()(
           sync(() => remote.deleteStudent(id));
         },
         saveTimetable: async (entries) => {
-          const { mode, today, timetable: previous } = get();
+          const { mode, today, now, timetable: previous } = get();
           if (mode === "cloud") {
             await flushWrites();
             set({ syncing: true });
             try {
-              await remote.saveTimetable(entries, previous, today, get().profile.country);
+              await remote.saveTimetable(entries, previous, today, now, get().profile.country);
               await remote.updateProfile(get().userId!, { onboarded: true });
-              await reload();
             } finally {
+              // Always re-read: after a partial failure the next attempt must diff against what is really stored.
+              await reload().catch(() => undefined);
               set({ syncing: false });
             }
             return;
           }
           // Demo: rebuild the coming three weeks locally from the new template.
-          const keep = (s: LessonSlot) => s.date < today || s.status !== "planned" || s.taughtNote || s.materialIds.length || s.carriedFromId;
+          const keep = (s: LessonSlot) => s.date < today || s.status !== "planned" || s.taughtNote || s.topic || s.materialIds.length || s.carriedFromId || s.carriedToId;
           const country = get().profile.country;
-          const occ = materialize(entries, today, addDays(today, 20), new Set(), (d) => !!holidayOn(country, d));
+          const occ = materialize(entries, today, addDays(today, 20), new Set(), (d) => !isSchoolDay(country, d));
           set((s) => ({
             timetable: entries,
             slots: [
@@ -293,11 +357,38 @@ export const useApp = create<AppState>()(
         addTask: (text) => {
           const t = { id: uid(), text: text.slice(0, 200), done: false };
           set((s) => ({ tasks: [...s.tasks, t] }));
-          sync(() => remote.upsertTask(t));
+          const date = get().today;
+          sync(() => remote.upsertTask(t, date));
         },
         removeTask: (id) => {
           set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
           sync(() => remote.deleteTask(id));
+        },
+        editTask: (id, text) => {
+          set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, text: text.slice(0, 200) } : t)) }));
+          const t = get().tasks.find((x) => x.id === id);
+          if (t) sync(() => remote.upsertTask(t));
+        },
+        restoreTask: (t) => {
+          set((s) => ({ tasks: [...s.tasks, t] }));
+          const date = get().today;
+          sync(() => remote.upsertTask(t, date));
+        },
+        restoreNote: (n) => {
+          set((s) => ({ notes: [n, ...s.notes].sort((a, b) => b.createdAt - a.createdAt) }));
+          sync(() => remote.addNote(n));
+        },
+        restoreStudentNote: (n) => {
+          set((s) => ({ studentNotes: [n, ...s.studentNotes].sort((a, b) => b.createdAt - a.createdAt) }));
+          sync(() => remote.addStudentNote(n));
+        },
+        editNote: (id, text) => {
+          set((s) => ({ notes: s.notes.map((n) => (n.id === id ? { ...n, text: text.slice(0, 2000) } : n)) }));
+          sync(() => remote.editNote(id, text.slice(0, 2000)));
+        },
+        editStudentNote: (id, text) => {
+          set((s) => ({ studentNotes: s.studentNotes.map((n) => (n.id === id ? { ...n, text: text.slice(0, 2000) } : n)) }));
+          sync(() => remote.editStudentNote(id, text.slice(0, 2000)));
         },
 
         cycleAttendance: (classId, date, studentId) => {
@@ -396,7 +487,7 @@ export const useApp = create<AppState>()(
             });
           const material: Material = {
             id,
-            title: input.title,
+            title: input.title.trim().slice(0, 200) || "Νέο υλικό",
             classId: input.classId,
             subjectId: input.subjectId,
             kind: input.kind,
@@ -441,10 +532,10 @@ export const useApp = create<AppState>()(
           const copy: Material = {
             ...src,
             id: newId,
-            title: `${src.title} ${suffix}`,
+            title: `${src.title.slice(0, 200 - suffix.length - 1)} ${suffix}`,
             blocks,
             originalBlocks: blocks,
-            versions: [{ id: uid(), at: now, label: `Αντίγραφο από «${src.title}»`, blocks }],
+            versions: [{ id: uid(), at: now, label: `Αντίγραφο από «${src.title}»`.slice(0, 200), blocks }],
             createdAt: now,
             updatedAt: now,
           };

@@ -44,8 +44,13 @@ function Login() {
       setError("Λάθος ή ληγμένος κωδικός.");
       return;
     }
-    await loadCloud(data.user.id, data.user.email ?? undefined);
-    router.replace("/");
+    try {
+      await loadCloud(data.user.id, data.user.email ?? undefined);
+      router.replace("/");
+    } catch {
+      setBusy(false);
+      setError("Συνδέθηκες, αλλά δεν φόρτωσαν τα δεδομένα. Έλεγξε το διαδίκτυο και ανανέωσε τη σελίδα.");
+    }
   };
 
   return (

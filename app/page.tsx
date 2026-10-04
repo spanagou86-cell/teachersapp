@@ -7,6 +7,7 @@ import { needsLog, useClock } from "@/components/lesson";
 import { MobileBrandBar } from "@/components/shell/PageHeader";
 import { SubjectIcon } from "@/components/subject";
 import { LogRing, Timeline } from "@/components/timeline";
+import { toast } from "@/components/toast";
 import { ButtonLink, Card, cx } from "@/components/ui";
 import { dayName, longDate, shortDate, timeToMin } from "@/lib/dates";
 import { slotsOn, sortSlots, upcomingLesson } from "@/lib/schedule";
@@ -18,6 +19,8 @@ function Tasks() {
   const toggle = useApp((s) => s.toggleTask);
   const add = useApp((s) => s.addTask);
   const remove = useApp((s) => s.removeTask);
+  const edit = useApp((s) => s.editTask);
+  const restore = useApp((s) => s.restoreTask);
   const [text, setText] = useState("");
   const open = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
@@ -29,18 +32,39 @@ function Tasks() {
       </h2>
       <ul className="grid gap-1.5">
         {[...open, ...done].map((t) => (
-          <li key={t.id} className="group flex items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2.5">
-            <input type="checkbox" checked={t.done} onChange={() => toggle(t.id)} aria-label={t.text} className="size-[18px] shrink-0 cursor-pointer accent-brand-500" />
-            <span className={cx("min-w-0 flex-1 text-[14px]", t.done && "text-muted line-through")}>
-              {t.text}
-              {t.time && <span className="text-muted"> · {t.time}</span>}
-              {t.detail && <span className="block text-[12px] text-muted">{t.detail}</span>}
+          <li key={t.id} className="group flex items-center gap-1 rounded-xl border border-line bg-surface pl-1.5 pr-1">
+            <label className="flex size-10 shrink-0 cursor-pointer items-center justify-center">
+              <input type="checkbox" checked={t.done} onChange={() => toggle(t.id)} aria-label={t.text} className="size-5 cursor-pointer accent-brand-500" />
+            </label>
+            <span className={cx("min-w-0 flex-1 py-2 text-[14px]", t.done && "text-muted line-through")}>
+              <input
+                defaultValue={t.text}
+                aria-label="Κείμενο εκκρεμότητας"
+                maxLength={200}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (!v) e.target.value = t.text;
+                  else if (v !== t.text) edit(t.id, v);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                className={cx("w-full rounded-md bg-transparent outline-none focus:bg-line-2", t.done && "line-through")}
+              />
+              {(t.time || t.detail) && (
+                <span className="block text-[12px] text-muted">
+                  {t.time}
+                  {t.time && t.detail && " · "}
+                  {t.detail}
+                </span>
+              )}
             </span>
             <button
               type="button"
               aria-label={`Διαγραφή: ${t.text}`}
-              onClick={() => remove(t.id)}
-              className="text-muted opacity-0 transition-opacity hover:text-danger focus:opacity-100 group-hover:opacity-100"
+              onClick={() => {
+                remove(t.id);
+                toast("Η εκκρεμότητα διαγράφηκε", { label: "Αναίρεση", run: () => restore(t) });
+              }}
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted hover:text-danger sm:opacity-0 sm:focus:opacity-100 sm:group-hover:opacity-100"
             >
               <Trash2 className="size-4" />
             </button>

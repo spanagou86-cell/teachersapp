@@ -1,12 +1,12 @@
 "use client";
 
-import { CalendarCog, CheckCircle2, CircleDashed, FlaskConical, LogIn, LogOut, RotateCcw, Rocket } from "lucide-react";
+import { CalendarCog, CheckCircle2, CircleDashed, FlaskConical, LogIn, LogOut, RotateCcw, Rocket, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { toast } from "@/components/toast";
 import { Button, ButtonLink, Card } from "@/components/ui";
 import { supabase } from "@/lib/supabase/client";
-import { useApp } from "@/lib/store";
+import { flushWrites, useApp } from "@/lib/store";
 
 const REAL = [
   "Λογαριασμός με email: τα δεδομένα σου αποθηκεύονται με ασφάλεια και φαίνονται σε κινητό και υπολογιστή",
@@ -26,16 +26,21 @@ const REAL = [
   "Σημειώσεις τμήματος, λίστα «Για σήμερα», εκτύπωση / PDF (φύλλο μαθητή και λύσεων)",
 ];
 
-const MOCK = [
-  "Η προσαρμογή με AI είναι δείγμα: καταλαβαίνει βασικές οδηγίες (πιο απλό/δύσκολο, άσκηση Ν, λύσεις, χώρος, εκδοχή Α/Β) και δεν διαβάζει ακόμη το περιεχόμενο του αρχείου",
+const AI = [
+  "Δημιουργία φύλλου, τεστ, σχεδίου μαθήματος ή περίληψης από PDF, Word (.docx) ή φωτογραφία σελίδας, για την τάξη και το επίπεδο που διαλέγεις",
+  "Προσαρμογή με δικά σου λόγια: πιο απλό, πιο απαιτητικό, λύσεις, εκδοχή Α/Β, μόνο μία άσκηση",
+  "Ανάγνωση του ωρολογίου προγράμματος του σχολείου από φωτογραφία ή PDF",
+  "Ό,τι φτιάχνει το AI το ελέγχεις πριν το μοιράσεις· το πρωτότυπο μένει ανέγγιχτο και κάθε αλλαγή μπαίνει στο ιστορικό",
+];
+
+const DEMO = [
   "Στην επίδειξη χωρίς λογαριασμό η ημερομηνία είναι σταθερή (Δευτέρα 5 Οκτωβρίου, 09:05) και τα δεδομένα μένουν μόνο στον browser",
+  "Στην επίδειξη το AI αντικαθίσταται από απλούς κανόνες και έτοιμα παραδείγματα",
 ];
 
 const NEXT = [
-  "Αυτόματη συμπλήρωση του ωρολογίου από φωτογραφία του προγράμματος του σχολείου",
-  "Ανάγνωση PDF/Word/φωτογραφιών και προσαρμογή με πραγματικό μοντέλο Claude",
   "Βιβλίο ύλης και ετήσιος προγραμματισμός ύλης, έτοιμα για εκτύπωση",
-  "Πακέτα συνδρομής με Stripe",
+  "Αξιολόγηση και αναφορές προόδου ανά μαθητή",
 ];
 
 export default function AboutPage() {
@@ -47,7 +52,7 @@ export default function AboutPage() {
   const router = useRouter();
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader back="/settings" title="Τι λειτουργεί" subtitle="Πρωτότυπο της «τάξης» — τι είναι πραγματικό και τι ακόμη δείγμα." />
+      <PageHeader back="/settings" title="Τι λειτουργεί" subtitle="Όλες οι δυνατότητες της «τάξης» και τι έρχεται." />
       <div className="space-y-5">
         <Card className="flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center">
           <div className="flex-1">
@@ -62,7 +67,8 @@ export default function AboutPage() {
               <Button
                 variant="secondary"
                 onClick={async () => {
-                  await supabase().auth.signOut();
+                  await flushWrites();
+                await supabase().auth.signOut();
                   leave();
                   router.replace("/login");
                 }}
@@ -95,19 +101,33 @@ export default function AboutPage() {
         </Card>
         <Card className="p-5">
           <h2 className="mb-3 flex items-center gap-2 text-lg font-bold">
-            <FlaskConical className="size-5 text-amber" /> Δείγμα επίδειξης
+            <Sparkles className="size-5 text-brand-500" /> Με τη βοήθεια AI
           </h2>
           <ul className="space-y-2 text-[15px]">
-            {MOCK.map((r) => (
+            {AI.map((r) => (
               <li key={r} className="flex gap-2">
-                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-amber" /> {r}
+                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-brand-500" /> {r}
               </li>
             ))}
           </ul>
         </Card>
+        {mode !== "cloud" && (
+          <Card className="p-5">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-bold">
+              <FlaskConical className="size-5 text-amber" /> Στην επίδειξη
+            </h2>
+            <ul className="space-y-2 text-[15px]">
+              {DEMO.map((r) => (
+                <li key={r} className="flex gap-2">
+                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-amber" /> {r}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
         <Card className="p-5" id="plans">
           <h2 className="mb-3 flex items-center gap-2 text-lg font-bold">
-            <Rocket className="size-5 text-info" /> Επόμενα βήματα
+            <Rocket className="size-5 text-info" /> Έρχονται σύντομα
           </h2>
           <ul className="space-y-2 text-[15px]">
             {NEXT.map((r) => (

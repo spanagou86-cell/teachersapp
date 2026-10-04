@@ -236,7 +236,13 @@ export function Sheet({
 }) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Don't throw away what the teacher is typing.
+      const t = e.target as HTMLInputElement | HTMLTextAreaElement;
+      if ((t.tagName === "TEXTAREA" || t.tagName === "INPUT") && t.value) return t.blur();
+      onClose();
+    };
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";

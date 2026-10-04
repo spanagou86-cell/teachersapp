@@ -3,15 +3,17 @@
 import clsx from "clsx";
 import { AlertTriangle, Camera, Coffee, Loader2, MessagesSquare, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { SUBJECT_STYLE } from "@/components/subject";
 import { toast } from "@/components/toast";
 import { Button, Card, cx, Field, IconButton, inputClass, Segmented, Select, Sheet } from "@/components/ui";
 import { uid } from "@/lib/id";
-import { dutyLabel } from "@/lib/schoolYear";
+import { dutyLabel, yearFor } from "@/lib/schoolYear";
+import { aiReadTimetable, shrinkImage, toBase64 } from "@/lib/ai/client";
+import { gradeFromName, planImport } from "@/lib/ai/timetableImport";
 import { useApp } from "@/lib/store";
-import { isValidTime, kindLabel, overlappingEntries, periodsFrom, schoolYearEnd, type Period } from "@/lib/timetable";
+import { isValidTime, kindLabel, overlappingEntries, periodsFrom, type Period } from "@/lib/timetable";
 import { shortDate, timeToMin } from "@/lib/dates";
 import type { SubjectId, TimetableEntry } from "@/lib/types";
 
@@ -191,6 +193,12 @@ function Editor() {
   const today = useApp((s) => s.today);
   const mode = useApp((s) => s.mode);
   const saveTimetable = useApp((s) => s.saveTimetable);
+  const allClasses = useApp((s) => s.classes);
+  const addClass = useApp((s) => s.addClass);
+  const teacher = useApp((s) => s.profile.displayName);
+  const photoRef = useRef<HTMLInputElement>(null);
+  const [reading, setReading] = useState(false);
+  const [readNotes, setReadNotes] = useState("");
 
   const initialRows = useMemo<Row[]>(
     () => (timetable.length ? periodsFrom(timetable) : DEFAULT_ROWS).map((p) => ({ ...p, key: uid() })),
@@ -238,11 +246,48 @@ function Editor() {
     setRows((rs) => [...rs, { key: uid(), start, end }]);
   };
 
+  /** Photo or PDF of the school timetable → filled grid, for the teacher to check before saving. */
+  const readPhoto = async (file: File) => {
+    if (mode !== "cloud") return toast("Η ανάγνωση από φωτογραφία είναι διαθέσιμη με λογαριασμό.");
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    if (!isPdf && !/^image\/(jpeg|png|webp|gif)$/.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
+      return toast("Ανέβασε φωτογραφία (JPG/PNG) ή PDF του προγράμματος.");
+    setReading(true);
+    setReadNotes("");
+    try {
+      const blob = isPdf ? file : await shrinkImage(file, 1800, 0.85);
+      if (blob.size > 3_000_000) return toast("Το αρχείο είναι μεγάλο. Δοκίμασε φωτογραφία ή PDF μιας σελίδας.");
+      const mediaType = isPdf ? "application/pdf" : blob.type === "image/jpeg" || blob.type === "image/png" || blob.type === "image/webp" ? blob.type : "";
+      if (!mediaType) return toast("Αυτή η φωτογραφία δεν διαβάζεται. Τράβηξέ τη ξανά από την κάμερα ή στείλε τη ως JPG.");
+      const r = await aiReadTimetable({ data: await toBase64(blob), mediaType }, teacher, allClasses.map((c) => c.name));
+      if (!r.ok) return toast(r.error);
+      const plan = planImport(r.data.entries, allClasses);
+      const created = new Map<string, string>();
+      for (const name of plan.newClasses) created.set(name, addClass({ name: name.slice(0, 40), grade: gradeFromName(name), room: "" }));
+      const newRows = plan.periods.map((p) => ({ ...p, key: uid() }));
+      const next: Record<string, Cell> = {};
+      for (const c of plan.cells) {
+        const row = newRows.find((x) => x.start === c.start && x.end === c.end)!;
+        const classId = c.classId ?? (c.className ? created.get(c.className) : undefined);
+        if (c.kind === "lesson" && !classId) continue;
+        next[`${c.weekday}|${row.key}`] = { kind: c.kind, classId, subjectId: c.subjectId, label: c.label };
+      }
+      setRows(newRows);
+      setCells(next);
+      setReadNotes(r.data.notes?.trim() ?? "");
+      toast(
+        `Διάβασα ${plan.cells.length} ώρες${plan.newClasses.length ? ` · νέα τμήματα: ${plan.newClasses.join(", ")}` : ""}. Έλεγξέ τες και πάτα Αποθήκευση.`,
+      );
+    } finally {
+      setReading(false);
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
       await saveTimetable(entries);
-      toast(mode === "cloud" ? `Το πρόγραμμα δημιουργήθηκε έως ${shortDate(schoolYearEnd(today))}` : "Το πρόγραμμα αποθηκεύτηκε");
+      toast(mode === "cloud" ? `Το πρόγραμμα δημιουργήθηκε έως ${shortDate(yearFor(country, today).end)}` : "Το πρόγραμμα αποθηκεύτηκε");
       router.push("/");
     } catch {
       toast("Δεν αποθηκεύτηκε. Δοκίμασε ξανά.");
@@ -258,7 +303,7 @@ function Editor() {
       inputMode="numeric"
       maxLength={5}
       aria-label={field === "start" ? "Έναρξη" : "Λήξη"}
-      className={cx(inputClass, "h-8 w-[60px] px-1.5 text-center text-xs tabular-nums", !isValidTime(r[field]) && "border-danger")}
+      className={cx(inputClass, "h-9 w-[60px] px-1.5 text-center text-xs tabular-nums", !isValidTime(r[field]) && "border-danger")}
     />
   );
 
@@ -270,12 +315,32 @@ function Editor() {
         subtitle={welcome ? "Τελευταίο βήμα: συμπλήρωσε την εβδομάδα σου όπως στο πρόγραμμα του σχολείου." : `Η εβδομάδα σου: μαθήματα, ${country === "cy" ? "παιδονομίες" : "εφημερίες"}, κενά.`}
       />
 
-      <Card className="mb-5 flex items-center gap-3 border-dashed p-4 text-sm">
-        <Camera className="size-5 shrink-0 text-muted" />
+      <Card className="mb-5 flex flex-col gap-3 border-dashed p-4 text-sm sm:flex-row sm:items-center">
+        <Camera className="hidden size-6 shrink-0 text-brand-500 sm:block" />
         <p className="flex-1 text-muted">
-          <b className="text-ink">Σύντομα:</b> ανέβασε φωτογραφία του προγράμματος του σχολείου και θα συμπληρωθεί αυτόματα. Εδώ θα το ελέγχεις πριν το αποθηκεύσεις.
+          <b className="text-ink">Έχεις το πρόγραμμα του σχολείου;</b> Τράβηξε φωτογραφία ή ανέβασε το PDF και θα συμπληρωθεί αυτόματα. Το ελέγχεις πριν το αποθηκεύσεις.
         </p>
+        <Button variant="secondary" disabled={reading} onClick={() => photoRef.current?.click()}>
+          {reading ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+          {reading ? "Διαβάζω το πρόγραμμα…" : "Φωτογραφία ή PDF"}
+        </Button>
+        <input
+          ref={photoRef}
+          type="file"
+          hidden
+          accept="image/jpeg,image/png,image/webp,image/heic,application/pdf,.pdf"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) void readPhoto(f);
+          }}
+        />
       </Card>
+      {readNotes && (
+        <p role="note" className="mb-5 flex gap-2 rounded-xl bg-amber-50 p-3 text-sm">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber" /> {readNotes}
+        </p>
+      )}
 
       {/* Mobile: one day at a time */}
       <div className="lg:hidden">
@@ -363,11 +428,18 @@ function Editor() {
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted">
-          {lessons} μαθήματα την εβδομάδα · θα δημιουργηθεί πρόγραμμα έως {shortDate(schoolYearEnd(today))}. Ό,τι έχεις ήδη σημειώσει σε μαθήματα δεν χάνεται.
+          {lessons} {lessons === 1 ? "μάθημα" : "μαθήματα"} την εβδομάδα · θα δημιουργηθεί πρόγραμμα έως {shortDate(yearFor(country, today).end)}, χωρίς αργίες και διακοπές. Ό,τι έχεις ήδη σημειώσει σε μαθήματα δεν χάνεται.
         </p>
-        <Button size="lg" onClick={save} disabled={saving || badTimes.length > 0 || overlaps.size > 0 || !entries.length}>
-          {saving && <Loader2 className="size-5 animate-spin" />} Αποθήκευση προγράμματος
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {welcome && (
+            <Button size="lg" variant="secondary" onClick={() => router.push("/")}>
+              Αργότερα
+            </Button>
+          )}
+          <Button size="lg" onClick={save} disabled={saving || badTimes.length > 0 || overlaps.size > 0 || (!entries.length && !timetable.length)}>
+            {saving && <Loader2 className="size-5 animate-spin" />} Αποθήκευση προγράμματος
+          </Button>
+        </div>
       </div>
 
       {editing && (

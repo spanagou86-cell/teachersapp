@@ -43,10 +43,10 @@ export default function OnboardingPage() {
 
   const save = async () => {
     setBusy(true);
-    updateProfile({ displayName: name.trim(), schoolName: school.trim(), country });
+    updateProfile({ displayName: name.trim(), schoolName: school.trim(), country, onboarded: true });
     for (const d of drafts) {
       const id = addClass({ name: d.name.trim(), grade: d.grade, room: d.room.trim() });
-      addStudents(id, d.students.split(/\n|,/));
+      addStudents(id, d.students.split(/\n/));
     }
     await flushWrites();
     setBusy(false);
@@ -85,7 +85,7 @@ export default function OnboardingPage() {
       <h2 className="mb-3 mt-8 text-lg font-bold">2. Τα τμήματά σου</h2>
       <div className="space-y-4">
         {drafts.map((d, i) => {
-          const count = d.students.split(/\n|,/).filter((x) => x.trim()).length;
+          const count = d.students.split(/\n/).filter((x) => x.trim()).length;
           return (
             <Card key={d.key} className="p-5">
               <div className="flex items-center gap-2">

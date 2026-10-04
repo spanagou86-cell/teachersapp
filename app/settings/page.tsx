@@ -9,7 +9,7 @@ import { toast } from "@/components/toast";
 import { Button, Card, cx, Field, inputClass, Segmented, Toggle } from "@/components/ui";
 import { usePrefs } from "@/lib/prefs";
 import { schoolYear, schoolYearStart } from "@/lib/schoolYear";
-import { useApp } from "@/lib/store";
+import { flushWrites, useApp } from "@/lib/store";
 import { supabase } from "@/lib/supabase/client";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -55,6 +55,8 @@ export default function SettingsPage() {
   const [prefs, setPrefs] = usePrefs();
   const profile = useApp((s) => s.profile);
   const update = useApp((s) => s.updateProfile);
+  const setCountry = useApp((s) => s.setCountry);
+  const [moving, setMoving] = useState(false);
   const mode = useApp((s) => s.mode);
   const email = useApp((s) => s.email);
   const today = useApp((s) => s.today);
@@ -100,9 +102,17 @@ export default function SettingsPage() {
           <Segmented<"gr" | "cy">
             className="w-full sm:w-56"
             value={country}
-            onChange={(c) => {
-              update({ country: c });
-              toast(c === "cy" ? "Ημερολόγιο Κύπρου" : "Ημερολόγιο Ελλάδας");
+            onChange={async (c) => {
+              if (moving) return;
+              setMoving(true);
+              try {
+                await setCountry(c);
+                toast(c === "cy" ? "Το ημερολόγιο άλλαξε σε Κύπρου" : "Το ημερολόγιο άλλαξε σε Ελλάδας");
+              } catch {
+                toast("Δεν ολοκληρώθηκε η αλλαγή. Δοκίμασε ξανά.");
+              } finally {
+                setMoving(false);
+              }
             }}
             options={[
               { value: "gr", label: "Ελλάδα" },
@@ -114,7 +124,7 @@ export default function SettingsPage() {
           href="/settings/timetable"
           icon={<CalendarClock />}
           label="Ωρολόγιο πρόγραμμα"
-          hint={timetable.length ? `${timetable.length} ώρες την εβδομάδα` : "Πρόσθεσε μαθήματα, εφημερίες και κενά"}
+          hint={timetable.length ? `${timetable.length} ${timetable.length === 1 ? "ώρα" : "ώρες"} την εβδομάδα` : `Πρόσθεσε μαθήματα, ${country === "cy" ? "παιδονομίες" : "εφημερίες"} και κενά`}
         />
       </Section>
 
@@ -179,6 +189,7 @@ export default function SettingsPage() {
             <Button
               variant="secondary"
               onClick={async () => {
+                await flushWrites();
                 await supabase().auth.signOut();
                 leave();
                 router.replace("/login");

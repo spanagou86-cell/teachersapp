@@ -34,9 +34,10 @@ export function NoteSheet({ open, onClose, defaultKind = "note" }: { open: boole
   const [text, setText] = useState("");
   const roster = students.filter((s) => s.classId === classId);
   const needsStudent = kind === "parent" && !studentId;
+  const noClass = !classId;
 
   const save = () => {
-    if (!text.trim() || needsStudent) return;
+    if (!text.trim() || needsStudent || noClass) return;
     if (studentId) addStudentNote(studentId, kind, text.trim());
     else addNote(classId, text.trim());
     toast(kind === "parent" ? "Η επαφή με τον γονέα καταγράφηκε" : "Η σημείωση αποθηκεύτηκε");
@@ -50,7 +51,7 @@ export function NoteSheet({ open, onClose, defaultKind = "note" }: { open: boole
       onClose={onClose}
       title={kind === "parent" ? "Επαφή με γονέα" : "Σημείωση"}
       footer={
-        <Button className="w-full" onClick={save} disabled={!text.trim() || needsStudent}>
+        <Button className="w-full" onClick={save} disabled={!text.trim() || needsStudent || noClass}>
           Αποθήκευση
         </Button>
       }
@@ -64,6 +65,15 @@ export function NoteSheet({ open, onClose, defaultKind = "note" }: { open: boole
           { value: "parent", label: "Επαφή με γονέα" },
         ]}
       />
+      {noClass && (
+        <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm">
+          Πρόσθεσε πρώτα ένα τμήμα από τις{" "}
+          <Link href="/classes" onClick={onClose} className="font-semibold text-brand underline">
+            Τάξεις
+          </Link>
+          .
+        </p>
+      )}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Field label="Τμήμα">
           <Select

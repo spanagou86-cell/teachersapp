@@ -10,13 +10,35 @@ import { remote } from "@/lib/store/remote";
 import { usePendingUpload } from "@/lib/store/pending";
 import type { FileMeta } from "@/lib/types";
 import { toast } from "./toast";
+import { shrinkImage } from "@/lib/ai/client";
 
-export const ACCEPT = ".pdf,.doc,.docx,.odt,image/*";
+export const ACCEPT = ".pdf,.doc,.docx,.odt,.jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic";
 const MAX_BYTES = 25 * 1024 * 1024;
 
-export async function ingestFile(file: File): Promise<{ meta: FileMeta; previewUrl: string } | { error: string }> {
-  const ok = /\.(pdf|docx?|odt)$/i.test(file.name) || file.type.startsWith("image/") || file.type === "application/pdf";
-  if (!ok) return { error: "Υποστηρίζονται PDF, Word και εικόνες." };
+/** Some phones and Windows report no type for Word files; derive it from the name. */
+const BY_EXT: Record<string, string> = {
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  odt: "application/vnd.oasis.opendocument.text",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+};
+
+export async function ingestFile(original: File): Promise<{ meta: FileMeta; previewUrl: string } | { error: string }> {
+  const ext = original.name.split(".").pop()?.toLowerCase() ?? "";
+  const type = original.type && Object.values(BY_EXT).includes(original.type) ? original.type : BY_EXT[ext];
+  if (!type) return { error: "Υποστηρίζονται PDF, Word (.docx) και φωτογραφίες (JPG, PNG)." };
+  // Phone photos are shrunk: faster upload, and the AI reads them quicker and cheaper.
+  const shrunk = await shrinkImage(new Blob([original], { type }));
+  const file =
+    shrunk.size < original.size
+      ? new File([shrunk], original.name.replace(/\.(heic|heif|png|webp|jpe?g)$/i, "") + ".jpg", { type: "image/jpeg" })
+      : new File([original], original.name, { type });
   if (file.size > MAX_BYTES) return { error: "Το αρχείο ξεπερνά τα 25 MB." };
   const { mode, userId } = useApp.getState();
   const previewUrl = URL.createObjectURL(file);
@@ -58,7 +80,7 @@ export function UploadTrigger({
         ref={ref}
         type="file"
         hidden
-        accept={camera ? "image/*" : ACCEPT}
+        accept={camera ? "image/jpeg,image/png,image/webp,image/heic" : ACCEPT}
         capture={camera ? "environment" : undefined}
         onChange={async (e) => {
           const file = e.target.files?.[0];

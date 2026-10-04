@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import { Check, CheckCircle2, CloudUpload, FileText, ListChecks, Loader2, NotebookText, RefreshCw, Sparkles, SquareCheckBig } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type DragEvent } from "react";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -9,11 +10,13 @@ import { FileBadge } from "@/components/subject";
 import { toast } from "@/components/toast";
 import { Button, Card, cx, Field, inputClass, Segmented, Select, Toggle } from "@/components/ui";
 import { ACCEPT, ingestFile } from "@/components/upload";
+import { aiCreate } from "@/lib/ai/client";
 import { shortDate } from "@/lib/dates";
 import { fileKindLabel, formatBytes, KIND_LABEL, LEVEL_LABEL, titleFromFileName } from "@/lib/materials";
+import { SUBJECTS } from "@/lib/seed";
 import { useApp } from "@/lib/store";
 import { usePendingUpload } from "@/lib/store/pending";
-import type { Level, MaterialKind, SubjectId } from "@/lib/types";
+import type { Block, Level, MaterialKind, SubjectId } from "@/lib/types";
 
 const KINDS: { value: Exclude<MaterialKind, "file">; Icon: typeof FileText }[] = [
   { value: "worksheet", Icon: FileText },
@@ -86,6 +89,8 @@ function Wizard() {
   const classes = useApp((s) => s.classes);
   const subjects = useApp((s) => s.subjects);
   const create = useApp((s) => s.createMaterial);
+  const mode = useApp((s) => s.mode);
+  const cloud = mode === "cloud";
   const attach = useApp((s) => s.attachMaterial);
   const { file, previewUrl, set: setPending } = usePendingUpload();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -120,16 +125,46 @@ function Wizard() {
     if (f) void accept(f);
   };
 
-  const step: 1 | 2 | 3 = phase === "working" ? 3 : file ? 2 : 1;
-  const STEPS = ["Διαβάζω το αρχείο", `Προσαρμόζω για ${classes.find((c) => c.id === classId)?.grade}`, withSolutions ? "Ετοιμάζω τις λύσεις" : "Μορφοποιώ τη σελίδα"];
+  const ready = Boolean(file) || cloud;
+  const step: 1 | 2 | 3 = phase === "working" ? 3 : ready ? 2 : 1;
+  const grade = classes.find((c) => c.id === classId)?.grade ?? "";
+  const STEPS = [file ? "Διαβάζω το αρχείο" : "Σκέφτομαι το περιεχόμενο", `Προσαρμόζω για ${grade || "την τάξη"}`, withSolutions ? "Ετοιμάζω τις λύσεις" : "Μορφοποιώ τη σελίδα"];
+  const canRun = Boolean(classId) && (Boolean(file) || title.trim().length >= 3);
 
   const run = async () => {
     setPhase("working");
-    for (let i = 1; i <= STEPS.length; i++) {
-      await new Promise((r) => setTimeout(r, 550));
-      setProgress(i);
+    setProgress(0);
+    let blocks: Block[] | undefined;
+    if (cloud) {
+      // The model works for 10–40 s; move the steps along so the wait feels alive.
+      const timer = setInterval(() => setProgress((p) => Math.min(p + 1, STEPS.length - 1)), 6000);
+      const r = await aiCreate({
+        path: file?.path,
+        fileName: file?.name,
+        mediaType: file?.type,
+        title: title.trim(),
+        kindLabel: KIND_LABEL[kind],
+        subject: SUBJECTS.find((x) => x.id === subjectId)?.name ?? "",
+        grade,
+        levelLabel: LEVEL_LABEL[level],
+        withSolutions,
+      });
+      clearInterval(timer);
+      if (!r.ok) {
+        setPhase("form");
+        toast(r.unavailable ? "Η δημιουργία με AI δεν είναι διαθέσιμη αυτή τη στιγμή. Ξαναδοκίμασε αργότερα." : r.error);
+        return;
+      }
+      blocks = r.data;
+      setProgress(STEPS.length);
+    } else {
+      for (let i = 1; i <= STEPS.length; i++) {
+        await new Promise((r) => setTimeout(r, 550));
+        setProgress(i);
+      }
     }
     const id = create({
+      blocks,
       title: title.trim() || KIND_LABEL[kind],
       classId,
       subjectId,
@@ -195,10 +230,13 @@ function Wizard() {
               <Button size="lg" onClick={() => inputRef.current?.click()}>
                 <CloudUpload className="size-5" /> Επιλογή αρχείου
               </Button>
-              <Button size="lg" variant="secondary" onClick={() => setPending(SAMPLE)}>
-                Δοκίμασε με δείγμα
-              </Button>
+              {!cloud && (
+                <Button size="lg" variant="secondary" onClick={() => setPending(SAMPLE)}>
+                  Δοκίμασε με δείγμα
+                </Button>
+              )}
             </div>
+            {cloud && <p className="mt-4 text-sm text-muted">Ή χωρίς αρχείο: γράψε τίτλο παρακάτω και το AI θα το ετοιμάσει από την αρχή.</p>}
           </div>
         )}
         <input
@@ -226,7 +264,7 @@ function Wizard() {
             </span>
             <div>
               <p className="font-bold">Ετοιμάζω το {KIND_LABEL[kind].toLowerCase()}…</p>
-              <p className="text-sm text-muted">Λίγα δευτερόλεπτα</p>
+              <p className="text-sm text-muted">{cloud ? "Συνήθως 10–40 δευτερόλεπτα" : "Λίγα δευτερόλεπτα"}</p>
             </div>
           </div>
           <ul className="mt-5 space-y-3">
@@ -239,7 +277,15 @@ function Wizard() {
           </ul>
         </Card>
       ) : (
-        <fieldset disabled={!file} className={clsx("space-y-5 transition-opacity", !file && "opacity-50")}>
+        <fieldset disabled={!ready} className={clsx("space-y-5 transition-opacity", !ready && "opacity-50")}>
+          {classes.length === 0 && (
+            <p className="rounded-xl bg-amber-50 p-3 text-sm">
+              Πρόσθεσε πρώτα ένα τμήμα, για να ξέρουμε για ποια τάξη είναι το υλικό.{" "}
+              <Link href="/classes" className="font-semibold text-brand underline">
+                Τμήματα
+              </Link>
+            </p>
+          )}
           <div>
             <h2 className="mb-3 text-lg font-bold">Τι θα ετοιμάσουμε;</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -290,11 +336,13 @@ function Wizard() {
             <span className="text-[15px] font-medium">Με ξεχωριστές λύσεις</span>
             <Toggle checked={withSolutions} onChange={setWithSolutions} label="Με ξεχωριστές λύσεις" />
           </div>
-          <Button size="lg" className="w-full" onClick={run}>
+          <Button size="lg" className="w-full" onClick={run} disabled={!canRun}>
             <Sparkles className="size-5" /> Ετοίμασε το υλικό
           </Button>
           <p className="text-center text-xs text-muted">
-            Πρωτότυπο: το δείγμα AI φτιάχνει περιεχόμενο με βάση μάθημα, τάξη και επίπεδο — δεν διαβάζει ακόμη το αρχείο. Το αρχείο σου αποθηκεύεται και φαίνεται στην καρτέλα «Πρωτότυπο».
+            {cloud
+              ? "Το AI διαβάζει το αρχείο σου και ετοιμάζει υλικό για την τάξη σου. Ελέγχεις και αλλάζεις τα πάντα πριν το μοιράσεις· το πρωτότυπο μένει ανέγγιχτο."
+              : "Στην επίδειξη το υλικό φτιάχνεται από έτοιμα παραδείγματα. Με λογαριασμό το AI διαβάζει το δικό σου αρχείο."}
           </p>
         </fieldset>
       )}

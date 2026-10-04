@@ -37,7 +37,7 @@ export default function MaterialsPage() {
       <MobileBrandBar />
       <PageHeader
         title="Υλικό & αρχεία"
-        subtitle={`${materials.length} αρχεία οργανωμένα ανά τμήμα και μάθημα`}
+        subtitle={`${materials.length} ${materials.length === 1 ? "αρχείο" : "αρχεία"} οργανωμένα ανά τμήμα και μάθημα`}
         actions={
           <>
             <UploadTrigger className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold hover:bg-line-2 sm:flex-none">

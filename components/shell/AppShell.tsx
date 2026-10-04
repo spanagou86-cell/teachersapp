@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { shortDate } from "@/lib/dates";
 import { useApp } from "@/lib/store";
+import { SUBJECTS } from "@/lib/seed";
 import { isBarePath, useSession } from "@/lib/store/session";
 import { Avatar } from "../ui";
 import { Toaster } from "../toast";
@@ -99,7 +100,7 @@ function SearchBox() {
         out.push({ key: m.id, href: `/materials/${m.id}`, title: m.title, sub: "Υλικό", icon: <SubjectIcon id={m.subjectId} size="sm" /> });
     const seen = new Set<string>();
     for (const s of slots)
-      if (s.date >= today && norm(s.topic).includes(term) && !seen.has(s.topic)) {
+      if (s.date >= today && s.topic && norm(s.topic).includes(term) && !seen.has(s.topic)) {
         seen.add(s.topic);
         out.push({ key: s.id, href: `/lessons/${s.id}`, title: s.topic, sub: `Μάθημα · ${shortDate(s.date)} ${s.start}`, icon: <SubjectIcon id={s.subjectId} size="sm" /> });
       }
@@ -206,7 +207,7 @@ function Notifications() {
               <Link key={s.id} href={`/lessons/${s.id}`} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-line-2">
                 <SubjectIcon id={s.subjectId} size="sm" />
                 <span className="text-sm">
-                  <span className="block font-semibold">{s.topic}</span>
+                  <span className="block font-semibold">{s.topic || SUBJECTS.find((x) => x.id === s.subjectId)?.name}</span>
                   <span className="text-xs text-muted">{shortDate(s.date)} · {s.start} — τι διδάχθηκε;</span>
                 </span>
               </Link>
@@ -266,8 +267,9 @@ function useShortcuts(onCapture: () => void) {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (e.metaKey || e.ctrlKey || e.altKey || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
-      if (document.querySelector('[role="dialog"]')) return;
-      const k = e.key.toLowerCase();
+      if (document.querySelector('[role="dialog"]') || isBarePath(window.location.pathname)) return;
+      // Physical key, so the shortcuts also work with the Greek keyboard layout.
+      const k = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : e.key.toLowerCase();
       if (k === "n") {
         e.preventDefault();
         onCapture();
@@ -291,8 +293,20 @@ function Skeleton() {
   );
 }
 
+function Offline({ retry }: { retry: () => void }) {
+  return (
+    <div className="mx-auto mt-16 max-w-sm text-center">
+      <p className="text-lg font-bold">Δεν υπάρχει σύνδεση</p>
+      <p className="mt-1 text-sm text-muted">Δεν μπόρεσα να φέρω τα δεδομένα σου. Έλεγξε το διαδίκτυο και ξαναδοκίμασε.</p>
+      <button type="button" onClick={retry} className="mt-4 h-11 rounded-xl bg-brand px-5 font-semibold text-white hover:bg-brand-hover">
+        Ξαναδοκίμασε
+      </button>
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
-  const ready = useSession();
+  const { ready, failed, retry } = useSession();
   const pathname = usePathname();
   const [capture, setCapture] = useState(false);
   const openCapture = useCallback(() => setCapture(true), []);
@@ -300,7 +314,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (isBarePath(pathname))
     return (
       <div className="min-h-dvh">
-        {ready ? children : <div className="mx-auto max-w-md p-6"><Skeleton /></div>}
+        {failed ? <Offline retry={retry} /> : ready ? children : <div className="mx-auto max-w-md p-6"><Skeleton /></div>}
         <Toaster />
       </div>
     );
@@ -309,7 +323,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="lg:pl-60">
         <TopBar onCapture={openCapture} />
-        <main className="mx-auto max-w-6xl px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-12 lg:pt-2">{ready ? children : <Skeleton />}</main>
+        <main className="mx-auto max-w-6xl px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-12 lg:pt-2">{failed ? <Offline retry={retry} /> : ready ? children : <Skeleton />}</main>
       </div>
       <BottomNav onCapture={openCapture} />
       {capture && <CaptureSheet open onClose={() => setCapture(false)} />}

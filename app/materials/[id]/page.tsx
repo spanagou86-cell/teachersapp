@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import {
-  ArrowRight, CalendarPlus, Check, CheckCircle2, ChevronDown, Download, Eye, FileQuestion, FileText, History, Link2Off, Plus, Redo2, RotateCcw, Sparkles, Type, Undo2, X,
+  ArrowRight, CalendarPlus, Check, CheckCircle2, ChevronDown, Download, Eye, FileQuestion, FileText, History, Link2Off, Plus, Redo2, RotateCcw, Sparkles, Trash2, Type, Undo2, X,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -53,7 +53,11 @@ function OriginalView({ material }: { material: Material }) {
       <div>
         <p className="mb-3 flex items-center gap-2 rounded-xl bg-line-2 px-3 py-2 text-sm text-muted">
           <FileQuestion className="size-4 shrink-0" />
-          {file ? "Δείγμα επίδειξης — δεν υπάρχει πραγματικό αρχείο. Βλέπεις το αρχικό περιεχόμενο πριν από τις αλλαγές." : "Χωρίς αρχείο. Βλέπεις το αρχικό περιεχόμενο."}
+          {!file
+            ? "Χωρίς αρχείο. Βλέπεις το αρχικό περιεχόμενο."
+            : file.path
+              ? "Το αρχείο δεν άνοιξε αυτή τη στιγμή (έλεγξε τη σύνδεση). Βλέπεις το αρχικό περιεχόμενο πριν από τις αλλαγές."
+              : "Δείγμα επίδειξης — δεν υπάρχει πραγματικό αρχείο. Βλέπεις το αρχικό περιεχόμενο πριν από τις αλλαγές."}
         </p>
         <DocPage material={material} blocks={material.originalBlocks} mode="view" />
       </div>
@@ -75,6 +79,48 @@ function OriginalView({ material }: { material: Material }) {
         </a>
       }
     />
+  );
+}
+
+/** Class, subject and delete: the material's own details. */
+function MaterialDetails({ material }: { material: Material }) {
+  const classes = useApp((s) => s.classes);
+  const subjects = useApp((s) => s.subjects);
+  const patch = useApp((s) => s.patchMaterial);
+  const remove = useApp((s) => s.deleteMaterial);
+  const router = useRouter();
+  return (
+    <Card className="grid gap-3 p-5">
+      <h2 className="text-[15px] font-bold">Στοιχεία</h2>
+      <div className="grid grid-cols-2 gap-2">
+        <Select value={material.classId} onChange={(e) => patch(material.id, { classId: e.target.value })} aria-label="Τμήμα">
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name} · {c.grade}
+            </option>
+          ))}
+        </Select>
+        <Select value={material.subjectId} onChange={(e) => patch(material.id, { subjectId: e.target.value as Material["subjectId"] })} aria-label="Μάθημα υλικού">
+          {subjects.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.name}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <Button
+        variant="ghost"
+        className="justify-self-start !text-danger"
+        onClick={() => {
+          if (!confirm(`Διαγραφή του «${material.title}»; Θα αφαιρεθεί και από τα μαθήματα όπου είναι συνδεδεμένο.`)) return;
+          remove(material.id);
+          toast("Το υλικό διαγράφηκε");
+          router.replace("/materials");
+        }}
+      >
+        <Trash2 className="size-4" /> Διαγραφή υλικού
+      </Button>
+    </Card>
   );
 }
 
@@ -105,6 +151,15 @@ function LessonLinks({ material }: { material: Material }) {
       <h2 className="flex items-center gap-2 text-[15px] font-bold">
         <CalendarPlus className="size-5" /> Προσθήκη στο μάθημα
       </h2>
+      {upcoming.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">
+          Δεν υπάρχουν προσεχή μαθήματα.{" "}
+          <Link href="/settings/timetable" className="font-semibold text-brand hover:underline">
+            Συμπλήρωσε το ωρολόγιο
+          </Link>{" "}
+          για να συνδέεις υλικό με μαθήματα.
+        </p>
+      ) : (
       <div className="mt-3 flex gap-2">
         <Select value={chosen} onChange={(e) => setTarget(e.target.value)} className="min-w-0 flex-1" aria-label="Μάθημα">
           {upcoming.map((s) => (
@@ -126,6 +181,7 @@ function LessonLinks({ material }: { material: Material }) {
           <ArrowRight className="size-5" />
         </IconButton>
       </div>
+      )}
       {linked.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {linked.map((s) => (
@@ -134,7 +190,7 @@ function LessonLinks({ material }: { material: Material }) {
               <Link href={`/lessons/${s.id}`} className="min-w-0 flex-1 truncate hover:underline">
                 {label(s.id)}
               </Link>
-              <IconButton label="Αποσύνδεση" className="size-7" onClick={() => detach(s.id, material.id)}>
+              <IconButton label="Αποσύνδεση" className="size-9" onClick={() => detach(s.id, material.id)}>
                 <Link2Off className="size-3.5" />
               </IconButton>
             </li>
@@ -368,6 +424,7 @@ function Editor() {
       </div>
       <div className={clsx("space-y-4", pane !== "more" && "max-lg:hidden")}>
         <LessonLinks material={material} />
+        <MaterialDetails material={material} />
         <HistoryCard material={material} />
       </div>
     </div>
@@ -393,14 +450,20 @@ function Editor() {
               defaultValue={material.title}
               aria-label="Τίτλος"
               onBlur={(e) => {
-                if (e.target.value.trim()) patch(material.id, { title: e.target.value.trim() });
+                if (e.target.value.trim()) patch(material.id, { title: e.target.value.trim().slice(0, 200) });
                 setEditingTitle(false);
               }}
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
               className="w-full rounded-lg border border-brand-500 bg-surface px-2 text-[28px] font-extrabold tracking-tight text-brand-700 outline-none sm:text-[36px]"
             />
           ) : (
-            <h1 onClick={() => setEditingTitle(true)} title="Πάτησε για μετονομασία" className="cursor-text text-[28px] font-extrabold leading-tight tracking-tight text-brand-700 sm:text-[36px]">
+            <h1
+              role="button"
+              tabIndex={0}
+              onClick={() => setEditingTitle(true)}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setEditingTitle(true)}
+              title="Πάτησε για μετονομασία"
+              className="cursor-text text-[28px] font-extrabold leading-tight tracking-tight text-brand-700 sm:text-[36px]">
               {material.title}
             </h1>
           )}

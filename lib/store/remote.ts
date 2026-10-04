@@ -2,8 +2,8 @@
 
 import { addDays } from "../dates";
 import { supabase } from "../supabase/client";
-import { holidayOn, type Country } from "../schoolYear";
-import { materialize, schoolYearEnd } from "../timetable";
+import { isSchoolDay, yearFor, type Country } from "../schoolYear";
+import { materialize } from "../timetable";
 import type {
   AttendanceRecord,
   Block,
@@ -240,6 +240,28 @@ const run = async (p: PromiseLike<{ error: { message: string } | null }>) => {
   if (error) throw new Error(error.message);
 };
 
+interface FutureSlot {
+  id: string;
+  date: string;
+  kind: string;
+  topic: string;
+  status: string;
+  taught_note: string;
+  carried_from_id: string | null;
+  carried_to_id: string | null;
+}
+const FUTURE_COLS = "id, date, kind, topic, status, taught_note, carried_from_id, carried_to_id";
+
+/** Deletes the given future lessons except those the teacher has already worked on. */
+async function deleteUntouched(slots: FutureSlot[]) {
+  if (!slots.length) return;
+  const linked = new Set((await all<{ slot_id: string }>((a, b) => db().from("slot_materials").select("slot_id").range(a, b))).map((l) => l.slot_id));
+  const untouched = slots
+    .filter((s) => s.status === "planned" && !s.taught_note && !(s.kind === "lesson" && s.topic) && !s.carried_from_id && !s.carried_to_id && !linked.has(s.id))
+    .map((s) => s.id);
+  for (let i = 0; i < untouched.length; i += 200) await run(db().from("lesson_slots").delete().in("id", untouched.slice(i, i + 200)));
+}
+
 export const remote = {
   updateProfile: (userId: string, p: Partial<Profile>) =>
     run(
@@ -256,17 +278,18 @@ export const remote = {
 
   upsertClass: (c: ClassGroup) => run(db().from("classes").upsert({ id: c.id, name: c.name, grade: c.grade, room: c.room })),
   deleteClass: (id: string) => run(db().from("classes").delete().eq("id", id)),
-  insertStudents: (list: Student[]) =>
+  insertStudents: (list: Student[], firstSort = 0) =>
     run(
       db()
         .from("students")
-        .insert(list.map((s, i) => ({ id: s.id, class_id: s.classId, first_name: s.firstName, last_name: s.lastName, sort: i }))),
+        .insert(list.map((s, i) => ({ id: s.id, class_id: s.classId, first_name: s.firstName, last_name: s.lastName, sort: firstSort + i }))),
     ),
   updateStudent: (s: Student) => run(db().from("students").update({ first_name: s.firstName, last_name: s.lastName }).eq("id", s.id)),
   deleteStudent: (id: string) => run(db().from("students").delete().eq("id", id)),
 
-  upsertTask: (t: Task) =>
-    run(db().from("tasks").upsert({ id: t.id, text: t.text, done: t.done, time: t.time ?? null, detail: t.detail ?? "" })),
+  /** `date` only on creation: the database default is UTC, not Athens. */
+  upsertTask: (t: Task, date?: string) =>
+    run(db().from("tasks").upsert({ id: t.id, text: t.text, done: t.done, time: t.time ?? null, detail: t.detail ?? "", ...(date && { date }) })),
   deleteTask: (id: string) => run(db().from("tasks").delete().eq("id", id)),
 
   setAttendance: (classId: string, date: string, r: AttendanceRecord) =>
@@ -320,7 +343,7 @@ export const remote = {
     await run(
       db().from("materials").insert({
         id: m.id,
-        title: m.title,
+        title: m.title.slice(0, 200),
         class_id: m.classId,
         subject_id: m.subjectId,
         kind: m.kind,
@@ -332,13 +355,13 @@ export const remote = {
         blocks: m.blocks,
       }),
     );
-    await run(db().from("material_versions").insert(m.versions.map((v) => ({ id: v.id, material_id: m.id, label: v.label, blocks: v.blocks }))));
+    await run(db().from("material_versions").insert(m.versions.map((v) => ({ id: v.id, material_id: m.id, label: v.label.slice(0, 200), blocks: v.blocks }))));
   },
   /** Saves the working copy and the newest history entry. */
   saveMaterialChange: async (m: Material) => {
     const v = m.versions[0];
     await run(db().from("materials").update({ blocks: m.blocks }).eq("id", m.id));
-    if (v) await run(db().from("material_versions").insert({ id: v.id, material_id: m.id, label: v.label, blocks: v.blocks }));
+    if (v) await run(db().from("material_versions").insert({ id: v.id, material_id: m.id, label: v.label.slice(0, 200), blocks: v.blocks }));
   },
   patchMaterial: (id: string, p: Partial<Pick<Material, "title" | "withSolutions" | "blackAndWhite" | "classId" | "subjectId">>) =>
     run(
@@ -363,25 +386,27 @@ export const remote = {
   addStudentNote: (n: StudentNote) =>
     run(db().from("student_notes").insert({ id: n.id, student_id: n.studentId, kind: n.kind, date: n.date, text: n.text })),
   deleteStudentNote: (id: string) => run(db().from("student_notes").delete().eq("id", id)),
+  editNote: (id: string, text: string) => run(db().from("class_notes").update({ text }).eq("id", id)),
+  editStudentNote: (id: string, text: string) => run(db().from("student_notes").update({ text }).eq("id", id)),
 
   uploadFile: async (userId: string, file: File): Promise<string> => {
     const safe = file.name.normalize("NFD").replace(/[^\w.-]+/g, "_").slice(-80) || "file";
     const path = `${userId}/${crypto.randomUUID()}-${safe}`;
-    const { error } = await db().storage.from("materials").upload(path, file, { contentType: file.type || undefined });
+    const { error } = await db().storage.from("materials").upload(path, file, { contentType: file.type || "application/octet-stream" });
     if (error) throw new Error(error.message);
     return path;
   },
   signedUrl: async (path: string): Promise<string | undefined> => {
-    const { data } = await db().storage.from("materials").createSignedUrl(path, 600);
+    const { data } = await db().storage.from("materials").createSignedUrl(path, 3600);
     return data?.signedUrl;
   },
 
   /**
    * Replaces the weekly template. Future lessons that came from removed or changed
-   * entries are deleted unless the teacher already touched them (note, status,
-   * material or carry-over); then the new template is expanded to the end of the year.
+   * entries are deleted unless the teacher already touched them (topic, note, status,
+   * material or carry-over); then the whole template is expanded to the end of the year.
    */
-  saveTimetable: async (entries: TimetableEntry[], previous: TimetableEntry[], today: string, country: Country) => {
+  saveTimetable: async (entries: TimetableEntry[], previous: TimetableEntry[], today: string, now: string, country: Country) => {
     const same = (a: TimetableEntry, b: TimetableEntry) =>
       a.weekday === b.weekday && a.start === b.start && a.end === b.end && a.kind === b.kind && a.classId === b.classId && a.subjectId === b.subjectId && a.label === b.label;
     const kept = entries.filter((e) => previous.some((p) => p.id === e.id && same(p, e)));
@@ -390,16 +415,10 @@ export const remote = {
 
     if (removed.length) {
       const ids = removed.map((r) => r.id);
-      const future = await all<{ id: string; status: string; taught_note: string; carried_from_id: string | null; carried_to_id: string | null }>((a, b) =>
-        db().from("lesson_slots").select("id, status, taught_note, carried_from_id, carried_to_id").in("template_id", ids).gte("date", today).range(a, b),
-      );
-      const linked = new Set(
-        (await all<{ slot_id: string }>((a, b) => db().from("slot_materials").select("slot_id").range(a, b))).map((l) => l.slot_id),
-      );
-      const untouched = future
-        .filter((s) => s.status === "planned" && !s.taught_note && !s.carried_from_id && !s.carried_to_id && !linked.has(s.id))
-        .map((s) => s.id);
-      for (let i = 0; i < untouched.length; i += 200) await run(db().from("lesson_slots").delete().in("id", untouched.slice(i, i + 200)));
+      const future: FutureSlot[] = [];
+      for (let i = 0; i < ids.length; i += 100)
+        future.push(...(await all<FutureSlot>((a, b) => db().from("lesson_slots").select(FUTURE_COLS).in("template_id", ids.slice(i, i + 100)).gte("date", today).range(a, b))));
+      await deleteUntouched(future);
       await run(db().from("timetable_entries").delete().in("id", ids));
     }
     if (added.length)
@@ -420,8 +439,27 @@ export const remote = {
             })),
           ),
       );
+    await remote.fillYear([...kept, ...added], today, now, country);
+  },
 
-    const occ = materialize(added, today, schoolYearEnd(today), new Set(), (d) => !!holidayOn(country, d));
+  /**
+   * Makes sure every school day from today to the end of the school year has its lessons.
+   * Idempotent: times already taken (by any lesson or block) are left alone, so it is safe
+   * to run on every start-up — that is how a new school year gets its calendar.
+   */
+  fillYear: async (entries: TimetableEntry[], today: string, now: string, country: Country) => {
+    if (!entries.length) return 0;
+    const year = yearFor(country, today);
+    const from = today > year.start ? today : year.start;
+    if (from > year.end) return 0;
+    const taken = new Set(
+      (await all<{ date: string; start_time: string }>((a, b) => db().from("lesson_slots").select("date, start_time").gte("date", from).range(a, b))).map(
+        (r) => `${r.date}|${r.start_time.slice(0, 5)}`,
+      ),
+    );
+    const occ = materialize(entries, from, year.end, new Set(), (d) => !isSchoolDay(country, d)).filter(
+      (o) => !taken.has(`${o.date}|${o.entry.start}`) && !(o.date === today && o.entry.start < now),
+    );
     const rows = occ.map((o) => ({
       date: o.date,
       start_time: o.entry.start,
@@ -434,5 +472,13 @@ export const remote = {
     }));
     for (let i = 0; i < rows.length; i += 500)
       await run(db().from("lesson_slots").upsert(rows.slice(i, i + 500), { onConflict: "owner,template_id,date", ignoreDuplicates: true }));
+    return rows.length;
+  },
+
+  /** After a change of country: drop untouched lessons on the new country's holidays, add the missing days. */
+  changeCountry: async (entries: TimetableEntry[], today: string, now: string, country: Country) => {
+    const future = await all<FutureSlot>((a, b) => db().from("lesson_slots").select(FUTURE_COLS).gte("date", today).range(a, b));
+    await deleteUntouched(future.filter((s) => !isSchoolDay(country, s.date)));
+    await remote.fillYear(entries, today, now, country);
   },
 };

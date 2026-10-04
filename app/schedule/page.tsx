@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { SUBJECT_STYLE } from "@/components/subject";
 import { Timeline } from "@/components/timeline";
 import { ButtonLink, Card, IconButton, Segmented } from "@/components/ui";
-import { addDays, dayMonth, dayName, dayOfMonth, dayShort, shortDate, startOfWeek, timeToMin, weekday, weekDates } from "@/lib/dates";
+import { addDays, dayMonth, dayName, dayOfMonth, dayShort, isISODate, shortDate, startOfWeek, timeToMin, weekday, weekDates } from "@/lib/dates";
 import { dutyLabel, holidayOn, schoolYear, schoolYearStart, termOn, weekNumber, type Country } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
 import { periodsFrom } from "@/lib/timetable";
@@ -175,9 +175,9 @@ function MonthGrid({ year, month, country, onPick }: { year: number; month: numb
   );
 }
 
-function YearView({ country, onPick }: { country: Country; onPick: (d: string) => void }) {
+function YearView({ country, anchor, onPick }: { country: Country; anchor: string; onPick: (d: string) => void }) {
   const today = useApp((s) => s.today);
-  const y = schoolYear(country, schoolYearStart(today));
+  const y = schoolYear(country, schoolYearStart(anchor));
   const startYear = Number(y.start.slice(0, 4));
   const termTint = ["bg-meleti-50", "bg-glossa-50", "bg-fysika-50"];
   return (
@@ -219,7 +219,7 @@ function YearView({ country, onPick }: { country: Country; onPick: (d: string) =
             <Card key={k} className="grid gap-2 p-3">
               <p className="flex items-baseline justify-between text-sm font-bold">
                 {MONTHS[m]} {yr}
-                <span className="text-[11px] font-semibold text-muted">{school} μέρες</span>
+                <span className="text-[11px] font-semibold text-muted">{school} {school === 1 ? "μέρα" : "μέρες"}</span>
               </p>
               <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] tabular-nums">
                 {["Δ", "Τ", "Τ", "Π", "Π", "Σ", "Κ"].map((x, i) => (
@@ -264,8 +264,10 @@ function Calendar() {
   const today = useApp((s) => s.today);
   const country = useApp((s) => s.profile.country);
   const slots = useApp((s) => s.slots);
-  const view = (params.get("view") as View) || "week";
-  const anchor = params.get("d") || today;
+  const rawView = params.get("view");
+  const view: View = rawView === "month" || rawView === "year" ? rawView : "week";
+  const rawD = params.get("d");
+  const anchor = isISODate(rawD) ? rawD : today;
   const go = (v: View, d: string) => router.replace(`/schedule?view=${v}&d=${d}`, { scroll: false });
 
   const monday = startOfWeek(weekday(anchor) === 6 || weekday(anchor) === 0 ? addDays(anchor, 2) : anchor);
@@ -287,7 +289,7 @@ function Calendar() {
     view === "week" ? (week ? `Εβδομάδα ${week}` : "Εβδομάδα") : view === "month" ? `${MONTHS[m - 1]} ${y}` : `Σχολική χρονιά ${schoolYearStart(anchor)}–${String(schoolYearStart(anchor) + 1).slice(2)}`;
   const subtitle =
     view === "week"
-      ? [`${shortDate(dates[0])} – ${shortDate(dates[4])}`, term, `${weekSlots.length} μαθήματα${done ? ` · ${done} έγιναν` : ""}`].filter(Boolean).join(" · ")
+      ? [`${shortDate(dates[0])} – ${shortDate(dates[4])}`, term, `${weekSlots.length} ${weekSlots.length === 1 ? "μάθημα" : "μαθήματα"}${done ? ` · ${done} έγιναν` : ""}`].filter(Boolean).join(" · ")
       : undefined;
 
   return (
@@ -368,7 +370,7 @@ function Calendar() {
         </>
       )}
       {view === "month" && <MonthGrid year={y} month={m - 1} country={country} onPick={(d) => go("week", d)} />}
-      {view === "year" && <YearView country={country} onPick={(d) => go("week", d)} />}
+      {view === "year" && <YearView country={country} anchor={anchor} onPick={(d) => go("week", d)} />}
     </div>
   );
 }

@@ -30,7 +30,7 @@ export function applyChange(m: Material, blocks: Block[], label: string, version
 export function restoreVersion(m: Material, versionId: string, newVersionId: string, at: number): Material {
   const v = m.versions.find((x) => x.id === versionId);
   if (!v) return m;
-  return applyChange(m, v.blocks, `Επαναφορά: ${v.label}`, newVersionId, at);
+  return applyChange(m, v.blocks, `Επαναφορά: ${v.label.replace(/^(Επαναφορά: )+/, "")}`.slice(0, 200), newVersionId, at);
 }
 
 export function restoreOriginal(m: Material, newVersionId: string, at: number): Material {

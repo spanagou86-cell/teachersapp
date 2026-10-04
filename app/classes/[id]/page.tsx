@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { SubjectIcon } from "@/components/subject";
 import { toast } from "@/components/toast";
 import { Avatar, Button, ButtonLink, Card, cx, EmptyState, inputClass, Segmented } from "@/components/ui";
-import { addDays, dayName, longDate, shortDate, weekday } from "@/lib/dates";
+import { addDays, dayName, isISODate, longDate, shortDate, weekday } from "@/lib/dates";
 import { sortSlots } from "@/lib/schedule";
 import { holidayOn } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
@@ -34,7 +34,8 @@ function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
   const params = useSearchParams();
   const today = useApp((s) => s.today);
   const country = useApp((s) => s.profile.country);
-  const date = params.get("date") ?? today;
+  const rawDate = params.get("date");
+  const date = isISODate(rawDate) ? rawDate : today;
   const record = useApp((s) => s.attendance[`${cls.id}|${date}`]);
   const cycle = useApp((s) => s.cycleAttendance);
   const allPresent = useApp((s) => s.markAllPresent);
@@ -212,7 +213,7 @@ function Progress({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
 
       <Card className="p-5">
         <h2 className="mb-1 text-lg font-bold">Απουσίες</h2>
-        <p className="mb-3 text-sm text-muted">{recorded.length} καταγεγραμμένες ημέρες</p>
+        <p className="mb-3 text-sm text-muted">{recorded.length} {recorded.length === 1 ? "καταγεγραμμένη ημέρα" : "καταγεγραμμένες ημέρες"}</p>
         {absences.length === 0 ? (
           <p className="text-sm text-muted">Καμία απουσία.</p>
         ) : (
@@ -261,6 +262,8 @@ function Notes({ cls }: { cls: ClassGroup }) {
   const all = useApp((s) => s.notes);
   const addNote = useApp((s) => s.addNote);
   const del = useApp((s) => s.deleteNote);
+  const edit = useApp((s) => s.editNote);
+  const restore = useApp((s) => s.restoreNote);
   const notes = all.filter((n) => n.classId === cls.id);
   const [text, setText] = useState("");
   return (
@@ -295,9 +298,31 @@ function Notes({ cls }: { cls: ClassGroup }) {
               <Card className="group flex gap-3 p-4">
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-muted">{longDate(n.date)}</p>
-                  <p className="mt-1 text-[15px]">{n.text}</p>
+                  <textarea
+                    defaultValue={n.text}
+                    aria-label="Κείμενο σημείωσης"
+                    rows={Math.min(6, n.text.split("\n").length + Math.floor(n.text.length / 70))}
+                    maxLength={2000}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (!v) e.target.value = n.text;
+                      else if (v !== n.text) {
+                        edit(n.id, v);
+                        toast("Η σημείωση διορθώθηκε");
+                      }
+                    }}
+                    className="mt-1 w-full resize-none rounded-md bg-transparent text-[15px] outline-none focus:bg-line-2"
+                  />
                 </div>
-                <button type="button" aria-label="Διαγραφή σημείωσης" onClick={() => del(n.id)} className="self-start text-muted hover:text-danger">
+                <button
+                  type="button"
+                  aria-label="Διαγραφή σημείωσης"
+                  onClick={() => {
+                    del(n.id);
+                    toast("Η σημείωση διαγράφηκε", { label: "Αναίρεση", run: () => restore(n) });
+                  }}
+                  className="flex size-9 shrink-0 items-center justify-center self-start rounded-lg text-muted hover:text-danger"
+                >
                   <Trash2 className="size-4" />
                 </button>
               </Card>
@@ -332,7 +357,7 @@ export default function ClassPage() {
       <PageHeader
         back="/classes"
         title={`${cls.name} · ${cls.grade}`}
-        subtitle={[`${roster.length} μαθητές`, cls.room].filter(Boolean).join(" · ")}
+        subtitle={[`${roster.length} ${roster.length === 1 ? "μαθητής" : "μαθητές"}`, cls.room].filter(Boolean).join(" · ")}
         actions={
           <Button variant="secondary" onClick={() => setEditing(true)}>
             <Pencil className="size-4" /> Επεξεργασία

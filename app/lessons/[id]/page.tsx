@@ -290,8 +290,8 @@ export default function LessonPage() {
               className={cx(inputClass, "h-10 max-w-md text-base")}
             />
           ) : (
-            <button type="button" onClick={() => setEditingTopic(true)} className="group inline-flex items-center gap-2 text-left">
-              {slot.topic}
+            <button type="button" aria-label="Επεξεργασία θέματος" onClick={() => setEditingTopic(true)} className="group inline-flex min-h-9 items-center gap-2 text-left">
+              {slot.topic || <span className="text-muted">Πρόσθεσε θέμα μαθήματος</span>}
               <Pencil className="size-4 text-muted opacity-60 group-hover:opacity-100" />
             </button>
           )
@@ -357,7 +357,8 @@ export default function LessonPage() {
             {previous && previous.id !== carriedFrom?.id && (
               <Card className="p-5">
                 <p className="text-xs font-semibold text-muted">
-                  Την προηγούμενη φορά · {dayName(previous.date)} {shortDate(previous.date)} · {previous.topic}
+                  Την προηγούμενη φορά · {dayName(previous.date)} {shortDate(previous.date)}
+                  {previous.topic && ` · ${previous.topic}`}
                 </p>
                 <p className="mt-1 text-[15px] text-ink-2">«{previous.taughtNote}»</p>
               </Card>

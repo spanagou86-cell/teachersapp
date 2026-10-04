@@ -1,9 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { Columns2, Contrast, FileText, Lightbulb, Maximize2, Sparkles, TrendingDown, TrendingUp, X, Info, Loader2, FlaskConical } from "lucide-react";
+import { Columns2, Contrast, FileText, Lightbulb, Maximize2, Sparkles, TrendingDown, TrendingUp, X, Info, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { adaptMaterial, QUICK_ACTIONS, type AdaptResult, type QuickAction } from "@/lib/ai/mock";
+import { aiAdapt } from "@/lib/ai/client";
+import { QUICK_ACTIONS, type AdaptResult, type QuickAction } from "@/lib/ai/mock";
+import { SUBJECTS } from "@/lib/seed";
+import { useApp } from "@/lib/store";
+import { toast } from "../toast";
 import { exerciseNumber } from "@/lib/materials";
 import type { Block, Material } from "@/lib/types";
 import { Button, Card, cx, inputClass, Select } from "../ui";
@@ -21,6 +25,8 @@ const ICONS: Record<QuickAction, typeof FileText> = {
 
 export interface Suggestion extends AdaptResult {
   before: Block[];
+  /** Made by the built-in rules (demo, or AI not switched on yet). */
+  simulated?: boolean;
 }
 
 export function AdaptPanel({
@@ -43,6 +49,8 @@ export function AdaptPanel({
   const [actions, setActions] = useState<QuickAction[]>([]);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
+  const demo = useApp((s) => s.mode !== "cloud");
+  const grade = useApp((s) => s.classes.find((c) => c.id === material.classId)?.grade ?? "");
   const exercises = material.blocks.filter((b) => b.type === "exercise");
 
   const toggle = (a: QuickAction) =>
@@ -56,10 +64,18 @@ export function AdaptPanel({
 
   const generate = async () => {
     setBusy(true);
-    await new Promise((r) => setTimeout(r, 900));
-    const result = adaptMaterial({ blocks: material.blocks, actions, prompt, targetId: selectedId });
+    const r = await aiAdapt({
+      blocks: material.blocks,
+      actions,
+      prompt,
+      targetId: selectedId,
+      subject: SUBJECTS.find((x) => x.id === material.subjectId)?.name ?? "",
+      grade,
+      demo,
+    });
     setBusy(false);
-    onSuggest({ ...result, before: material.blocks });
+    if (!r.ok) return toast(r.error);
+    onSuggest({ ...r.data, before: material.blocks });
   };
 
   return (
@@ -72,9 +88,6 @@ export function AdaptPanel({
           <h2 className="text-lg font-bold leading-tight">Προσάρμοσε το υλικό</h2>
           <p className="text-sm text-muted">Με βάση το αρχείο σου</p>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-md bg-line-2 px-1.5 py-0.5 text-[11px] font-semibold text-muted" title="Η σύνδεση με μοντέλο AI δεν έχει γίνει ακόμη· οι προτάσεις είναι δείγμα.">
-          <FlaskConical className="size-3" /> Δείγμα AI
-        </span>
       </div>
 
       {material.file && (
@@ -133,7 +146,7 @@ export function AdaptPanel({
       </div>
       <Button className="mt-3 w-full" onClick={generate} disabled={busy || (!actions.length && !prompt.trim())}>
         {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-        {busy ? "Δημιουργία…" : "Δημιουργία πρότασης"}
+        {busy ? "Το AI ετοιμάζει πρόταση…" : "Δημιουργία πρότασης"}
       </Button>
 
       {suggestion && (
@@ -164,9 +177,12 @@ export function AdaptPanel({
               })}
             </ul>
           )}
-          {suggestion.partial && (
+          {suggestion.simulated && (
             <p className="mt-2 flex gap-1.5 text-xs text-amber">
-              <Info className="mt-px size-3.5 shrink-0" /> Το δείγμα AI καταλαβαίνει βασικές οδηγίες (απλό, δύσκολο, λύσεις, χώρος, άσκηση Ν). Με το πραγματικό μοντέλο θα εφαρμόζεται όλη η οδηγία.
+              <Info className="mt-px size-3.5 shrink-0" />
+              {demo
+                ? "Στην επίδειξη η προσαρμογή γίνεται με απλούς κανόνες. Με λογαριασμό εφαρμόζεται όλη η οδηγία σου από το AI."
+                : "Η προσαρμογή έγινε με απλούς κανόνες, γιατί το AI δεν είναι διαθέσιμο αυτή τη στιγμή."}
             </p>
           )}
           <div className="mt-3 grid grid-cols-2 gap-2">

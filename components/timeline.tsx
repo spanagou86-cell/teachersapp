@@ -41,7 +41,7 @@ function LogButtons({ slot }: { slot: LessonSlot }) {
       run: () => updateSlot(slot.id, { status: "planned" }),
     });
   };
-  const btn = "h-9 rounded-lg border border-line bg-bg text-[13px] font-semibold text-ink-2 transition-colors hover:bg-line-2";
+  const btn = "h-11 rounded-lg border border-line bg-bg text-[13px] font-semibold text-ink-2 transition-colors hover:bg-line-2";
   return (
     <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Πώς πήγε;">
       <button type="button" className={btn} onClick={() => set("done")}>Έγινε</button>
@@ -84,7 +84,7 @@ function LessonItem({ slot, highlight, minutesTo }: { slot: LessonSlot; highligh
             </span>
           )}
           <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-0.5">
-            <Users className="size-3" /> {count} μαθητές
+            <Users className="size-3" /> {count} {count === 1 ? "μαθητής" : "μαθητές"}
           </span>
         </div>
         <Link href={`/lessons/${slot.id}`} className="mt-1 inline-flex h-10 w-fit items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover">

@@ -26,6 +26,8 @@ export default function StudentPage() {
   const attendance = useApp((s) => s.attendance);
   const addNote = useApp((s) => s.addStudentNote);
   const delNote = useApp((s) => s.deleteStudentNote);
+  const editNote = useApp((s) => s.editStudentNote);
+  const restoreNote = useApp((s) => s.restoreStudentNote);
   const [kind, setKind] = useState<"note" | "parent">("note");
   const [text, setText] = useState("");
 
@@ -68,7 +70,7 @@ export default function StudentPage() {
       <div className="mb-5 grid grid-cols-3 gap-2">
         {[
           { n: absences, label: absences === 1 ? "απουσία" : "απουσίες", cls: "text-danger" },
-          { n: lates, label: "καθυστερήσεις", cls: "text-amber" },
+          { n: lates, label: lates === 1 ? "καθυστέρηση" : "καθυστερήσεις", cls: "text-amber" },
           { n: contacts, label: contacts === 1 ? "επαφή με γονέα" : "επαφές με γονείς", cls: "text-info" },
         ].map((x) => (
           <div key={x.label} className="rounded-2xl border border-line bg-surface px-3 py-2.5">
@@ -133,12 +135,30 @@ export default function StudentPage() {
                 </p>
                 {"text" in it && (
                   <div className="mt-1 flex gap-2">
-                    <p className="flex-1 whitespace-pre-line text-[15px]">{it.text}</p>
+                    <textarea
+                      defaultValue={it.text}
+                      aria-label="Κείμενο σημείωσης"
+                      rows={Math.min(6, it.text.split("\n").length + Math.floor(it.text.length / 60))}
+                      maxLength={2000}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (!v) e.target.value = it.text;
+                        else if (v !== it.text) {
+                          editNote(it.id, v);
+                          toast("Η σημείωση διορθώθηκε");
+                        }
+                      }}
+                      className="flex-1 resize-none rounded-md bg-transparent text-[15px] outline-none focus:bg-line-2"
+                    />
                     <button
                       type="button"
                       aria-label="Διαγραφή"
-                      onClick={() => delNote(it.id)}
-                      className="self-start text-muted opacity-0 hover:text-danger focus:opacity-100 group-hover:opacity-100"
+                      onClick={() => {
+                        const n = allNotes.find((x) => x.id === it.id);
+                        delNote(it.id);
+                        if (n) toast("Διαγράφηκε", { label: "Αναίρεση", run: () => restoreNote(n) });
+                      }}
+                      className="flex size-9 shrink-0 items-center justify-center self-start rounded-lg text-muted hover:text-danger sm:opacity-0 sm:focus:opacity-100 sm:group-hover:opacity-100"
                     >
                       <Trash2 className="size-4" />
                     </button>
