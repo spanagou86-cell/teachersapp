@@ -91,6 +91,7 @@ export function RosterImport({ className, onAdd }: { className?: string; onAdd: 
         {busy ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
         {busy ? "Διαβάζω τα ονόματα…" : "Φωτογραφία της λίστας μαθητών"}
       </Button>
+      <p className="text-xs text-muted">Η φωτογραφία διαβάζεται με AI και δεν αποθηκεύεται· κρατιούνται μόνο τα ονόματα που θα ελέγξεις.</p>
       <input
         ref={input}
         type="file"

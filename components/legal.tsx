@@ -20,7 +20,7 @@ export function LegalPage({ title, children }: { title: string; children: ReactN
 }
 
 export function Provider() {
-  const parts = [COMPANY.name, COMPANY.address, COMPANY.vat && `ΑΦΜ ${COMPANY.vat}`].filter(Boolean).join(", ");
+  const parts = [COMPANY.name, COMPANY.address, COMPANY.vat && `ΑΦΜ ${COMPANY.vat}`, COMPANY.registry && `ΓΕΜΗ ${COMPANY.registry}`].filter(Boolean).join(", ");
   return (
     <>
       {parts}
