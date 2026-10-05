@@ -125,7 +125,7 @@ async function flow(name, viewport, mobile) {
   await ctx.close();
 }
 
-/** Same screens on a device set to dark mode ("Συσκευής" theme). */
+/** A device in dark mode still gets the cream page: the app has one look everywhere. */
 async function dark(name, viewport, mobile) {
   console.log(`\n## ${name}`);
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 2, isMobile: mobile, hasTouch: mobile, locale: "el-GR", colorScheme: "dark" });
@@ -135,19 +135,14 @@ async function dark(name, viewport, mobile) {
   await page.waitForURL("**/login");
   await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
   await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
-  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  assert(bg === "rgb(15, 22, 18)", `dark background follows the device (${bg})`);
-  for (const [n, url] of [["01-today", "/"], ["02-schedule", "/schedule"], ["03-attendance", "/classes/d1"], ["04-lesson", "/lessons/l-2026-10-05-0920"], ["05-settings", "/settings"]]) {
+  for (const [n, url] of [["01-today", "/"], ["02-schedule", "/schedule"], ["03-settings", "/settings"]]) {
     await page.goto(BASE + url);
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(300);
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    assert(bg === "rgb(246, 244, 238)", `${url}: cream page on a dark-mode device (${bg})`);
     await page.screenshot({ path: path.join(OUT, `${name}-${n}.png`), fullPage: true });
   }
-  // "Φωτεινό" overrides the device.
-  await page.getByRole("radio", { name: /Φωτεινό/ }).click();
-  const light = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  assert(light === "rgb(246, 246, 241)", `"Φωτεινό" forces the light theme (${light})`);
-  await page.reload();
-  assert((await page.evaluate(() => document.documentElement.dataset.theme)) === "light", "theme choice survives reload");
+  assert((await page.getByRole("radio", { name: /Φωτεινό/ }).count()) === 0, "no theme switch in settings");
   await ctx.close();
 }
 

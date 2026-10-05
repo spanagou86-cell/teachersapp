@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Clock, MessageSquareText, Pencil, PhoneCall, Trash2, UserRound, UserX } from "lucide-react";
+import { Clock, MessageSquareText, Pencil, PhoneCall, Trash2, UserRound, UserX } from "@/components/icons";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -148,7 +148,7 @@ export default function StudentPage() {
           { n: contacts, label: contacts === 1 ? "επαφή με γονέα" : "επαφές με γονείς", cls: "text-info" },
         ].map((x) => (
           <div key={x.label} className="rounded-2xl border border-line bg-surface px-3 py-2.5">
-            <p className={cx("text-2xl font-extrabold leading-none tabular-nums", x.cls)}>{x.n}</p>
+            <p className={cx("text-2xl font-semibold tracking-[-0.02em] leading-none tabular-nums", x.cls)}>{x.n}</p>
             <p className="mt-1 text-[12px] text-muted">{x.label}</p>
           </div>
         ))}

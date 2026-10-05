@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Bell, BookOpen, Plus, Search, Settings } from "lucide-react";
+import { Bell, Plus, Search, Settings } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -18,11 +18,25 @@ import { SubjectIcon } from "../subject";
 import { needsLog, useClock } from "../lesson";
 import { isActive, NAV } from "./nav";
 
+/** The app mark: a «τ» on ink, with the red dot of the teacher's pen. */
+export function LogoMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden className={className}>
+      <rect width="64" height="64" rx="14" fill="var(--color-ink)" />
+      <path d="M17 22.5h28" stroke="var(--color-bg)" strokeWidth="5.5" strokeLinecap="round" />
+      <path d="M30 23v15.5a8.5 8.5 0 0 0 8.5 8.5" fill="none" stroke="var(--color-bg)" strokeWidth="5.5" strokeLinecap="round" />
+      <circle cx="47.5" cy="46.5" r="4.25" fill="#e5484d" />
+    </svg>
+  );
+}
+
 export function Logo({ className }: { className?: string }) {
   return (
-    <Link href="/" className={clsx("flex items-center gap-2 text-brand", className)} aria-label="τάξη — αρχική">
-      <BookOpen className="size-7" strokeWidth={2.4} fill="currentColor" fillOpacity={0.12} />
-      <span className="text-[26px] font-extrabold leading-none tracking-tight">τάξη</span>
+    <Link href="/" className={clsx("flex items-center gap-2 text-ink", className)} aria-label="τάξη — αρχική">
+      <LogoMark className="size-7" />
+      <span className="flex items-baseline text-[23px] font-semibold leading-none tracking-[-0.03em]">
+        τάξη<span className="ml-0.5 size-[5px] rounded-full bg-now" />
+      </span>
     </Link>
   );
 }
@@ -33,9 +47,9 @@ function Sidebar() {
   const mode = useApp((s) => s.mode);
   const syncing = useApp((s) => s.syncing);
   const item = (active: boolean) =>
-    clsx("flex h-11 items-center gap-3 rounded-xl px-3 text-[15px] transition-colors", active ? "bg-brand-50 font-semibold text-brand-700" : "text-ink-2 hover:bg-line-2");
+    clsx("flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[14px] transition-colors", active ? "bg-surface font-semibold text-ink shadow-[0_0_0_1px_var(--color-line),0_1px_2px_rgb(26_34_56/0.05)]" : "font-medium text-ink-2 hover:bg-line-2");
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface px-3 py-6 lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-line-2/60 px-3 py-5 lg:flex">
       <div className="flex items-center justify-between px-2">
         <Logo />
         {mode === "cloud" && (
@@ -47,17 +61,17 @@ function Sidebar() {
       <nav className="mt-6 flex flex-col gap-1">
         {NAV.map(({ href, label, Icon, key }) => (
           <Link key={href} href={href} className={item(isActive(pathname, href))}>
-            <Icon className="size-5" />
+            <Icon className="size-[18px]" />
             {label}
-            <kbd className="ml-auto rounded border border-line px-1.5 text-[11px] font-medium uppercase text-muted">{key}</kbd>
+            <kbd className="ml-auto rounded border border-line bg-surface px-1.5 font-mono text-[10.5px] font-medium uppercase text-muted">{key}</kbd>
           </Link>
         ))}
       </nav>
       <div className="mt-auto grid gap-1">
         <Link href="/settings" className={item(pathname.startsWith("/settings"))}>
-          <Settings className="size-5" /> Ρυθμίσεις
+          <Settings className="size-[18px]" /> Ρυθμίσεις
         </Link>
-        <Link href="/settings" className="mt-2 flex items-center gap-3 rounded-xl border-t border-line px-2 pt-4 hover:opacity-80">
+        <Link href="/settings" className="mt-2 flex items-center gap-3 border-t border-line px-1.5 pt-4 hover:opacity-80">
           <Avatar name={profile.displayName || "?"} seed={3} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold">{profile.displayName || "Λογαριασμός"}</span>
@@ -120,7 +134,7 @@ function SearchBox() {
 
   return (
     <div className="relative max-w-2xl flex-1">
-      <Search className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-[18px] -translate-y-1/2 text-muted" />
       <input
         ref={inputRef}
         value={q}
@@ -140,9 +154,9 @@ function SearchBox() {
         }}
         placeholder="Αναζήτηση σε μαθήματα, αρχεία και μαθητές…"
         aria-label="Αναζήτηση"
-        className="h-11 w-full rounded-xl border border-line bg-surface pl-11 pr-16 text-[15px] outline-none transition-colors placeholder:text-muted focus:border-brand-500"
+        className="h-10 w-full rounded-lg border border-line bg-surface pl-10 pr-16 text-[14px] outline-none transition-[border-color,box-shadow] placeholder:text-muted focus:border-brand-500 focus:shadow-[0_0_0_3px_var(--color-brand-100)]"
       />
-      <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-line bg-line-2 px-1.5 py-0.5 text-xs text-muted">⌘ K</kbd>
+      <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-line bg-line-2 px-1.5 py-0.5 font-mono text-[11px] text-muted">⌘ K</kbd>
       {open && q.trim() && (
         <div className="absolute inset-x-0 top-12 z-40 animate-fade-in overflow-hidden rounded-2xl border border-line bg-surface p-1.5 shadow-pop">
           {results.length === 0 ? (
@@ -174,10 +188,10 @@ function CaptureButton({ onOpen }: { onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="flex h-11 items-center gap-2 rounded-xl bg-brand pl-3.5 pr-4 text-[15px] font-semibold text-white shadow-sm hover:bg-brand-hover"
+      className="flex h-10 items-center gap-2 rounded-lg bg-brand pl-3 pr-3.5 text-[14px] font-semibold text-white hover:bg-brand-hover"
     >
-      <Plus className="size-5" /> Καταγραφή
-      <kbd className="ml-1 rounded border border-white/30 px-1.5 text-[11px] font-medium">N</kbd>
+      <Plus className="size-[18px]" /> Καταγραφή
+      <kbd className="ml-1 rounded border border-white/30 px-1.5 font-mono text-[10.5px] font-medium">N</kbd>
     </button>
   );
 }
@@ -194,7 +208,7 @@ function Notifications() {
         aria-label={`Ειδοποιήσεις (${pending.length})`}
         onClick={() => setOpen((o) => !o)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className="relative flex size-11 items-center justify-center rounded-xl text-ink-2 hover:bg-line-2"
+        className="relative flex size-10 items-center justify-center rounded-lg text-ink-2 hover:bg-line-2"
       >
         <Bell className="size-5" />
         {pending.length > 0 && <span className="absolute right-2.5 top-2.5 size-2.5 rounded-full border-2 border-bg bg-danger" />}
@@ -223,7 +237,7 @@ function Notifications() {
 
 function TopBar({ onCapture }: { onCapture: () => void }) {
   return (
-    <header className="no-print sticky top-0 z-20 hidden items-center gap-4 bg-bg/85 px-8 py-4 backdrop-blur lg:flex">
+    <header className="no-print sticky top-0 z-20 hidden items-center gap-3 border-b border-line bg-bg/85 px-8 py-3 backdrop-blur lg:flex">
       <SearchBox />
       <div className="ml-auto flex items-center gap-2">
         <Notifications />
@@ -238,23 +252,23 @@ function BottomNav({ onCapture }: { onCapture: () => void }) {
   const tab = ({ href, label, Icon }: (typeof NAV)[number]) => {
     const active = isActive(pathname, href);
     return (
-      <Link key={href} href={href} className={clsx("flex flex-col items-center gap-1 pb-2 pt-2.5 text-[11px]", active ? "font-bold text-brand-700" : "text-muted")}>
-        <Icon className="size-[22px]" strokeWidth={active ? 2.4 : 1.8} />
+      <Link key={href} href={href} className={clsx("flex flex-col items-center gap-1 pb-2 pt-2.5 text-[11px]", active ? "font-semibold text-brand" : "font-medium text-muted")}>
+        <Icon className="size-[22px]" strokeWidth={active ? 2 : 1.6} />
         {label}
       </Link>
     );
   };
   return (
-    <nav className="no-print kb-hide fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label="Κύρια πλοήγηση">
+    <nav className="no-print kb-hide fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden" aria-label="Κύρια πλοήγηση">
       <div className="mx-auto grid max-w-lg grid-cols-5 items-center">
         {NAV.slice(0, 2).map(tab)}
         <button
           type="button"
           onClick={onCapture}
           aria-label="Γρήγορη καταγραφή"
-          className="mx-auto -mt-6 flex size-14 items-center justify-center rounded-2xl bg-brand text-white shadow-pop hover:bg-brand-hover"
+          className="mx-auto flex size-11 items-center justify-center rounded-lg bg-brand text-white hover:bg-brand-hover active:scale-95 transition-transform"
         >
-          <Plus className="size-7" strokeWidth={2.4} />
+          <Plus className="size-6" strokeWidth={2} />
         </button>
         {NAV.slice(2).map(tab)}
       </div>
@@ -300,7 +314,7 @@ function Offline({ retry }: { retry: () => void }) {
     <div className="mx-auto mt-16 max-w-sm text-center">
       <p className="text-lg font-bold">Δεν υπάρχει σύνδεση</p>
       <p className="mt-1 text-sm text-muted">Δεν μπόρεσα να φέρω τα δεδομένα σου. Έλεγξε το διαδίκτυο και ξαναδοκίμασε.</p>
-      <button type="button" onClick={retry} className="mt-4 h-11 rounded-xl bg-brand px-5 font-semibold text-white hover:bg-brand-hover">
+      <button type="button" onClick={retry} className="mt-4 h-11 rounded-lg bg-brand px-5 font-semibold text-white hover:bg-brand-hover">
         Ξαναδοκίμασε
       </button>
     </div>

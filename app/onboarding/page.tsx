@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Loader2, Plus, Trash2, Users } from "lucide-react";
+import { ArrowRight, Loader2, Plus, Trash2, Users } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/shell/AppShell";
@@ -59,7 +59,7 @@ export default function OnboardingPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
       <Logo />
-      <h1 className="mt-8 text-[28px] font-extrabold tracking-tight text-brand-700 sm:text-4xl">Καλώς ήρθες!</h1>
+      <h1 className="mt-8 text-[28px] font-semibold tracking-[-0.025em] text-brand-700 sm:text-4xl">Καλώς ήρθες!</h1>
       <p className="mt-1 text-lg text-muted">Δύο λεπτά για να στήσουμε την τάξη σου. Όλα αλλάζουν και αργότερα.</p>
 
       <Card className="mt-8 p-5">

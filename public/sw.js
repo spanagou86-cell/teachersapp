@@ -1,7 +1,7 @@
 // τάξη — service worker. Kept deliberately small so it can never show stale data:
 // only build assets (hashed, immutable) and icons are cached; pages always come from
 // the network and fall back to the last copy (or an offline page) only without signal.
-const VERSION = "v1";
+const VERSION = "v2";
 const STATIC = `taxi-static-${VERSION}`;
 const PAGES = `taxi-pages-${VERSION}`;
 const OFFLINE_URL = "/offline.html";

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Plus, UserCheck, Users } from "lucide-react";
+import { ChevronRight, Plus, UserCheck, Users } from "@/components/icons";
 import { useState } from "react";
 import { ClassSheet } from "@/components/classes";
 import Link from "next/link";
@@ -49,7 +49,7 @@ export default function ClassesPage() {
                 <div className="flex items-center gap-4">
                   <span
                     className={cx(
-                      "flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-brand px-1 text-center font-extrabold leading-tight text-white",
+                      "flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-brand px-1 text-center font-semibold tracking-[-0.02em] leading-tight text-white",
                       c.name.length <= 3 ? "text-xl" : "line-clamp-2 break-all text-xs",
                     )}
                   >

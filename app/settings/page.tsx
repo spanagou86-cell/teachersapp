@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Check, ChevronRight, Download, FileText, Info, Loader2, LogIn, LogOut, Monitor, ShieldCheck, Sun, Trash2 } from "lucide-react";
+import { CalendarClock, Check, ChevronRight, Download, FileText, Info, Loader2, LogIn, LogOut, ShieldCheck, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -182,31 +182,6 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="Εμφάνιση">
-        <Row label="Θέμα" hint="«Συσκευής»: ακολουθεί το κινητό ή τον υπολογιστή σου, και σκούρο το βράδυ.">
-          <Segmented<"light" | "system">
-            className="w-full sm:w-64"
-            value={prefs.theme}
-            onChange={(theme) => setPrefs({ theme })}
-            options={[
-              {
-                value: "light",
-                label: (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Sun className="size-4" /> Φωτεινό
-                  </span>
-                ),
-              },
-              {
-                value: "system",
-                label: (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Monitor className="size-4" /> Συσκευής
-                  </span>
-                ),
-              },
-            ]}
-          />
-        </Row>
         <Row label="Μεγάλα γράμματα" hint="Όλο το κείμενο λίγο μεγαλύτερο.">
           <Toggle label="Μεγάλα γράμματα" checked={prefs.text === "large"} onChange={(v) => setPrefs({ text: v ? "large" : "normal" })} />
         </Row>

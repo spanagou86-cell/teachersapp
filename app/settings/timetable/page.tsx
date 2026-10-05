@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, Camera, Coffee, Loader2, MessagesSquare, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, Camera, Coffee, Loader2, MessagesSquare, Plus, ShieldCheck, Trash2 } from "@/components/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/shell/PageHeader";

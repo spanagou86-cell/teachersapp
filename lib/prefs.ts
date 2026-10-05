@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { PREFS_KEY } from "./prefs-boot";
 
-/** Per-device display settings. "Συσκευής" follows the phone or computer, which may be dark. */
+/** Per-device display settings. */
 export interface Prefs {
-  theme: "light" | "system";
   text: "normal" | "large";
 }
 
-const DEFAULTS: Prefs = { theme: "system", text: "normal" };
+const DEFAULTS: Prefs = { text: "normal" };
 
 function read(): Prefs {
   try {
@@ -21,8 +20,6 @@ function read(): Prefs {
 
 function apply(p: Prefs) {
   const el = document.documentElement;
-  if (p.theme === "light") el.dataset.theme = "light";
-  else delete el.dataset.theme;
   if (p.text === "large") el.dataset.text = "large";
   else delete el.dataset.text;
 }

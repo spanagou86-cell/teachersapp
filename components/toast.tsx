@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, X } from "lucide-react";
+import { CheckCircle2, X } from "@/components/icons";
 import { useEffect } from "react";
 import { create } from "zustand";
 

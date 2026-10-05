@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, CalendarArrowUp, CalendarCog, Check, CloudUpload, CornerDownRight, FilePlus2, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarArrowUp, CalendarCog, Check, CloudUpload, CornerDownRight, FilePlus2, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -430,7 +430,7 @@ export default function LessonPage() {
                     { n: attendance.lateIds?.length ?? 0, label: "καθυστέρηση", cls: "text-amber" },
                   ].map((x) => (
                     <div key={x.label} className="rounded-xl bg-bg p-3">
-                      <p className={cx("text-2xl font-extrabold tabular-nums", x.cls)}>{x.n}</p>
+                      <p className={cx("text-2xl font-semibold tracking-[-0.02em] tabular-nums", x.cls)}>{x.n}</p>
                       <p className="text-sm text-ink-2">{x.label}</p>
                     </div>
                   ))}

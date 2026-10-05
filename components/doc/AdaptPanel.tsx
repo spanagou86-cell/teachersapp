@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Columns2, Contrast, FileText, Lightbulb, Maximize2, Sparkles, TrendingDown, TrendingUp, X, Info, Loader2 } from "lucide-react";
+import { Columns2, Contrast, FileText, Lightbulb, Maximize2, Sparkles, TrendingDown, TrendingUp, X, Info, Loader2 } from "@/components/icons";
 import { useState } from "react";
 import { aiAdapt } from "@/lib/ai/client";
 import { QUICK_ACTIONS, type AdaptResult, type QuickAction } from "@/lib/ai/mock";

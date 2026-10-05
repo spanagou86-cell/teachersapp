@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCog, CheckCircle2, CircleDashed, FlaskConical, LogIn, LogOut, RotateCcw, Rocket, Sparkles } from "lucide-react";
+import { CalendarCog, CheckCircle2, CircleDashed, FlaskConical, LogIn, LogOut, RotateCcw, Rocket, Sparkles } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { toast } from "@/components/toast";

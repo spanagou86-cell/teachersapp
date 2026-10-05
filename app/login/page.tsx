@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Loader2, Mail, MailCheck, PlayCircle } from "lucide-react";
+import { ArrowRight, Loader2, Mail, MailCheck, PlayCircle } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -55,8 +55,10 @@ function Login() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
-      <Logo className="mb-2" />
+    <div className="grid min-h-dvh lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+      <DayPreview />
+      <div className="flex flex-col items-center justify-center px-4 py-10">
+      <Logo className="mb-3" />
       <p className="mb-8 text-center text-muted">Η τάξη σου. Μαζί σου.</p>
       <Card className="w-full max-w-sm p-6">
         {!cloudEnabled ? (
@@ -68,7 +70,7 @@ function Login() {
               if (email.includes("@")) void send();
             }}
           >
-            <h1 className="text-xl font-extrabold">Σύνδεση</h1>
+            <h1 className="text-xl font-semibold tracking-[-0.02em]">Σύνδεση</h1>
             <p className="mt-1 text-sm text-muted">Γράψε το email σου. Θα σου στείλουμε σύνδεσμο εισόδου — χωρίς κωδικούς.</p>
             <label className="mt-5 block">
               <span className="mb-1.5 block text-[13px] font-semibold text-ink-2">Email</span>
@@ -91,7 +93,7 @@ function Login() {
         ) : (
           <div>
             <MailCheck className="size-10 text-brand-500" />
-            <h1 className="mt-3 text-xl font-extrabold">Έλεγξε το email σου</h1>
+            <h1 className="mt-3 text-xl font-semibold tracking-[-0.02em]">Έλεγξε το email σου</h1>
             <p className="mt-1 text-sm text-muted">
               Στείλαμε σύνδεσμο στο <b className="text-ink">{email}</b>. Άνοιξέ τον από αυτή τη συσκευή. Αν δεν φαίνεται, κοίτα και στα ανεπιθύμητα.
             </p>
@@ -147,7 +149,48 @@ function Login() {
         </Link>
         .
       </p>
+      </div>
     </div>
+  );
+}
+
+const PREVIEW = [
+  { t: "08:15", s: "Γλώσσα", c: "Δ1", tp: "Ενότητα 3 · Ταξίδια", color: "bg-glossa", done: true },
+  { t: "09:00", s: "Μαθηματικά", c: "Δ1", tp: "Κεφ. 12 · Κλάσματα", color: "bg-math", now: true },
+  { t: "10:05", s: "Ιστορία", c: "Δ2", tp: "Ο μινωικός πολιτισμός", color: "bg-istoria" },
+  { t: "10:50", s: "Μελέτη Περιβάλλοντος", c: "Δ1", tp: "Τα φυτά τρέφονται", color: "bg-meleti" },
+];
+
+/** Desktop only: a page of the teacher's day, like a notebook with a red margin. */
+function DayPreview() {
+  return (
+    <aside aria-hidden className="relative hidden overflow-hidden border-r border-line bg-line-2/60 lg:flex lg:flex-col lg:justify-center lg:px-14">
+      <div className="max-w-lg">
+        <p className="font-mono text-xs font-medium uppercase tracking-[0.08em] text-muted">Δευτέρα 5 Οκτωβρίου</p>
+        <h2 className="mt-3 text-[40px] font-semibold leading-[1.08] tracking-[-0.035em] text-ink">
+          Η μέρα σου, σε μία σελίδα<span className="text-now">.</span>
+        </h2>
+        <p className="mt-4 max-w-md text-[15px] leading-relaxed text-ink-2">
+          Πρόγραμμα, παρουσίες, ύλη και φύλλα εργασίας μαζί. Γράφεις τι διδάχθηκε σε δέκα δευτερόλεπτα, τυπώνεις σε ένα.
+        </p>
+        <div className="relative mt-10 overflow-hidden rounded-xl border border-line bg-surface shadow-paper">
+          <span className="absolute inset-y-0 left-[68px] w-px bg-now/40" />
+          {PREVIEW.map((r) => (
+            <div key={r.t} className={cx("relative flex items-center gap-4 border-b border-[#dbe2ec] px-4 py-3 last:border-b-0", r.done && "opacity-55")}>
+              <span className={cx("w-11 font-mono text-[12px] tabular-nums", r.now ? "font-semibold text-now" : "text-muted")}>{r.t}</span>
+              <span className={cx("size-1.5 shrink-0 rounded-full", r.color)} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-semibold text-ink">
+                  {r.s} <span className="font-medium text-muted">{r.c}</span>
+                </span>
+                <span className="block truncate text-[12.5px] text-ink-2">{r.tp}</span>
+              </span>
+              {r.now && <span className="rounded border border-now/30 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-now">ΤΩΡΑ</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
   );
 }
 

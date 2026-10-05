@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Atom, BookOpen, Calculator, Church, Dumbbell, FileImage, FileText, FileType2, Globe2, Landmark, Languages, Leaf, Monitor, Music, Palette, Puzzle, Shapes } from "lucide-react";
+import { Atom, BookOpen, Calculator, Church, Dumbbell, FileImage, FileText, FileType2, Globe2, Landmark, Languages, Leaf, Monitor, Music, Palette, Puzzle, Shapes } from "@/components/icons";
 import { fileKindLabel } from "@/lib/materials";
 import type { FileMeta, SubjectId } from "@/lib/types";
 

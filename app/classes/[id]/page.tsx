@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { BookOpenCheck, CalendarDays, CheckCheck, ChevronLeft, ChevronRight, Info, NotebookPen, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { BookOpenCheck, CalendarDays, CheckCheck, ChevronLeft, ChevronRight, Info, NotebookPen, Pencil, Plus, Trash2, Users } from "@/components/icons";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -75,7 +75,7 @@ function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
           { n: record ? late.length : "—", label: "καθυστέρηση", cls: "text-amber" },
         ].map((x) => (
           <div key={x.label} className="rounded-2xl border border-line bg-surface px-3 py-2.5">
-            <p className={cx("text-2xl font-extrabold leading-none tabular-nums", x.cls)}>{x.n}</p>
+            <p className={cx("text-2xl font-semibold tracking-[-0.02em] leading-none tabular-nums", x.cls)}>{x.n}</p>
             <p className="mt-1 text-[12px] text-muted">{x.label}</p>
           </div>
         ))}
@@ -117,7 +117,7 @@ function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
                 <span
                   aria-hidden
                   className={cx(
-                    "flex size-10 items-center justify-center rounded-full text-[13px] font-extrabold",
+                    "flex size-10 items-center justify-center rounded-full text-[13px] font-semibold tracking-[-0.02em]",
                     state === "absent" ? "bg-danger text-surface" : state === "late" ? "bg-amber text-surface" : "bg-brand-50 text-brand-500",
                   )}
                 >

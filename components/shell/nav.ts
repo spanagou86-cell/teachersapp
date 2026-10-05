@@ -1,4 +1,4 @@
-import { CalendarDays, Clock3, FileText, Users } from "lucide-react";
+import { CalendarDays, Clock3, FileText, Users } from "@/components/icons";
 
 /** Four places, the same on phone and computer. */
 export const NAV = [

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, Camera, Loader2, X } from "lucide-react";
+import { ArrowLeftRight, Camera, Loader2, X } from "@/components/icons";
 import { useRef, useState } from "react";
 import { aiReadRoster, type RosterName } from "@/lib/ai/client";
 import { useApp } from "@/lib/store";

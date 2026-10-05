@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, Trash2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { dayName, shortDate, timeToMin } from "@/lib/dates";

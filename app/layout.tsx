@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope } from "next/font/google";
+import { Inter_Tight, JetBrains_Mono } from "next/font/google";
 import { ServiceWorker } from "@/components/pwa";
 import { AppShell } from "@/components/shell/AppShell";
 import { PREFS_BOOT } from "@/lib/prefs-boot";
 import "./globals.css";
 
-const manrope = Manrope({ subsets: ["latin", "greek"], variable: "--font-manrope", display: "swap" });
+const sans = Inter_Tight({ subsets: ["latin", "greek"], variable: "--font-inter-tight", display: "swap" });
+const mono = JetBrains_Mono({ subsets: ["latin", "greek"], variable: "--font-jetbrains", display: "swap", weight: ["400", "500", "600"] });
 
 export const metadata: Metadata = {
   title: { default: "τάξη — Η τάξη σου. Μαζί σου.", template: "%s · τάξη" },
@@ -16,10 +17,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f6f6f1" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1612" },
-  ],
+  themeColor: "#f6f4ee",
+  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -27,7 +26,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="el" className={manrope.variable} suppressHydrationWarning>
+    <html lang="el" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: PREFS_BOOT }} />
       </head>

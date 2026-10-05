@@ -1,4 +1,4 @@
-import { Compass } from "lucide-react";
+import { Compass } from "@/components/icons";
 import { ButtonLink, EmptyState } from "@/components/ui";
 
 export default function NotFound() {

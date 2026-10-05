@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Check, CheckCircle2, CloudUpload, FileText, ListChecks, Loader2, NotebookText, RefreshCw, Sparkles, SquareCheckBig } from "lucide-react";
+import { Check, CheckCircle2, CloudUpload, FileText, ListChecks, Loader2, NotebookText, RefreshCw, Sparkles, SquareCheckBig } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type DragEvent } from "react";

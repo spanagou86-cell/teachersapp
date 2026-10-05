@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, Check, ChevronRight, CircleDashed, Coffee, CornerDownRight, MessagesSquare, Paperclip, ShieldCheck, Users, X } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, CircleDashed, Coffee, CornerDownRight, MessagesSquare, Paperclip, ShieldCheck, Users, X } from "@/components/icons";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { timeToMin } from "@/lib/dates";
@@ -75,7 +75,7 @@ export function LessonRow({ slot, compact }: { slot: LessonSlot; compact?: boole
         live ? "border-brand-100 bg-brand-50" : "border-line-2 bg-surface hover:border-line hover:bg-line-2/50",
       )}
     >
-      <div className={clsx("w-12 shrink-0 text-[13px] leading-tight tabular-nums", live ? "font-bold text-ink" : "text-ink-2")}>
+      <div className={clsx("w-12 shrink-0 font-mono text-[12px] leading-tight tabular-nums", live ? "font-semibold text-ink" : "text-ink-2")}>
         {slot.start}
         <span className="block text-muted">– {slot.end}</span>
       </div>
@@ -123,7 +123,7 @@ export function BlockRow({ block }: { block: TimeBlock }) {
   const st = BLOCK_STYLE[block.kind];
   return (
     <div className={clsx("flex items-center gap-3 rounded-xl border px-3 py-2.5 sm:gap-4 sm:px-4", st.cls)}>
-      <div className="w-12 shrink-0 text-[13px] leading-tight tabular-nums text-ink-2">
+      <div className="w-12 shrink-0 font-mono text-[12px] leading-tight tabular-nums text-ink-2">
         {block.start}
         <span className="block text-muted">– {block.end}</span>
       </div>

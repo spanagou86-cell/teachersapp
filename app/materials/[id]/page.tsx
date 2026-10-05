@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import {
   ArrowRight, CalendarPlus, Check, CheckCircle2, ChevronDown, Download, Eye, FileQuestion, FileText, History, Link2Off, Plus, Redo2, RotateCcw, Sparkles, Trash2, Type, Undo2, X,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -478,7 +478,7 @@ function Editor() {
               }}
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
               maxLength={200}
-              className="w-full rounded-lg border border-brand-500 bg-surface px-2 text-[24px] font-extrabold tracking-tight text-brand-700 outline-none sm:text-[34px]"
+              className="w-full rounded-lg border border-brand-500 bg-surface px-2 text-[24px] font-semibold tracking-[-0.025em] text-brand-700 outline-none sm:text-[34px]"
             />
           ) : (
             <h1
@@ -487,7 +487,7 @@ function Editor() {
               onClick={() => setEditingTitle(true)}
               onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setEditingTitle(true)}
               title="Πάτησε για μετονομασία"
-              className="cursor-text break-words text-[24px] font-extrabold leading-tight tracking-tight text-brand-700 sm:text-[34px]">
+              className="cursor-text break-words text-[24px] font-semibold tracking-[-0.02em] leading-tight tracking-tight text-brand-700 sm:text-[34px]">
               {material.title}
             </h1>
           )}

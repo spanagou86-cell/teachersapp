@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarClock, CalendarOff, NotebookPen, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, CalendarClock, CalendarOff, NotebookPen, Plus, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useState } from "react";
 import { needsLog, useClock } from "@/components/lesson";
@@ -162,7 +162,7 @@ export default function TodayPage() {
     <div>
       <MobileBrandBar />
       <header className="mb-4 grid gap-1">
-        <h1 className="text-[26px] font-extrabold leading-tight tracking-tight sm:text-[34px]">{longDate(today).replace(",", "")}</h1>
+        <h1 className="text-[26px] font-semibold tracking-[-0.02em] leading-tight tracking-tight sm:text-[34px]">{longDate(today).replace(",", "")}</h1>
         <p className="text-[14px] text-muted sm:text-[15px]">
           {[week && `Εβδομάδα ${week}`, term, `${greeting}${firstName ? `, ${firstName}` : ""}`].filter(Boolean).join(" · ")}
         </p>

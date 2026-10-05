@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Camera, MessageSquareText, NotebookPen, PhoneCall, Sparkles, UserCheck } from "lucide-react";
+import { Camera, MessageSquareText, NotebookPen, PhoneCall, Sparkles, UserCheck } from "@/components/icons";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { timeToMin } from "@/lib/dates";

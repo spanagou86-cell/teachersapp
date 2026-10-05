@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Printer } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Printer } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
@@ -245,7 +245,7 @@ function Journal() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-2">{profile.schoolName || "Σχολείο"}</p>
-                <h1 className="mt-0.5 text-[20px] font-extrabold leading-tight">{docTitle}</h1>
+                <h1 className="mt-0.5 text-[20px] font-semibold tracking-[-0.02em] leading-tight">{docTitle}</h1>
               </div>
               <p className="text-right text-[11px] leading-snug text-ink-2">
                 Σχολικό έτος {year.start.slice(0, 4)}–{year.end.slice(0, 4)}

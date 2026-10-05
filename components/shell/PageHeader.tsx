@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Settings } from "lucide-react";
+import { ArrowLeft, Settings } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -22,7 +22,7 @@ export function MobileBrandBar() {
       <Link
         href="/settings"
         aria-label="Ρυθμίσεις: σχολείο, προφίλ, εμφάνιση"
-        className="flex h-11 items-center gap-2 rounded-full border border-line bg-surface pl-1 pr-3 text-[13px] font-semibold text-ink-2 active:bg-line-2"
+        className="flex h-11 items-center gap-2 rounded-lg border border-line bg-surface pl-1 pr-3 text-[13px] font-semibold text-ink-2 active:bg-line-2"
       >
         <Avatar name={name || "?"} seed={3} size="sm" />
         <Settings className="size-4" />
@@ -66,7 +66,7 @@ export function PageHeader({
       {back && <BackButton fallback={back} />}
       <div className="min-w-0 flex-1">
         {eyebrow && <div className="mb-1 text-[13px] text-muted">{eyebrow}</div>}
-        <h1 className="break-words text-2xl font-extrabold tracking-tight text-brand-700 sm:text-[32px] sm:leading-tight">{title}</h1>
+        <h1 className="break-words text-[26px] font-semibold leading-tight tracking-[-0.025em] text-ink sm:text-[30px]">{title}</h1>
         {subtitle && <p className="mt-1 text-[15px] text-muted sm:text-lg">{subtitle}</p>}
       </div>
       {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}

@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, BookOpen, GripVertical, Pencil, Trash2, Target } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, GripVertical, Pencil, Trash2, Target } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { GrowingTextarea } from "../text";
 import { buttonClass, cx, inputClass } from "../ui";
@@ -184,7 +184,7 @@ export function DocPage({
             {grade && <span className="block text-xs text-ink-2">{grade}</span>}
           </span>
         ) : (
-          <span className="flex items-center gap-1.5 text-lg font-extrabold text-brand">
+          <span className="flex items-center gap-1.5 text-lg font-semibold tracking-[-0.02em] text-brand">
             <BookOpen className="size-5" strokeWidth={2.4} /> τάξη
           </span>
         )}
@@ -218,7 +218,7 @@ export function DocPage({
               );
             switch (b.type) {
               case "heading":
-                return <h2 className="py-2 text-center text-xl font-extrabold leading-snug sm:text-2xl">{b.text}</h2>;
+                return <h2 className="py-2 text-center text-xl font-semibold tracking-[-0.02em] leading-snug sm:text-2xl">{b.text}</h2>;
               case "text":
                 return <p className="whitespace-pre-line text-[14px] leading-relaxed sm:text-[15px]">{b.text}</p>;
               case "chart":

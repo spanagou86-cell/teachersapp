@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, Coffee, CornerDownRight, MessagesSquare, Paperclip, ShieldCheck, Users } from "lucide-react";
+import { ArrowRight, Coffee, CornerDownRight, MessagesSquare, Paperclip, ShieldCheck, Users } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { timeToMin } from "@/lib/dates";
@@ -16,7 +16,7 @@ type Entry = { kind: "lesson"; slot: LessonSlot } | { kind: "block"; block: Time
 
 function Times({ start, end, strong }: { start: string; end: string; strong?: boolean }) {
   return (
-    <div className={clsx("w-11 shrink-0 pt-2.5 text-[12px] font-semibold leading-tight tabular-nums", strong ? "text-ink" : "text-muted")}>
+    <div className={clsx("w-11 shrink-0 pt-2.5 font-mono text-[11.5px] font-medium leading-tight tabular-nums", strong ? "text-ink" : "text-muted")}>
       {start}
       <span className="block font-medium opacity-75">{end}</span>
     </div>
@@ -27,7 +27,7 @@ function NowLine({ now }: { now: string }) {
   return (
     <div className="relative my-0.5 ml-[52px] border-t-2 border-now" aria-label={`Τώρα ${now}`}>
       <span className="absolute -left-[7px] -top-[6px] size-2.5 rounded-full bg-now" />
-      <span className="absolute -left-[52px] -top-[9px] text-[11px] font-bold tabular-nums text-now">{now}</span>
+      <span className="absolute -left-[52px] -top-[9px] font-mono text-[10.5px] font-semibold tabular-nums text-now">{now}</span>
     </div>
   );
 }
@@ -68,7 +68,7 @@ function LessonItem({ slot, highlight, minutesTo }: { slot: LessonSlot; highligh
           {minutesTo !== undefined && minutesTo > 0 ? `Σε ${minutesTo} λεπτά` : "Τώρα"}
           {cls?.room && ` · ${cls.room}`}
         </span>
-        <p className="text-lg font-extrabold leading-tight">
+        <p className="text-lg font-semibold tracking-[-0.02em] leading-tight">
           {subject?.name} · {cls?.name}
         </p>
         {slot.topic && (

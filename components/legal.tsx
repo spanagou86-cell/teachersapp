@@ -7,7 +7,7 @@ export function LegalPage({ title, children }: { title: string; children: ReactN
   return (
     <article className="mx-auto max-w-2xl px-4 py-10 text-[15px] leading-relaxed text-ink-2 [&_h2]:mb-2 [&_h2]:mt-8 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-ink [&_li]:mt-1 [&_p]:mt-2 [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5">
       <BackButton fallback="/" />
-      <h1 className="mt-4 text-[28px] font-extrabold leading-tight text-ink">{title}</h1>
+      <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] leading-tight text-ink">{title}</h1>
       <p className="text-sm text-muted">Τελευταία ενημέρωση: {LEGAL_UPDATED}</p>
       {children}
       <nav className="mt-10 flex flex-wrap gap-4 border-t border-line pt-4 text-sm font-semibold text-brand-500">

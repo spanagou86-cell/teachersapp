@@ -1,0 +1,117 @@
+/**
+ * The app's one icon set (Tabler, thin 1.6 line). Every screen imports from here, so the
+ * whole look changes in this file. Names follow what the screens already use.
+ */
+import type { ComponentType, SVGProps } from "react";
+import * as T from "@tabler/icons-react";
+
+export type IconProps = Omit<SVGProps<SVGSVGElement>, "ref" | "stroke"> & { strokeWidth?: number | string; size?: number | string };
+export type Icon = ComponentType<IconProps>;
+
+const STROKE = 1.6;
+
+function make(C: T.Icon, name: string): Icon {
+  const I = ({ strokeWidth, ...props }: IconProps) => <C stroke={Number(strokeWidth ?? STROKE)} {...(props as object)} />;
+  I.displayName = name;
+  return I;
+}
+
+export const AlertTriangle = make(T.IconAlertTriangle, "AlertTriangle");
+export const TriangleAlert = AlertTriangle;
+export const ArrowDown = make(T.IconArrowDown, "ArrowDown");
+export const ArrowLeft = make(T.IconArrowLeft, "ArrowLeft");
+export const ArrowLeftRight = make(T.IconArrowsLeftRight, "ArrowLeftRight");
+export const ArrowRight = make(T.IconArrowRight, "ArrowRight");
+export const ArrowUp = make(T.IconArrowUp, "ArrowUp");
+export const Atom = make(T.IconAtom, "Atom");
+export const Bell = make(T.IconBell, "Bell");
+export const BookOpen = make(T.IconBook, "BookOpen");
+export const BookOpenCheck = make(T.IconBook2, "BookOpenCheck");
+export const Calculator = make(T.IconCalculator, "Calculator");
+export const CalendarArrowUp = make(T.IconCalendarUp, "CalendarArrowUp");
+export const CalendarClock = make(T.IconCalendarTime, "CalendarClock");
+export const CalendarCog = make(T.IconCalendarCog, "CalendarCog");
+export const CalendarDays = make(T.IconCalendarWeek, "CalendarDays");
+export const CalendarOff = make(T.IconCalendarOff, "CalendarOff");
+export const Camera = make(T.IconCamera, "Camera");
+export const Check = make(T.IconCheck, "Check");
+export const CheckCheck = make(T.IconChecks, "CheckCheck");
+export const CheckCircle2 = make(T.IconCircleCheck, "CheckCircle2");
+export const ChevronDown = make(T.IconChevronDown, "ChevronDown");
+export const ChevronLeft = make(T.IconChevronLeft, "ChevronLeft");
+export const ChevronRight = make(T.IconChevronRight, "ChevronRight");
+export const Church = make(T.IconBuildingChurch, "Church");
+export const CircleDashed = make(T.IconCircleDashed, "CircleDashed");
+export const Clock = make(T.IconClock, "Clock");
+export const Clock3 = make(T.IconClockHour3, "Clock3");
+export const CloudUpload = make(T.IconCloudUpload, "CloudUpload");
+export const Coffee = make(T.IconCoffee, "Coffee");
+export const Columns2 = make(T.IconColumns2, "Columns2");
+export const Compass = make(T.IconCompass, "Compass");
+export const Contrast = make(T.IconContrast, "Contrast");
+export const CornerDownRight = make(T.IconCornerDownRight, "CornerDownRight");
+export const Download = make(T.IconDownload, "Download");
+export const Dumbbell = make(T.IconBallFootball, "Dumbbell");
+export const FileImage = make(T.IconPhoto, "FileImage");
+export const FilePlus2 = make(T.IconFilePlus, "FilePlus2");
+export const FileText = make(T.IconFileText, "FileText");
+export const FileType2 = make(T.IconFileTypePdf, "FileType2");
+export const FlaskConical = make(T.IconFlask, "FlaskConical");
+export const FolderOpen = make(T.IconFolderOpen, "FolderOpen");
+export const Globe2 = make(T.IconWorld, "Globe2");
+export const GripVertical = make(T.IconGripVertical, "GripVertical");
+export const History = make(T.IconHistory, "History");
+export const Info = make(T.IconInfoCircle, "Info");
+export const Landmark = make(T.IconBuildingBank, "Landmark");
+export const Languages = make(T.IconLanguage, "Languages");
+export const Leaf = make(T.IconLeaf, "Leaf");
+export const Lightbulb = make(T.IconBulb, "Lightbulb");
+export const Link2Off = make(T.IconUnlink, "Link2Off");
+export const ListChecks = make(T.IconListCheck, "ListChecks");
+export const Loader2 = make(T.IconLoader2, "Loader2");
+export const LogIn = make(T.IconLogin, "LogIn");
+export const LogOut = make(T.IconLogout, "LogOut");
+export const Mail = make(T.IconMail, "Mail");
+export const MailCheck = make(T.IconMailCheck, "MailCheck");
+export const Maximize2 = make(T.IconArrowsMaximize, "Maximize2");
+export const MessageSquareText = make(T.IconMessage2, "MessageSquareText");
+export const MessagesSquare = make(T.IconMessages, "MessagesSquare");
+export const Monitor = make(T.IconDeviceDesktop, "Monitor");
+export const Music = make(T.IconMusic, "Music");
+export const NotebookPen = make(T.IconNotebook, "NotebookPen");
+export const NotebookText = make(T.IconNotes, "NotebookText");
+export const Palette = make(T.IconPalette, "Palette");
+export const Paperclip = make(T.IconPaperclip, "Paperclip");
+export const Pencil = make(T.IconPencil, "Pencil");
+export const PhoneCall = make(T.IconPhoneCall, "PhoneCall");
+export const PlayCircle = make(T.IconPlayerPlay, "PlayCircle");
+export const Plus = make(T.IconPlus, "Plus");
+export const Printer = make(T.IconPrinter, "Printer");
+export const Puzzle = make(T.IconPuzzle, "Puzzle");
+export const RefreshCw = make(T.IconRefresh, "RefreshCw");
+export const Rocket = make(T.IconRocket, "Rocket");
+export const RotateCcw = make(T.IconArrowBackUp, "RotateCcw");
+export const Search = make(T.IconSearch, "Search");
+export const Settings = make(T.IconSettings, "Settings");
+export const Shapes = make(T.IconCategory, "Shapes");
+export const Share = make(T.IconShare, "Share");
+export const ShieldCheck = make(T.IconShieldCheck, "ShieldCheck");
+export const Sparkles = make(T.IconSparkles, "Sparkles");
+export const SquareCheckBig = make(T.IconSquareCheck, "SquareCheckBig");
+export const Sun = make(T.IconSun, "Sun");
+export const Target = make(T.IconTarget, "Target");
+export const Trash2 = make(T.IconTrash, "Trash2");
+export const TrendingDown = make(T.IconTrendingDown, "TrendingDown");
+export const TrendingUp = make(T.IconTrendingUp, "TrendingUp");
+export const UserCheck = make(T.IconUserCheck, "UserCheck");
+export const UserPlus = make(T.IconUserPlus, "UserPlus");
+export const UserRound = make(T.IconUser, "UserRound");
+export const UserX = make(T.IconUserX, "UserX");
+export const Users = make(T.IconUsers, "Users");
+export const X = make(T.IconX, "X");
+export const CalendarPlus = make(T.IconCalendarPlus, "CalendarPlus");
+export const Eye = make(T.IconEye, "Eye");
+export const FileQuestion = make(T.IconFileUnknown, "FileQuestion");
+export const Redo2 = make(T.IconArrowForwardUp, "Redo2");
+export const Type = make(T.IconTypography, "Type");
+export const Undo2 = make(T.IconArrowBackUp, "Undo2");

@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2, UserPlus, X } from "lucide-react";
+import { Trash2, UserPlus, X } from "@/components/icons";
 import { useState } from "react";
 import { GRADES } from "@/lib/grades";
 import { useApp } from "@/lib/store";

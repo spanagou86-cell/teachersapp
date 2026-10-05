@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown, X } from "@/components/icons";
 import Link from "next/link";
 import { useEffect, type ButtonHTMLAttributes, type ComponentProps, type ReactNode } from "react";
 import { revealOnFocus, useScrollLock, useVisibleViewport } from "@/lib/viewport";
@@ -12,21 +12,21 @@ type Variant = "primary" | "secondary" | "ghost" | "soft" | "danger";
 type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-hover shadow-sm disabled:bg-brand/40",
-  secondary: "bg-surface text-ink border border-line hover:bg-line-2 disabled:text-muted",
+  primary: "bg-brand text-white hover:bg-brand-hover shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_1px_2px_rgb(26_34_56/0.2)] disabled:bg-brand/40 disabled:shadow-none",
+  secondary: "bg-surface text-ink border border-line shadow-[0_1px_2px_rgb(26_34_56/0.05)] hover:bg-line-2 disabled:text-muted",
   ghost: "text-ink-2 hover:bg-line-2 disabled:text-muted",
   soft: "bg-brand-50 text-brand hover:bg-brand-100 disabled:opacity-50",
   danger: "bg-surface text-danger border border-line hover:bg-danger-50",
 };
 const SIZES: Record<Size, string> = {
-  sm: "h-8 px-3 text-[13px] gap-1.5 rounded-lg",
-  md: "h-10 px-4 text-sm gap-2 rounded-xl",
-  lg: "h-12 px-5 text-[15px] gap-2 rounded-xl",
+  sm: "h-8 px-2.5 text-[13px] gap-1.5 rounded-md",
+  md: "h-10 px-3.5 text-sm gap-2 rounded-lg",
+  lg: "h-12 px-5 text-[15px] gap-2 rounded-lg",
 };
 
 export function buttonClass(variant: Variant = "primary", size: Size = "md", extra?: string) {
   return clsx(
-    "inline-flex items-center justify-center font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed select-none",
+    "inline-flex items-center justify-center font-semibold whitespace-nowrap transition-[background-color,color,transform] active:scale-[0.98] disabled:active:scale-100 disabled:cursor-not-allowed select-none",
     VARIANTS[variant],
     SIZES[size],
     extra,
@@ -65,7 +65,7 @@ export function IconButton({ className, label, ...props }: ButtonHTMLAttributes<
 
 export function Card({ className, children, ...props }: ComponentProps<"div">) {
   return (
-    <div className={clsx("rounded-2xl border border-line bg-surface shadow-card", className)} {...props}>
+    <div className={clsx("rounded-xl border border-line bg-surface shadow-card", className)} {...props}>
       {children}
     </div>
   );
@@ -96,7 +96,7 @@ export function Segmented<T extends string>({
   size?: "sm" | "md";
 }) {
   return (
-    <div role="radiogroup" className={clsx("flex rounded-xl border border-line bg-surface p-1", className)}>
+    <div role="radiogroup" className={clsx("flex rounded-lg border border-line bg-line-2 p-0.5", className)}>
       {options.map((o) => (
         <button
           key={o.value}
@@ -105,9 +105,9 @@ export function Segmented<T extends string>({
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
           className={clsx(
-            "flex-1 rounded-lg px-2 font-medium transition-colors",
+            "flex-1 rounded-md px-2 font-medium transition-colors",
             size === "sm" ? "h-7 text-xs" : "h-9 text-sm",
-            value === o.value ? "bg-brand-50 font-semibold text-brand shadow-[inset_0_0_0_1px_var(--color-brand-100)]" : "text-ink-2 hover:bg-line-2",
+            value === o.value ? "bg-surface font-semibold text-ink shadow-[0_0_0_1px_var(--color-line),0_1px_2px_rgb(26_34_56/0.08)]" : "text-ink-2 hover:text-ink",
           )}
         >
           {o.label}
@@ -168,7 +168,7 @@ export function Select({ className, children, ...props }: ComponentProps<"select
   return (
     <div className={clsx("relative min-w-0", className)}>
       <select
-        className="h-10 w-full appearance-none rounded-xl border border-line bg-surface pl-3 pr-9 text-base font-medium text-ink sm:text-sm outline-none transition-colors hover:border-ink/20 focus:border-brand-500"
+        className="h-10 w-full appearance-none rounded-lg border border-line bg-surface pl-3 pr-9 text-base font-medium text-ink sm:text-sm outline-none transition-[border-color,box-shadow] hover:border-ink/20 focus:border-brand-500 focus:shadow-[0_0_0_3px_var(--color-brand-100)]"
         {...props}
       >
         {children}
@@ -181,14 +181,14 @@ export function Select({ className, children, ...props }: ComponentProps<"select
 export function Field({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
     <label className={clsx("block min-w-0", className)}>
-      <span className="mb-1.5 block text-[13px] font-semibold text-ink-2">{label}</span>
+      <span className="mb-1.5 block text-[13px] font-medium text-ink-2">{label}</span>
       {children}
     </label>
   );
 }
 
 export const inputClass =
-  "w-full min-w-0 rounded-xl border border-line bg-surface px-3 text-base text-ink outline-none sm:text-sm transition-colors placeholder:text-muted/70 hover:border-ink/20 focus:border-brand-500";
+  "w-full min-w-0 rounded-lg border border-line bg-surface px-3 text-base text-ink outline-none sm:text-sm transition-[border-color,box-shadow] placeholder:text-muted/70 hover:border-ink/20 focus:border-brand-500 focus:shadow-[0_0_0_3px_var(--color-brand-100)]";
 
 const AVATAR_TONES = [
   "bg-glossa-50 text-glossa",
@@ -259,16 +259,16 @@ export function Sheet({
       aria-modal
       aria-label={title}
     >
-      <div className="absolute inset-0 animate-fade-in bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="absolute inset-0 animate-fade-in bg-ink/35 backdrop-blur-[2px]" onClick={onClose} />
       <div
         onFocus={revealOnFocus}
         className={clsx(
-          "relative flex max-h-[calc(100%-1.5rem)] w-full animate-slide-up flex-col rounded-t-3xl bg-surface shadow-pop sm:max-h-[88dvh] sm:rounded-2xl",
+          "relative flex max-h-[calc(100%-1.5rem)] w-full animate-slide-up flex-col rounded-t-2xl bg-surface shadow-pop sm:max-h-[88dvh] sm:rounded-xl",
           wide ? "sm:max-w-3xl" : "sm:max-w-lg",
         )}
       >
         <div className="flex items-center justify-between gap-4 border-b border-line-2 px-5 py-4">
-          <h2 className="text-base font-bold">{title}</h2>
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em]">{title}</h2>
           <IconButton label="Κλείσιμο" onClick={onClose}>
             <X className="size-5" />
           </IconButton>
@@ -283,7 +283,7 @@ export function Sheet({
 export function EmptyState({ icon, title, text, action }: { icon: ReactNode; title: string; text?: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center px-6 py-10 text-center">
-      <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-brand-50 text-brand">{icon}</div>
+      <div className="mb-3 flex size-12 items-center justify-center rounded-xl border border-line bg-surface text-brand shadow-card">{icon}</div>
       <p className="font-semibold">{title}</p>
       {text && <p className="mt-1 max-w-sm text-sm text-muted">{text}</p>}
       {action && <div className="mt-4">{action}</div>}
@@ -304,7 +304,7 @@ export function CheckCircle({ checked, tone = "brand" }: { checked: boolean; ton
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-4">
-      <h2 className="text-lg font-bold tracking-tight">{children}</h2>
+      <h2 className="text-lg font-semibold tracking-[-0.02em]">{children}</h2>
       {action}
     </div>
   );

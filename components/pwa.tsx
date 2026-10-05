@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Share } from "lucide-react";
+import { Download, Share } from "@/components/icons";
 import { useEffect, useState } from "react";
 import { toast } from "./toast";
 import { Button } from "./ui";

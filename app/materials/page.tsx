@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { CloudUpload, FolderOpen, Paperclip, Search, Sparkles, Trash2 } from "lucide-react";
+import { CloudUpload, FolderOpen, Paperclip, Search, Sparkles, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { MobileBrandBar, PageHeader } from "@/components/shell/PageHeader";

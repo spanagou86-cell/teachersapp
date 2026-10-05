@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { BookOpenCheck, CalendarCog, Plus, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "lucide-react";
+import { BookOpenCheck, CalendarCog, Plus, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
@@ -48,14 +48,14 @@ function WeekAgenda({ dates, country }: { dates: string[]; country: Country }) {
           return (
             <div key={d} className="flex items-baseline gap-2 border-b border-l border-line bg-bg px-3 py-2.5">
               <span className={clsx("text-xs font-bold tracking-wide", isToday ? "text-brand-500" : "text-muted")}>{dayShort(d)}</span>
-              <span className={clsx("text-xl font-extrabold tabular-nums", isToday && "text-brand-500")}>{dayOfMonth(d)}</span>
+              <span className={clsx("text-xl font-semibold tracking-[-0.02em] tabular-nums", isToday && "text-brand-500")}>{dayOfMonth(d)}</span>
               {isToday && <span className="ml-auto rounded-md bg-brand px-1.5 py-0.5 text-[10px] font-bold text-white">ΣΗΜΕΡΑ</span>}
             </div>
           );
         })}
         {rows.map((r, ri) => (
           <div key={`${r.start}-${r.end}`} className="contents">
-            <div className="border-b border-line-2 bg-bg px-2 py-2 text-[11.5px] font-semibold leading-tight tabular-nums text-muted">
+            <div className="border-b border-line-2 bg-bg px-2 py-2 font-mono text-[11px] font-medium leading-tight tabular-nums text-muted">
               {r.start}
               <br />
               {r.end}
@@ -243,7 +243,7 @@ function YearView({ country, anchor, onPick }: { country: Country; anchor: strin
                       c.wd >= 5 && "text-muted opacity-50",
                       c.holiday && "bg-holiday font-bold line-through",
                       c.term >= 0 && termTint[c.term],
-                      c.d === today && "font-extrabold ring-2 ring-now",
+                      c.d === today && "font-semibold tracking-[-0.02em] ring-2 ring-now",
                     )}
                   >
                     {Number(c.d.slice(8))}
