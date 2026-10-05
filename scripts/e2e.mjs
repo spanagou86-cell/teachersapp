@@ -276,6 +276,35 @@ async function mobileQuality(name) {
   }
 }
 
+/** Cyprus: the school comes from the Ministry list; signing out from the sidebar. */
+async function schoolAndSignOut(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  await page.goto(BASE + "/settings");
+  await page.getByRole("radio", { name: "Κύπρος" }).click();
+  await page.getByText(/άλλαξε σε Κύπρου/).waitFor();
+  await page.getByRole("button", { name: "Το σχολείο σου" }).click();
+  await page.getByRole("textbox", { name: "Αναζήτηση σχολείου" }).fill("λατσιων γ");
+  await page.getByRole("option", { name: /Λατσιών Γ΄/ }).click();
+  await page.waitForTimeout(300);
+  assert((await page.getByRole("button", { name: "Το σχολείο σου" }).innerText()).includes("Δημοτικό Σχολείο Λατσιών Γ΄"), "school picked from the Cyprus list");
+  await page.getByRole("button", { name: "Το σχολείο σου" }).click();
+  await page.getByRole("textbox", { name: "Αναζήτηση σχολείου" }).fill("Ιδιωτικό Σχολείο Ηλιαχτίδα");
+  await page.getByRole("button", { name: /Κράτησε/ }).click();
+  await page.waitForTimeout(300);
+  assert((await page.getByRole("button", { name: "Το σχολείο σου" }).innerText()).includes("Ηλιαχτίδα"), "a school not on the list can be kept as typed");
+  await page.screenshot({ path: path.join(OUT, `${name}-01-settings.png`), fullPage: true });
+  await page.getByRole("button", { name: "Έξοδος από την επίδειξη" }).click();
+  await page.waitForURL("**/login");
+  assert(true, "sidebar sign-out returns to the login page");
+  await ctx.close();
+}
+
 /** Editing everywhere keeps the text: block editor, lesson day/time, delete + undo, student move, school name. */
 async function editingFlow(name) {
   console.log(`\n## ${name}`);
@@ -391,6 +420,7 @@ try {
   await journalFlow("journal");
   await mobileQuality("quality");
   await editingFlow("editing");
+  await schoolAndSignOut("school");
 } finally {
   await browser.close();
 }

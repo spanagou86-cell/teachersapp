@@ -8,6 +8,7 @@ import { InstallRow } from "@/components/pwa";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AutoText } from "@/components/text";
 import { toast } from "@/components/toast";
+import { SchoolPicker } from "@/components/schoolPicker";
 import { Button, Card, cx, Field, inputClass, Segmented, Toggle } from "@/components/ui";
 import { usePrefs } from "@/lib/prefs";
 import { schoolYear, schoolYearStart } from "@/lib/schoolYear";
@@ -121,7 +122,11 @@ export default function SettingsPage() {
             <AutoText value={profile.displayName} onSave={(v) => update({ displayName: v })} maxLength={80} label="Το όνομά σου" placeholder="π.χ. Μαρία Παπαδοπούλου" className={cx(inputClass, "h-11")} />
           </Field>
           <Field label="Το σχολείο σου">
-            <AutoText value={profile.schoolName} onSave={(v) => update({ schoolName: v })} allowEmpty maxLength={120} label="Το σχολείο σου" placeholder="π.χ. 3ο Δημοτικό Σχολείο Πάτρας" className={cx(inputClass, "h-11")} />
+            {country === "cy" ? (
+              <SchoolPicker value={profile.schoolName} onChange={(v) => update({ schoolName: v })} />
+            ) : (
+              <AutoText value={profile.schoolName} onSave={(v) => update({ schoolName: v })} allowEmpty maxLength={120} label="Το σχολείο σου" placeholder="π.χ. 3ο Δημοτικό Σχολείο Πάτρας" className={cx(inputClass, "h-11")} />
+            )}
           </Field>
           <p className="flex items-center gap-1.5 text-[13px] text-muted sm:col-span-2">
             <Check className="size-3.5" /> Αποθηκεύεται αυτόματα · το σχολείο εμφανίζεται στα φύλλα εργασίας και στις εκτυπώσεις
@@ -157,6 +162,36 @@ export default function SettingsPage() {
         />
       </Section>
 
+      <Section title="Λογαριασμός">
+        {mode === "cloud" ? (
+          <Row label={email ?? "Λογαριασμός"} hint="Τα δεδομένα σου συγχρονίζονται σε κινητό και υπολογιστή.">
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                await flushWrites();
+                await supabase().auth.signOut();
+                leave();
+                router.replace("/login");
+              }}
+            >
+              <LogOut className="size-4" /> Αποσύνδεση
+            </Button>
+          </Row>
+        ) : (
+          <Row label="Επίδειξη" hint="Τα δεδομένα είναι δείγματα και μένουν σε αυτόν τον browser.">
+            <Button
+              onClick={() => {
+                leave();
+                router.replace("/login");
+              }}
+            >
+              <LogIn className="size-4" /> Δημιούργησε λογαριασμό
+            </Button>
+          </Row>
+        )}
+        <LinkRow href="/about" icon={<Info />} label="Τι λειτουργεί" hint="Τι είναι έτοιμο και τι έρχεται" />
+      </Section>
+
       <Section title="Σχολική χρονιά">
         <div className="grid gap-2 px-4 py-4 text-[14px]">
           <p>
@@ -188,35 +223,6 @@ export default function SettingsPage() {
         <InstallRow />
       </Section>
 
-      <Section title="Λογαριασμός">
-        {mode === "cloud" ? (
-          <Row label={email ?? "Λογαριασμός"} hint="Τα δεδομένα σου συγχρονίζονται σε κινητό και υπολογιστή.">
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                await flushWrites();
-                await supabase().auth.signOut();
-                leave();
-                router.replace("/login");
-              }}
-            >
-              <LogOut className="size-4" /> Αποσύνδεση
-            </Button>
-          </Row>
-        ) : (
-          <Row label="Επίδειξη" hint="Τα δεδομένα είναι δείγματα και μένουν σε αυτόν τον browser.">
-            <Button
-              onClick={() => {
-                leave();
-                router.replace("/login");
-              }}
-            >
-              <LogIn className="size-4" /> Δημιούργησε λογαριασμό
-            </Button>
-          </Row>
-        )}
-        <LinkRow href="/about" icon={<Info />} label="Τι λειτουργεί" hint="Τι είναι έτοιμο και τι έρχεται" />
-      </Section>
 
       <Section title="Τα δεδομένα σου">
         <Row label="Κατέβασε τα δεδομένα σου" hint="Όλα όσα έχεις καταχωρίσει, σε ένα αρχείο (JSON).">

@@ -1,12 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { Bell, Plus, Search, Settings } from "@/components/icons";
+import { Bell, LogOut, Plus, Search, Settings } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { shortDate } from "@/lib/dates";
-import { useApp } from "@/lib/store";
+import { flushWrites, useApp } from "@/lib/store";
+import { supabase } from "@/lib/supabase/client";
 import { SUBJECTS } from "@/lib/seed";
 import { isBarePath, useSession } from "@/lib/store/session";
 import { trackVisit } from "@/lib/history";
@@ -46,6 +47,17 @@ function Sidebar() {
   const profile = useApp((s) => s.profile);
   const mode = useApp((s) => s.mode);
   const syncing = useApp((s) => s.syncing);
+  const email = useApp((s) => s.email);
+  const leave = useApp((s) => s.leave);
+  const router = useRouter();
+  const signOut = async () => {
+    if (mode === "cloud") {
+      await flushWrites();
+      await supabase().auth.signOut();
+    }
+    leave();
+    router.replace("/login");
+  };
   const item = (active: boolean) =>
     clsx("flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[14px] transition-colors", active ? "bg-surface font-semibold text-ink shadow-[0_0_0_1px_var(--color-line),0_1px_2px_rgb(26_34_56/0.05)]" : "font-medium text-ink-2 hover:bg-line-2");
   return (
@@ -71,13 +83,24 @@ function Sidebar() {
         <Link href="/settings" className={item(pathname.startsWith("/settings"))}>
           <Settings className="size-[18px]" /> Ρυθμίσεις
         </Link>
-        <Link href="/settings" className="mt-2 flex items-center gap-3 border-t border-line px-1.5 pt-4 hover:opacity-80">
-          <Avatar name={profile.displayName || "?"} seed={3} />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold">{profile.displayName || "Λογαριασμός"}</span>
-            <span className="block truncate text-xs text-muted">{mode === "demo" ? "Χωρίς λογαριασμό" : "Ο λογαριασμός μου"}</span>
-          </span>
-        </Link>
+        <div className="mt-2 flex items-center gap-2 border-t border-line px-1.5 pt-4">
+          <Link href="/settings" className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-80">
+            <Avatar name={profile.displayName || "?"} seed={3} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">{profile.displayName || "Λογαριασμός"}</span>
+              <span className="block truncate text-xs text-muted">{mode === "demo" ? "Χωρίς λογαριασμό" : (email ?? "Ο λογαριασμός μου")}</span>
+            </span>
+          </Link>
+          <button
+            type="button"
+            onClick={signOut}
+            aria-label={mode === "demo" ? "Έξοδος από την επίδειξη" : "Αποσύνδεση"}
+            title={mode === "demo" ? "Έξοδος από την επίδειξη" : "Αποσύνδεση"}
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-line-2 hover:text-ink"
+          >
+            <LogOut className="size-[18px]" />
+          </button>
+        </div>
       </div>
     </aside>
   );

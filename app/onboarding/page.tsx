@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/shell/AppShell";
 import { toast } from "@/components/toast";
+import { SchoolPicker } from "@/components/schoolPicker";
 import { Button, Card, cx, Field, IconButton, inputClass, Segmented, Select } from "@/components/ui";
 import { RosterImport } from "@/components/roster";
 import { GrowingTextarea } from "@/components/text";
@@ -79,7 +80,11 @@ export default function OnboardingPage() {
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="π.χ. Σπύρος" className={cx(inputClass, "h-10")} />
           </Field>
           <Field label="Σχολείο">
-            <input value={school} onChange={(e) => setSchool(e.target.value)} maxLength={120} placeholder="π.χ. 5ο Δημοτικό Σχολείο Πατρών" className={cx(inputClass, "h-10")} />
+            {country === "cy" ? (
+              <SchoolPicker value={school} onChange={setSchool} />
+            ) : (
+              <input value={school} onChange={(e) => setSchool(e.target.value)} maxLength={120} placeholder="π.χ. 5ο Δημοτικό Σχολείο Πατρών" className={cx(inputClass, "h-10")} />
+            )}
           </Field>
         </div>
       </Card>
