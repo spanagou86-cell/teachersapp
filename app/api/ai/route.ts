@@ -83,13 +83,14 @@ export async function POST(req: NextRequest) {
             .filter(Boolean)
             .join("\n"),
         });
-        const out = await callTool<{ blocks: unknown[] }>({ system: CREATE_SYSTEM, content, tool: CREATE_TOOL, maxTokens: 8000 });
+        const out = await callTool<{ blocks: unknown[] }>({ tier: "quality", system: CREATE_SYSTEM, content, tool: CREATE_TOOL, maxTokens: 8000 });
         return NextResponse.json(out);
       }
       case "adapt": {
         const blocks = JSON.stringify(body.blocks ?? []);
         if (blocks.length > 60_000) return fail(413, "Το υλικό είναι πολύ μεγάλο για προσαρμογή.");
         const out = await callTool<{ blocks: unknown[]; versionB?: unknown[]; summary: string }>({
+          tier: "quality",
           system: ADAPT_SYSTEM,
           content: [
             {
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest) {
         const file = inlineFile(str("mediaType"), str("data", 16_000_000));
         if (!file) return fail(415, "Ανέβασε φωτογραφία ή PDF της λίστας.");
         const out = await callTool<{ students: unknown[]; className?: string; notes?: string }>({
+          tier: "fast",
           system: ROSTER_SYSTEM,
           content: [file, { type: "text", text: `Τμήμα για το οποίο προορίζεται: ${str("className") || "—"}` }],
           tool: ROSTER_TOOL,
@@ -125,6 +127,7 @@ export async function POST(req: NextRequest) {
         const file = inlineFile(str("mediaType"), str("data", 16_000_000));
         if (!file) return fail(415, "Ανέβασε φωτογραφία ή PDF του προγράμματος.");
         const out = await callTool<{ entries: unknown[]; teacher?: string; notes?: string }>({
+          tier: "fast",
           system: TIMETABLE_SYSTEM,
           content: [
             file,
@@ -147,6 +150,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     if (e instanceof AiError) {
       if (e.status === 413) return fail(413, "Η απάντηση βγήκε πολύ μεγάλη. Δοκίμασε με μικρότερο αρχείο ή λιγότερες σελίδες.");
+      if (e.status === 422) return fail(422, "Το AI δεν μπόρεσε να το φτιάξει. Δοκίμασε άλλη διατύπωση.");
       if (e.status === 503) return fail(503, "Η υπηρεσία AI είναι προσωρινά απασχολημένη. Ξαναδοκίμασε σε λίγο.");
       return fail(502, "Το AI δεν απάντησε σωστά. Ξαναδοκίμασε.");
     }
