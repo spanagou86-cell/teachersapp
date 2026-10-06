@@ -9,7 +9,7 @@ import { uid } from "../id";
 import { applyChange, restoreOriginal, restoreVersion } from "../materials";
 import { carryOverLesson, findConflicts, undoCarryOver, type CarryOverResult, type TimeWindow } from "../schedule";
 import { seed, type SeedState } from "../seed";
-import { isSchoolDay } from "../schoolYear";
+import { CALENDAR_VERSION, isSchoolDay, setLocalHoliday } from "../schoolYear";
 import { materialize } from "../timetable";
 import type {
   Block,
@@ -70,6 +70,8 @@ interface Actions {
   updateProfile: (p: Partial<Profile>) => void;
   /** Changes country and moves the calendar to its holidays. */
   setCountry: (country: Profile["country"]) => Promise<void>;
+  /** The school's feast day ("MM-DD", or nothing): lessons that day are taken off the calendar. */
+  setLocalHoliday: (mmdd: string | undefined) => Promise<void>;
   addClass: (c: Omit<ClassGroup, "id">) => string;
   updateClass: (c: ClassGroup) => void;
   deleteClass: (id: string) => void;
@@ -77,7 +79,8 @@ interface Actions {
   /** Names already split into first and last (e.g. read from a photo of the class list). */
   addStudentRecords: (classId: string, list: { firstName: string; lastName: string }[]) => void;
   renameStudent: (s: Student) => void;
-  removeStudent: (id: string) => void;
+  /** Removes a pupil; returns the «Αναίρεση» that brings them back (within a few seconds). */
+  removeStudent: (id: string) => (() => void) | undefined;
   saveTimetable: (entries: TimetableEntry[]) => Promise<void>;
 
   toggleTask: (id: string) => void;
@@ -116,7 +119,8 @@ interface Actions {
   restoreOriginal: (id: string) => void;
   patchMaterial: (id: string, patch: Partial<Pick<Material, "title" | "withSolutions" | "blackAndWhite" | "classId" | "subjectId" | "kind" | "level">>) => void;
   duplicateMaterial: (id: string, blocks: Block[], suffix: string) => string;
-  deleteMaterial: (id: string) => void;
+  /** Deletes a material; returns the «Αναίρεση» that brings it back (within a few seconds). */
+  deleteMaterial: (id: string) => (() => void) | undefined;
 
   addNote: (classId: string, text: string) => void;
   deleteNote: (id: string) => void;
@@ -144,7 +148,7 @@ export function athensClock(d = new Date()): { today: ISODate; now: HHMM } {
   return { today: `${parts.year}-${parts.month}-${parts.day}`, now: `${parts.hour}:${parts.minute}` };
 }
 
-const EMPTY: Omit<SeedState, "subjects"> = {
+const EMPTY: SeedState = {
   classes: [],
   students: [],
   slots: [],
@@ -160,6 +164,9 @@ const EMPTY: Omit<SeedState, "subjects"> = {
 const DEMO_PROFILE: Profile = { displayName: "Σπύρος", schoolName: "3ο Δημοτικό Σχολείο Πάτρας", onboarded: true, country: "gr" };
 
 const noteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** How long «Αναίρεση» can bring back something deleted. */
+const UNDO_MS = 8000;
 
 /** Resolves when every queued database write has finished. */
 export let flushWrites: () => Promise<unknown> = () => Promise.resolve();
@@ -197,7 +204,30 @@ export const useApp = create<AppState>()(
             if (--pending === 0) set({ syncing: false });
           });
       };
+      // Deletions reach the database a few seconds late, so «Αναίρεση» can still bring things back.
+      const deferred = new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>();
+      const later = (key: string, cloud: () => Promise<unknown>, local?: () => unknown) => {
+        const run = () => (get().mode === "cloud" ? sync(cloud) : void local?.());
+        deferred.set(key, {
+          run,
+          timer: setTimeout(() => {
+            deferred.delete(key);
+            run();
+          }, UNDO_MS),
+        });
+      };
+      /** False when the write already went out (too late to undo). */
+      const cancel = (key: string) => {
+        const d = deferred.get(key);
+        if (d) clearTimeout(d.timer);
+        return deferred.delete(key);
+      };
       flushWrites = () => {
+        for (const [key, d] of deferred) {
+          clearTimeout(d.timer);
+          deferred.delete(key);
+          d.run();
+        }
         // Notes still waiting for a pause in typing go out now.
         for (const [id, timer] of noteTimers) {
           clearTimeout(timer);
@@ -209,7 +239,7 @@ export const useApp = create<AppState>()(
       };
       if (typeof window !== "undefined")
         window.addEventListener("beforeunload", (e) => {
-          if (pending > 0 || noteTimers.size > 0) {
+          if (pending > 0 || noteTimers.size > 0 || deferred.size > 0) {
             void flushWrites();
             e.preventDefault();
           }
@@ -217,6 +247,30 @@ export const useApp = create<AppState>()(
       const reload = async () => {
         const { userId, email } = get();
         if (userId) await get().loadCloud(userId, email);
+      };
+      /** A new country or feast day: lessons on the new days off go, unless the teacher already worked on them. */
+      const changeCalendar = async (p: Pick<Profile, "country"> | Pick<Profile, "localHoliday">) => {
+        const { mode, today, now, timetable } = get();
+        set((s) => ({ profile: { ...s.profile, ...p } }));
+        setLocalHoliday(get().profile.localHoliday);
+        const country = get().profile.country;
+        if (mode === "cloud") {
+          await flushWrites();
+          set({ syncing: true });
+          try {
+            await remote.updateProfile(get().userId!, p);
+            await remote.applyCalendar(timetable, today, now, country);
+          } finally {
+            await reload().catch(() => undefined);
+            set({ syncing: false });
+          }
+          return;
+        }
+        const untouched = (x: LessonSlot) => x.status === "planned" && !x.taughtNote && !x.topic && !x.materialIds.length && !x.carriedFromId && !x.carriedToId;
+        set((s) => ({
+          slots: s.slots.filter((x) => x.date < today || isSchoolDay(country, x.date) || !untouched(x)),
+          blocks: s.blocks.filter((b) => b.date < today || isSchoolDay(country, b.date)),
+        }));
       };
 
       return {
@@ -232,8 +286,26 @@ export const useApp = create<AppState>()(
         loadCloud: async (userId, email) => {
           const clock = athensClock();
           let data = await loadAll(userId, clock.today);
-          // A new school year (or days missing after an interruption): fill the calendar from the template.
-          if (data.timetable.length && (await remote.fillYear(data.timetable, clock.today, clock.now, data.profile.country)) > 0) data = await loadAll(userId, clock.today);
+          setLocalHoliday(data.profile.localHoliday);
+          if (data.timetable.length) {
+            // The calendar rules changed since this device last looked (a fixed holiday list,
+            // a new feast day): take untouched lessons off the new days off and fill the rest.
+            const key = `taxi-calendar:${userId}`;
+            const sig = `${CALENDAR_VERSION}:${data.profile.country}:${data.profile.localHoliday ?? ""}`;
+            let stored: string | null = null;
+            try {
+              stored = localStorage.getItem(key);
+            } catch {}
+            if (stored !== sig) {
+              await remote.applyCalendar(data.timetable, clock.today, clock.now, data.profile.country);
+              try {
+                localStorage.setItem(key, sig);
+              } catch {}
+              data = await loadAll(userId, clock.today);
+            }
+            // A new school year (or days missing after an interruption): fill the calendar from the template.
+            else if ((await remote.fillYear(data.timetable, clock.today, clock.now, data.profile.country)) > 0) data = await loadAll(userId, clock.today);
+          }
           set({ ...data, mode: "cloud", userId, email, ...clock });
         },
         leave: () => set({ ...seed(), mode: null, userId: undefined, email: undefined, today: DEMO_TODAY, now: DEMO_NOW, profile: DEMO_PROFILE }),
@@ -245,26 +317,12 @@ export const useApp = create<AppState>()(
         },
 
         setCountry: async (country) => {
-          const { mode, today, now, timetable } = get();
           if (country === get().profile.country) return;
-          set((s) => ({ profile: { ...s.profile, country } }));
-          if (mode === "cloud") {
-            await flushWrites();
-            set({ syncing: true });
-            try {
-              await remote.updateProfile(get().userId!, { country });
-              await remote.changeCountry(timetable, today, now, country);
-            } finally {
-              await reload().catch(() => undefined);
-              set({ syncing: false });
-            }
-            return;
-          }
-          const untouched = (x: LessonSlot) => x.status === "planned" && !x.taughtNote && !x.topic && !x.materialIds.length && !x.carriedFromId && !x.carriedToId;
-          set((s) => ({
-            slots: s.slots.filter((x) => x.date < today || isSchoolDay(country, x.date) || !untouched(x)),
-            blocks: s.blocks.filter((b) => b.date < today || isSchoolDay(country, b.date)),
-          }));
+          await changeCalendar({ country });
+        },
+        setLocalHoliday: async (mmdd) => {
+          if (mmdd === get().profile.localHoliday) return;
+          await changeCalendar({ localHoliday: mmdd });
         },
         updateProfile: (p) => {
           set((s) => ({ profile: { ...s.profile, ...p } }));
@@ -317,8 +375,16 @@ export const useApp = create<AppState>()(
           sync(() => remote.updateStudent(st));
         },
         removeStudent: (id) => {
+          const at = get().students.findIndex((x) => x.id === id);
+          if (at < 0) return undefined;
+          const student = get().students[at];
           set((s) => ({ students: s.students.filter((x) => x.id !== id) }));
-          sync(() => remote.deleteStudent(id));
+          const key = `student:${id}`;
+          later(key, () => remote.deleteStudent(id));
+          return () => {
+            if (!cancel(key)) return;
+            set((s) => ({ students: s.students.some((x) => x.id === id) ? s.students : [...s.students.slice(0, at), student, ...s.students.slice(at)] }));
+          };
         },
         saveTimetable: async (entries) => {
           const { mode, today, now, timetable: previous } = get();
@@ -607,16 +673,29 @@ export const useApp = create<AppState>()(
           return newId;
         },
         deleteMaterial: (id) => {
-          const m = get().materials.find((x) => x.id === id);
-          if (!m) return;
+          const at = get().materials.findIndex((x) => x.id === id);
+          if (at < 0) return undefined;
+          const m = get().materials[at];
+          const linked = new Set(get().slots.filter((x) => x.materialIds.includes(id)).map((x) => x.id));
           const shared = get().materials.some((x) => x.id !== id && x.file && (x.file.blobKey ?? x.file.path) === (m.file?.blobKey ?? m.file?.path));
-          if (get().mode !== "cloud" && m.file?.blobKey && !shared) void deleteBlob(m.file.blobKey);
           set((s) => ({
             materials: s.materials.filter((x) => x.id !== id),
-            slots: s.slots.map((x) => ({ ...x, materialIds: x.materialIds.filter((mid) => mid !== id) })),
+            slots: s.slots.map((x) => (linked.has(x.id) ? { ...x, materialIds: x.materialIds.filter((mid) => mid !== id) } : x)),
           }));
-          // A version B copy shares the uploaded file; keep it while another material uses it.
-          sync(() => remote.deleteMaterial(shared ? { ...m, file: undefined } : m));
+          const key = `material:${id}`;
+          later(
+            key,
+            // A copy (second version) shares the uploaded file; keep it while another material uses it.
+            () => remote.deleteMaterial(shared ? { ...m, file: undefined } : m),
+            () => m.file?.blobKey && !shared && deleteBlob(m.file.blobKey),
+          );
+          return () => {
+            if (!cancel(key)) return;
+            set((s) => ({
+              materials: s.materials.some((x) => x.id === id) ? s.materials : [...s.materials.slice(0, at), m, ...s.materials.slice(at)],
+              slots: s.slots.map((x) => (linked.has(x.id) && !x.materialIds.includes(id) ? { ...x, materialIds: [...x.materialIds, id] } : x)),
+            }));
+          };
         },
 
         addNote: (classId, text) => {
@@ -655,5 +734,9 @@ export const useApp = create<AppState>()(
     },
   ),
 );
+
+// The calendar follows the teacher's feast day wherever the profile comes from (saved demo, account).
+setLocalHoliday(useApp.getState().profile.localHoliday);
+useApp.subscribe((s) => setLocalHoliday(s.profile.localHoliday));
 
 export const attendanceFor = (s: AppState, classId: string, date: string) => s.attendance[attendanceKey(classId, date)];

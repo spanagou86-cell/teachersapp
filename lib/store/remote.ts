@@ -161,6 +161,8 @@ export interface CloudData {
 /** Everything a teacher needs, in one round of parallel requests. */
 export async function loadAll(userId: string, today: string): Promise<CloudData> {
   const db = supabase();
+  // The school's feast day is a personal setting kept with the account itself.
+  const meta = (await db.auth.getSession()).data.session?.user.user_metadata;
   const from = addDays(today, -120);
   const to = addDays(today, 240);
   const [profile, classes, students, slotRows, links, entries, materials, versions, attendance, tasks, notes, studentNotes] = await Promise.all([
@@ -198,7 +200,13 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
 
   return {
     profile: profile
-      ? { displayName: profile.display_name, schoolName: profile.school_name, onboarded: profile.onboarded, country: profile.country as Country }
+      ? {
+          displayName: profile.display_name,
+          schoolName: profile.school_name,
+          onboarded: profile.onboarded,
+          country: profile.country as Country,
+          localHoliday: typeof meta?.local_holiday === "string" ? meta.local_holiday : undefined,
+        }
       : { displayName: "", schoolName: "", onboarded: false, country: "gr" },
     classes: (classes as { id: string; name: string; grade: string; room: string }[]).map((c) => ({ ...c })),
     students: (students as { id: string; class_id: string; first_name: string; last_name: string }[]).map((s) => ({
@@ -308,18 +316,19 @@ export const remote = {
     await db().auth.signOut();
   },
 
-  updateProfile: (userId: string, p: Partial<Profile>) =>
-    run(
-      db()
-        .from("profiles")
-        .update({
-          ...(p.displayName !== undefined && { display_name: p.displayName }),
-          ...(p.schoolName !== undefined && { school_name: p.schoolName }),
-          ...(p.onboarded !== undefined && { onboarded: p.onboarded }),
-          ...(p.country !== undefined && { country: p.country }),
-        })
-        .eq("id", userId),
-    ),
+  updateProfile: async (userId: string, p: Partial<Profile>) => {
+    if ("localHoliday" in p) {
+      const { error } = await db().auth.updateUser({ data: { local_holiday: p.localHoliday ?? null } });
+      if (error) throw new Error(error.message);
+    }
+    const row = {
+      ...(p.displayName !== undefined && { display_name: p.displayName }),
+      ...(p.schoolName !== undefined && { school_name: p.schoolName }),
+      ...(p.onboarded !== undefined && { onboarded: p.onboarded }),
+      ...(p.country !== undefined && { country: p.country }),
+    };
+    if (Object.keys(row).length) await run(db().from("profiles").update(row).eq("id", userId));
+  },
 
   upsertClass: (c: ClassGroup) => run(db().from("classes").upsert({ id: c.id, name: c.name, grade: c.grade, room: c.room })),
   deleteClass: (id: string) => run(db().from("classes").delete().eq("id", id)),
@@ -566,8 +575,8 @@ export const remote = {
     return rows.length;
   },
 
-  /** After a change of country: drop untouched lessons on the new country's holidays, add the missing days. */
-  changeCountry: async (entries: TimetableEntry[], today: string, now: string, country: Country) => {
+  /** After a change of calendar (country, feast day, new rules): drop untouched lessons on days off, add the missing days. */
+  applyCalendar: async (entries: TimetableEntry[], today: string, now: string, country: Country) => {
     const future = await all<FutureSlot>((a, b) => db().from("lesson_slots").select(FUTURE_COLS).gte("date", today).range(a, b));
     await deleteUntouched(future.filter((s) => !isSchoolDay(country, s.date)));
     await remote.fillYear(entries, today, now, country);

@@ -12,7 +12,8 @@ interface Toast {
 
 const useToasts = create<{ items: Toast[]; push: (t: Omit<Toast, "id">) => void; dismiss: (id: number) => void }>((set) => ({
   items: [],
-  push: (t) => set((s) => ({ items: [...s.items.slice(-2), { ...t, id: Date.now() + Math.random() }] })),
+  // One message at a time: the newest replaces the one on screen.
+  push: (t) => set(() => ({ items: [{ ...t, id: Date.now() + Math.random() }] })),
   dismiss: (id) => set((s) => ({ items: s.items.filter((x) => x.id !== id) })),
 }));
 

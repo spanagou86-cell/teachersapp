@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, CalendarArrowUp, CalendarCog, Check, CloudUpload, CornerDownRight, FilePlus2, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "@/components/icons";
+import { AlertTriangle, ArrowRight, CalendarArrowUp, CalendarClock, CalendarCog, Check, CloudUpload, CornerDownRight, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -11,7 +11,8 @@ import { AutoText, GrowingTextarea } from "@/components/text";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { FileBadge, SubjectIcon } from "@/components/subject";
 import { toast } from "@/components/toast";
-import { Button, ButtonLink, Card, cx, EmptyState, inputClass, Segmented, Sheet } from "@/components/ui";
+import { Button, ButtonLink, buttonClass, Card, cx, EmptyState, inputClass, Segmented, Sheet } from "@/components/ui";
+import { openPrepare, PrepareTiles } from "@/components/prepare";
 import { UploadTrigger } from "@/components/upload";
 import { addDays, dayName, dayShort, dayOfMonth, longDate, shortDate, timeToMin, weekday } from "@/lib/dates";
 import { KIND_LABEL } from "@/lib/materials";
@@ -19,6 +20,7 @@ import { findConflicts, sortSlots } from "@/lib/schedule";
 import { holidayOn, type Country } from "@/lib/schoolYear";
 import { kindLabel, periodsFrom } from "@/lib/timetable";
 import { attendanceFor, useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import type { LessonSlot, LessonStatus, TimeBlock } from "@/lib/types";
 
 const NOTE_MAX = 2000;
@@ -38,8 +40,8 @@ function CarryOverPanel({ slot }: { slot: LessonSlot }) {
   const { today, now } = useClock();
   // Κενά don't block a move; παιδονομία and συσκέψεις do.
   const slots = useMemo(() => [...lessons, ...blocks.filter((b) => b.kind !== "free")], [lessons, blocks]);
-  const PERIODS = useMemo(() => periodsFrom(timetable.filter((e) => e.kind === "lesson" || e.kind === "free")), [timetable]);
-  const subjects = useApp((s) => s.subjects);
+  const PERIODS = useMemo(() => periodsFrom(timetable.filter((e) => e.kind === "lesson" || e.kind === "free"), country), [timetable, country]);
+  const subjects = useSubjects();
   const carryOver = useApp((s) => s.carryOver);
   const undo = useApp((s) => s.undoCarryOver);
   const days = useMemo(() => schoolDays(today, 10, country), [today, country]);
@@ -81,7 +83,7 @@ function CarryOverPanel({ slot }: { slot: LessonSlot }) {
           }}
           className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand-100"
         >
-          <Sparkles className="size-3.5" /> Πρώτη ελεύθερη ώρα: {dayName(firstFree.date)} {firstFree.start}
+          <CalendarClock className="size-3.5" /> Πρώτη ελεύθερη ώρα: {dayName(firstFree.date)} {firstFree.start}
         </button>
       )}
       <div className="scrollbar-none -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
@@ -198,7 +200,7 @@ function TaughtCard({ slot, future, withStatus }: { slot: LessonSlot; future: bo
     <Card className="p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-lg font-bold">{withStatus ? "Πώς πήγε" : "Τι κάναμε"}</h2>
-        {needsLog(slot, clock) && <span className="rounded-md bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger">Εκκρεμεί καταγραφή</span>}
+        {needsLog(slot, clock) && <span className="rounded-md bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger">Πώς πήγε;</span>}
       </div>
       {withStatus && (
         <Segmented<LessonStatus>
@@ -241,7 +243,7 @@ export default function LessonPage() {
   const { id } = useParams<{ id: string }>();
   const slot = useApp((s) => s.slots.find((x) => x.id === id));
   const slots = useApp((s) => s.slots);
-  const subject = useApp((s) => s.subjects.find((x) => x.id === slot?.subjectId));
+  const subject = useSubjects().find((x) => x.id === slot?.subjectId);
   const cls = useApp((s) => s.classes.find((x) => x.id === slot?.classId));
   const allStudents = useApp((s) => s.students);
   const students = allStudents.filter((x) => x.classId === slot?.classId);
@@ -358,6 +360,23 @@ export default function LessonPage() {
       <div className="mx-auto grid max-w-3xl grid-cols-1 gap-5">
         {stage === "before" && (
           <>
+            <Card className="p-5">
+              <div className="mb-4 flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
+                  <Sparkles className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold">Ετοίμασε για αυτό το μάθημα</h2>
+                  <p className="text-sm text-muted">
+                    {slot.topic ? `«${slot.topic}», ${cls.grade}.` : "Γράψε θέμα πάνω, για πιο στοχευμένο υλικό."} Ό,τι φτιάξεις μπαίνει μόνο του στο μάθημα.
+                  </p>
+                </div>
+              </div>
+              <PrepareTiles compact onPick={(kind) => openPrepare({ slotId: slot.id, kind })} />
+              <button type="button" onClick={() => openPrepare({ slotId: slot.id })} className="mt-3 text-sm font-semibold text-brand-500 hover:underline">
+                Από φωτογραφία βιβλίου ή με δική σου οδηγία
+              </button>
+            </Card>
             {previous && previous.id !== carriedFrom?.id && (
               <Card className="p-5">
                 <p className="text-xs font-semibold text-muted">
@@ -396,16 +415,13 @@ export default function LessonPage() {
                   ))}
                 </ul>
               )}
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <Button variant="secondary" onClick={() => setAttachOpen(true)}>
-                  <Paperclip className="size-4" /> Από βιβλιοθήκη
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setAttachOpen(true)}>
+                  <Paperclip className="size-4" /> Από τη βιβλιοθήκη
                 </Button>
-                <UploadTrigger slotId={slot.id} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold hover:bg-line-2">
-                  <CloudUpload className="size-4" /> Ανέβασμα
+                <UploadTrigger slotId={slot.id} className={buttonClass("secondary", "sm")}>
+                  <CloudUpload className="size-4" /> Ανέβασμα αρχείου
                 </UploadTrigger>
-                <ButtonLink href={`/materials/new?slot=${slot.id}`} variant="soft">
-                  <FilePlus2 className="size-4" /> Νέο με AI
-                </ButtonLink>
               </div>
             </Card>
           </>
@@ -418,7 +434,7 @@ export default function LessonPage() {
                 <h2 className="text-lg font-bold">Παρουσίες</h2>
                 {!future && (
                   <ButtonLink href={`/classes/${slot.classId}?date=${slot.date}`} variant="secondary" size="sm">
-                    <UserCheck className="size-4" /> {attendance ? "Επεξεργασία" : "Καταγραφή"}
+                    <UserCheck className="size-4" /> {attendance ? "Αλλαγή" : "Παρουσίες"}
                   </ButtonLink>
                 )}
               </div>
@@ -436,7 +452,7 @@ export default function LessonPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted">{future ? "Θα καταγραφούν την ημέρα του μαθήματος." : "Δεν έχουν καταγραφεί ακόμη."}</p>
+                <p className="text-sm text-muted">{future ? "Παίρνονται την ημέρα του μαθήματος." : "Δεν έχουν παρθεί ακόμη."}</p>
               )}
             </Card>
             {linked.length > 0 && (

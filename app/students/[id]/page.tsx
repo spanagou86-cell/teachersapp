@@ -39,9 +39,8 @@ function EditStudentSheet({ student, onClose }: { student: Student; onClose: () 
             variant="danger"
             aria-label="Διαγραφή μαθητή"
             onClick={() => {
-              if (!confirm(`Διαγραφή του/της ${student.firstName} ${student.lastName}; Θα σβηστούν και οι σημειώσεις του/της.`)) return;
-              remove(student.id);
-              toast("Ο μαθητής διαγράφηκε");
+              const undo = remove(student.id);
+              toast(`Διαγράφηκε: ${student.firstName} ${student.lastName}`, undo && { label: "Αναίρεση", run: undo });
               router.replace(`/classes/${student.classId}?tab=students`);
             }}
           >
@@ -179,7 +178,7 @@ export default function StudentPage() {
             onClick={() => {
               addNote(student.id, kind, text.trim());
               setText("");
-              toast(kind === "parent" ? "Η επαφή καταγράφηκε" : "Η σημείωση αποθηκεύτηκε");
+              toast(kind === "parent" ? "Η επαφή αποθηκεύτηκε" : "Η σημείωση αποθηκεύτηκε");
             }}
           >
             Προσθήκη

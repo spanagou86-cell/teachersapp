@@ -1,16 +1,19 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, Coffee, CornerDownRight, MessagesSquare, Paperclip, ShieldCheck, Users } from "@/components/icons";
+import { ArrowRight, Coffee, CornerDownRight, MessagesSquare, Paperclip, ShieldCheck, Sparkles, Users } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { timeToMin } from "@/lib/dates";
 import { dutyLabel } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import type { LessonSlot, LessonStatus, TimeBlock } from "@/lib/types";
 import { needsLog, StatusPill, useClock } from "./lesson";
 import { SUBJECT_STYLE } from "./subject";
+import { openPrepare } from "./prepare";
 import { toast } from "./toast";
+import { buttonClass } from "./ui";
 
 type Entry = { kind: "lesson"; slot: LessonSlot } | { kind: "block"; block: TimeBlock };
 
@@ -36,7 +39,7 @@ function LogButtons({ slot }: { slot: LessonSlot }) {
   const updateSlot = useApp((s) => s.updateSlot);
   const set = (status: LessonStatus) => {
     updateSlot(slot.id, { status });
-    toast(status === "done" ? "Καταγράφηκε: έγινε" : status === "partial" ? "Καταγράφηκε: μερικώς" : "Καταγράφηκε: δεν έγινε", {
+    toast(status === "done" ? "Σημειώθηκε: έγινε" : status === "partial" ? "Σημειώθηκε: μερικώς" : "Σημειώθηκε: δεν έγινε", {
       label: "Αναίρεση",
       run: () => updateSlot(slot.id, { status: "planned" }),
     });
@@ -51,8 +54,8 @@ function LogButtons({ slot }: { slot: LessonSlot }) {
   );
 }
 
-function LessonItem({ slot, highlight, minutesTo }: { slot: LessonSlot; highlight: boolean; minutesTo?: number }) {
-  const subject = useApp((s) => s.subjects.find((x) => x.id === slot.subjectId));
+function LessonItem({ slot, highlight, minutesTo, ai }: { slot: LessonSlot; highlight: boolean; minutesTo?: number; ai?: boolean }) {
+  const subject = useSubjects().find((x) => x.id === slot.subjectId);
   const cls = useApp((s) => s.classes.find((x) => x.id === slot.classId));
   const students = useApp((s) => s.students);
   const clock = useClock();
@@ -87,9 +90,16 @@ function LessonItem({ slot, highlight, minutesTo }: { slot: LessonSlot; highligh
             <Users className="size-3" /> {count} {count === 1 ? "μαθητής" : "μαθητές"}
           </span>
         </div>
-        <Link href={`/lessons/${slot.id}`} className="mt-1 inline-flex h-10 w-fit items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover">
-          Άνοιγμα μαθήματος <ArrowRight className="size-4" />
-        </Link>
+        <div className="mt-1 grid gap-2 sm:flex sm:flex-wrap">
+          {ai && (
+            <button type="button" onClick={() => openPrepare({ slotId: slot.id })} className={buttonClass(slot.materialIds.length ? "secondary" : "primary", "md")}>
+              <Sparkles className="size-4" /> {slot.materialIds.length ? "Ετοίμασε κι άλλο" : "Ετοίμασε υλικό"}
+            </button>
+          )}
+          <Link href={`/lessons/${slot.id}`} className={buttonClass(ai && !slot.materialIds.length ? "secondary" : "primary", "md")}>
+            Άνοιγμα μαθήματος <ArrowRight className="size-4" />
+          </Link>
+        </div>
       </div>
     );
 
@@ -136,8 +146,8 @@ function BlockItem({ block }: { block: TimeBlock }) {
   );
 }
 
-/** A day as a timeline: lessons, εφημερία/παιδονομία, κενά, and a "now" line on today. */
-export function Timeline({ date, empty }: { date: string; empty?: ReactNode }) {
+/** A day as a timeline: lessons, εφημερία/παιδονομία, κενά, and a "now" line on today. `ai` adds «Ετοίμασε» to the next lesson. */
+export function Timeline({ date, empty, ai }: { date: string; empty?: ReactNode; ai?: boolean }) {
   const slots = useApp((s) => s.slots);
   const blocks = useApp((s) => s.blocks);
   const { today, now } = useClock();
@@ -157,7 +167,7 @@ export function Timeline({ date, empty }: { date: string; empty?: ReactNode }) {
   const showNow = isToday && nowMin >= timeToMin(entries[0].start) - 60 && nowMin <= timeToMin(entries.at(-1)!.end);
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-1 gap-2">
       {entries.map((e, i) => (
         <div key={e.kind === "lesson" ? e.slot.id : e.block.id} className="contents">
           {showNow && i === nowIndex && <NowLine now={now} />}
@@ -165,7 +175,7 @@ export function Timeline({ date, empty }: { date: string; empty?: ReactNode }) {
             <Times start={e.start} end={e.end} strong={e === nextLesson} />
             <div className="min-w-0 flex-1">
               {e.kind === "lesson" ? (
-                <LessonItem slot={e.slot} highlight={e === nextLesson} minutesTo={timeToMin(e.start) - nowMin} />
+                <LessonItem slot={e.slot} highlight={e === nextLesson} minutesTo={timeToMin(e.start) - nowMin} ai={ai} />
               ) : (
                 <BlockItem block={e.block} />
               )}
@@ -175,28 +185,5 @@ export function Timeline({ date, empty }: { date: string; empty?: ReactNode }) {
       ))}
       {showNow && nowIndex === -1 && <NowLine now={now} />}
     </div>
-  );
-}
-
-/** Progress ring for "how many of today's finished lessons are logged". */
-export function LogRing({ done, total }: { done: number; total: number }) {
-  const r = 16;
-  const c = 2 * Math.PI * r;
-  const frac = total ? done / total : 0;
-  return (
-    <svg viewBox="0 0 40 40" className="size-10 shrink-0" aria-hidden>
-      <circle cx="20" cy="20" r={r} fill="none" stroke="var(--color-line)" strokeWidth="5" />
-      <circle
-        cx="20"
-        cy="20"
-        r={r}
-        fill="none"
-        stroke="var(--color-brand-500)"
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeDasharray={`${c * frac} ${c}`}
-        transform="rotate(-90 20 20)"
-      />
-    </svg>
   );
 }

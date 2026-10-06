@@ -13,25 +13,15 @@ import { dutyLabel, yearFor } from "@/lib/schoolYear";
 import { aiReadTimetable, shrinkImage, toBase64 } from "@/lib/ai/client";
 import { gradeFromName, planImport } from "@/lib/ai/timetableImport";
 import { useApp } from "@/lib/store";
-import { isValidTime, kindLabel, overlappingEntries, periodsFrom, type Period } from "@/lib/timetable";
+import { useSubjects } from "@/lib/store/hooks";
+import { BELLS, isValidTime, kindLabel, overlappingEntries, PERIOD_MINUTES, periodsFrom, type Period } from "@/lib/timetable";
 import { shortDate, timeToMin } from "@/lib/dates";
 import type { SubjectId, TimetableEntry } from "@/lib/types";
+import { subjectChoices } from "@/lib/subjects";
 
 const DAYS = ["Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή"];
 const DAYS_SHORT = ["ΔΕΥ", "ΤΡΙ", "ΤΕΤ", "ΠΕΜ", "ΠΑΡ"];
 const DUTY_PLACES = ["Αυλή", "Είσοδος", "Διάδρομος", "Κλίμακα", "Κυλικείο"];
-
-/** A typical primary-school day, breaks included so yard duty has a row. */
-const DEFAULT_ROWS: Period[] = [
-  { start: "08:15", end: "09:00" },
-  { start: "09:00", end: "09:45" },
-  { start: "09:45", end: "10:05" },
-  { start: "10:05", end: "10:50" },
-  { start: "10:50", end: "11:35" },
-  { start: "11:35", end: "11:50" },
-  { start: "11:50", end: "12:35" },
-  { start: "12:35", end: "13:15" },
-];
 
 type Kind = TimetableEntry["kind"] | "none";
 interface Cell {
@@ -48,7 +38,7 @@ interface Row extends Period {
 function CellView({ cell, onClick, label }: { cell?: Cell; onClick: () => void; label: string }) {
   const country = useApp((s) => s.profile.country);
   const classes = useApp((s) => s.classes);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const base = "flex h-14 w-full flex-col items-start justify-center rounded-lg border px-2 text-left text-xs leading-tight transition hover:shadow-pop";
   if (!cell)
     return (
@@ -97,7 +87,7 @@ function CellEditor({
   onSave: (c: Cell | undefined) => void;
 }) {
   const classes = useApp((s) => s.classes);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const country = useApp((s) => s.profile.country);
   const [kind, setKind] = useState<Kind>(cell?.kind ?? "lesson");
   const [classId, setClassId] = useState(cell?.classId ?? classes[0]?.id ?? "");
@@ -153,7 +143,7 @@ function CellEditor({
               </Field>
               <Field label="Μάθημα">
                 <Select value={subjectId} onChange={(e) => setSubjectId(e.target.value as SubjectId)}>
-                  {subjects.map((s) => (
+                  {subjectChoices(subjects, subjectId).map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
@@ -201,7 +191,7 @@ function Editor() {
   const [readNotes, setReadNotes] = useState("");
 
   const initialRows = useMemo<Row[]>(
-    () => (timetable.length ? periodsFrom(timetable) : DEFAULT_ROWS).map((p) => ({ ...p, key: uid() })),
+    () => (timetable.length ? periodsFrom(timetable) : BELLS[country]).map((p) => ({ ...p, key: uid() })),
     // Only on first render: later edits live in local state until saved.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -240,8 +230,8 @@ function Editor() {
   };
   const addRow = () => {
     const last = rows.at(-1);
-    const start = last?.end ?? "08:15";
-    const m = timeToMin(start) + 45;
+    const start = last?.end ?? BELLS[country][0].start;
+    const m = timeToMin(start) + PERIOD_MINUTES[country];
     const end = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
     setRows((rs) => [...rs, { key: uid(), start, end }]);
   };
@@ -259,7 +249,7 @@ function Editor() {
       if (blob.size > 3_000_000) return toast("Το αρχείο είναι μεγάλο. Δοκίμασε φωτογραφία ή PDF μιας σελίδας.");
       const mediaType = isPdf ? "application/pdf" : blob.type === "image/jpeg" || blob.type === "image/png" || blob.type === "image/webp" ? blob.type : "";
       if (!mediaType) return toast("Αυτή η φωτογραφία δεν διαβάζεται. Τράβηξέ τη ξανά από την κάμερα ή στείλε τη ως JPG.");
-      const r = await aiReadTimetable({ data: await toBase64(blob), mediaType }, teacher, allClasses.map((c) => c.name));
+      const r = await aiReadTimetable({ data: await toBase64(blob), mediaType }, teacher, allClasses.map((c) => c.name), country);
       if (!r.ok) return toast(r.error);
       const plan = planImport(r.data.entries, allClasses);
       const created = new Map<string, string>();

@@ -1,7 +1,7 @@
 "use client";
 
 import { uid } from "../id";
-import type { Block, Level } from "../types";
+import type { Block, Level, Variant } from "../types";
 import { adaptMaterial, type AdaptInput, type AdaptResult, type QuickAction } from "./mock";
 
 /** What the browser gets back from /api/ai. */
@@ -21,6 +21,14 @@ async function post<T>(body: object): Promise<AiAnswer<T>> {
 
 const LEVELS: Level[] = ["basic", "standard", "advanced"];
 
+function variant(raw: unknown): Variant | undefined {
+  const r = raw as Record<string, unknown> | undefined;
+  const text = typeof r?.text === "string" ? r.text.trim().slice(0, 4000) : "";
+  if (!text) return undefined;
+  const answer = typeof r?.answer === "string" ? r.answer.trim().slice(0, 2000) : "";
+  return answer ? { text, answer } : { text };
+}
+
 /** Model output → safe blocks: known types, trimmed text, fresh ids where needed. */
 export function cleanBlocks(raw: unknown, keep: Set<string> = new Set()): Block[] {
   if (!Array.isArray(raw)) return [];
@@ -39,6 +47,11 @@ export function cleanBlocks(raw: unknown, keep: Set<string> = new Set()): Block[
       if (typeof r.answer === "string" && r.answer.trim()) block.answer = r.answer.trim().slice(0, 2000);
       block.lines = typeof r.lines === "number" ? Math.max(0, Math.min(12, Math.round(r.lines))) : 2;
       if (LEVELS.includes(r.level as Level)) block.level = r.level as Level;
+      // Three levels of the same exercise: the block's own wording is the middle one.
+      const basic = variant(r.basic);
+      const advanced = variant(r.advanced);
+      if (basic || advanced)
+        block.variants = { standard: { text: block.text, ...(block.answer && { answer: block.answer }) }, ...(basic && { basic }), ...(advanced && { advanced }) };
     }
     out.push(block);
   }
@@ -55,6 +68,11 @@ export interface CreateRequest {
   grade: string;
   levelLabel: string;
   withSolutions: boolean;
+  /** What the teacher asked for, in their words and the app's (topic, kind of sheet, free text). */
+  hint?: string;
+  country?: "gr" | "cy";
+  /** Ask for an easier and a harder version of every exercise. */
+  levels?: boolean;
 }
 
 export async function aiCreate(req: CreateRequest): Promise<AiAnswer<Block[]>> {
@@ -142,8 +160,13 @@ export interface ReadEntry {
   label?: string;
 }
 
-export async function aiReadTimetable(file: { data: string; mediaType: string }, teacher: string, classes: string[]): Promise<AiAnswer<{ entries: ReadEntry[]; notes?: string }>> {
-  const r = await post<{ entries: unknown; notes?: string }>({ op: "timetable", ...file, teacher, classes: classes.join(", ") });
+export async function aiReadTimetable(
+  file: { data: string; mediaType: string },
+  teacher: string,
+  classes: string[],
+  country: "gr" | "cy",
+): Promise<AiAnswer<{ entries: ReadEntry[]; notes?: string }>> {
+  const r = await post<{ entries: unknown; notes?: string }>({ op: "timetable", ...file, teacher, classes: classes.join(", "), country });
   if (!r.ok) return r.unavailable ? { ok: false, error: "Η αυτόματη ανάγνωση δεν είναι ακόμη ενεργή. Συμπλήρωσε το πρόγραμμα με το χέρι." } : r;
   const time = /^([01]\d|2[0-3]):[0-5]\d$/;
   const entries = (Array.isArray(r.data.entries) ? (r.data.entries as ReadEntry[]) : []).filter(

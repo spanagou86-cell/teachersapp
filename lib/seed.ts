@@ -1,24 +1,7 @@
 import { buildBlocks } from "./ai/templates";
 import { addDays, DEMO_TODAY, startOfWeek } from "./dates";
 import { PERIODS } from "./schedule";
-import type { AttendanceRecord, ClassGroup, ClassNote, LessonSlot, Material, Student, StudentNote, Subject, SubjectId, Task, TimeBlock, TimetableEntry } from "./types";
-
-export const SUBJECTS: Subject[] = [
-  { id: "glossa", name: "Γλώσσα", short: "ΓΛ" },
-  { id: "math", name: "Μαθηματικά", short: "ΜΑ" },
-  { id: "meleti", name: "Μελέτη Περιβάλλοντος", short: "ΜΠ" },
-  { id: "eikastika", name: "Εικαστικά", short: "ΕΙ" },
-  { id: "istoria", name: "Ιστορία", short: "ΙΣ" },
-  { id: "fysika", name: "Φυσικά", short: "ΦΥ" },
-  { id: "geografia", name: "Γεωγραφία", short: "ΓΕ" },
-  { id: "agglika", name: "Αγγλικά", short: "ΑΓ" },
-  { id: "thriskeftika", name: "Θρησκευτικά", short: "ΘΡ" },
-  { id: "mousiki", name: "Μουσική", short: "ΜΟ" },
-  { id: "fa", name: "Φυσική Αγωγή", short: "ΦΑ" },
-  { id: "tpe", name: "Πληροφορική", short: "ΤΠ" },
-  { id: "ergastiria", name: "Εργαστήρια Δεξιοτήτων", short: "ΕΔ" },
-  { id: "allo", name: "Άλλο", short: "··" },
-];
+import type { AttendanceRecord, ClassGroup, ClassNote, LessonSlot, Material, Student, StudentNote, SubjectId, Task, TimeBlock, TimetableEntry } from "./types";
 
 export const CLASSES: ClassGroup[] = [
   { id: "d1", name: "Δ1", grade: "Δ΄ Δημοτικού", room: "Αίθουσα 1" },
@@ -186,7 +169,6 @@ function seedBlocks(timetable: TimetableEntry[]): TimeBlock[] {
 }
 
 export interface SeedState {
-  subjects: Subject[];
   classes: ClassGroup[];
   students: Student[];
   slots: LessonSlot[];
@@ -211,7 +193,6 @@ export function seed(): SeedState {
       { id: "sn2", studentId: "d1-s1", kind: "note", date: addDays(DEMO_TODAY, -3), text: "Πολύ καλή συμμετοχή στη Γλώσσα· βοήθησε την ομάδα της.", createdAt: Date.UTC(2026, 9, 2, 11, 0) },
       { id: "sn3", studentId: "d1-s4", kind: "note", date: addDays(DEMO_TODAY, -7), text: "Δυσκολεύεται με την ανάγνωση μεγάλων κειμένων· θέση κοντά στον πίνακα.", createdAt: Date.UTC(2026, 8, 28, 11, 0) },
     ],
-    subjects: SUBJECTS,
     classes: CLASSES,
     students: STUDENTS,
     slots,

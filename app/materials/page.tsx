@@ -7,16 +7,18 @@ import { useMemo, useState } from "react";
 import { MobileBrandBar, PageHeader } from "@/components/shell/PageHeader";
 import { FileBadge, SubjectIcon } from "@/components/subject";
 import { toast } from "@/components/toast";
-import { ButtonLink, Card, EmptyState, inputClass, Select } from "@/components/ui";
+import { Button, Card, EmptyState, inputClass, Select } from "@/components/ui";
+import { openPrepare } from "@/components/prepare";
 import { UploadTrigger } from "@/components/upload";
 import { relativeTime } from "@/lib/dates";
 import { fileKindLabel, formatBytes, KIND_LABEL } from "@/lib/materials";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import type { SubjectId } from "@/lib/types";
 
 export default function MaterialsPage() {
   const materials = useApp((s) => s.materials);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const classes = useApp((s) => s.classes);
   const slots = useApp((s) => s.slots);
   const del = useApp((s) => s.deleteMaterial);
@@ -43,9 +45,9 @@ export default function MaterialsPage() {
             <UploadTrigger className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-semibold hover:bg-line-2 sm:flex-none">
               <CloudUpload className="size-4" /> Ανέβασμα
             </UploadTrigger>
-            <ButtonLink href="/materials/new" className="flex-1 sm:flex-none">
+            <Button onClick={() => openPrepare({ slotId: null })} className="flex-1 sm:flex-none">
               <Sparkles className="size-4" /> Νέο υλικό
-            </ButtonLink>
+            </Button>
           </>
         }
       />
@@ -65,7 +67,7 @@ export default function MaterialsPage() {
         </Select>
       </div>
       <div className="scrollbar-none -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-        {[{ id: "all" as const, name: "Όλα" }, ...subjects].map((s) => (
+        {[{ id: "all" as const, name: "Όλα" }, ...subjects.filter((s) => s.id === subject || materials.some((m) => m.subjectId === s.id))].map((s) => (
           <button
             key={s.id}
             type="button"
@@ -86,7 +88,14 @@ export default function MaterialsPage() {
           <EmptyState
             icon={<FolderOpen className="size-6" />}
             title={materials.length ? "Δεν βρέθηκε υλικό" : "Η βιβλιοθήκη σου είναι άδεια"}
-            text="Ανέβασε ένα PDF, Word ή φωτογραφία και θα το οργανώσουμε για σένα."
+            text={materials.length ? "Δοκίμασε άλλη λέξη ή άλλο μάθημα." : "Φτιάξε το πρώτο σου φύλλο με AI ή ανέβασε ένα PDF, Word ή φωτογραφία."}
+            action={
+              !materials.length && (
+                <Button onClick={() => openPrepare({ slotId: null })}>
+                  <Sparkles className="size-4" /> Νέο υλικό
+                </Button>
+              )
+            }
           />
         ) : (
           <ul className="divide-y divide-line-2">
@@ -115,9 +124,8 @@ export default function MaterialsPage() {
                     type="button"
                     aria-label={`Διαγραφή: ${m.title}`}
                     onClick={() => {
-                      if (!confirm(`Διαγραφή του «${m.title}»;${lessons ? ` Θα αφαιρεθεί από ${lessons} μάθημα/τα.` : ""}`)) return;
-                      del(m.id);
-                      toast("Το υλικό διαγράφηκε");
+                      const undo = del(m.id);
+                      toast(lessons ? `Διαγράφηκε, και από ${lessons} ${lessons === 1 ? "μάθημα" : "μαθήματα"}` : "Το υλικό διαγράφηκε", undo && { label: "Αναίρεση", run: undo });
                     }}
                     className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-line-2 hover:text-danger hover-capable:opacity-0 hover-capable:group-hover:opacity-100 focus:opacity-100"
                   >

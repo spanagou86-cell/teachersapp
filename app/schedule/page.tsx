@@ -9,12 +9,14 @@ import { StatusPill } from "@/components/lesson";
 import { MobileBrandBar, PageHeader } from "@/components/shell/PageHeader";
 import { SUBJECT_STYLE } from "@/components/subject";
 import { Timeline } from "@/components/timeline";
-import { Button, ButtonLink, Card, IconButton, Segmented } from "@/components/ui";
+import { Card, IconButton, Segmented } from "@/components/ui";
 import { LessonSheet } from "@/components/lessonForm";
 import { addDays, dayMonth, dayName, dayOfMonth, dayShort, isISODate, shortDate, startOfWeek, timeToMin, weekday, weekDates } from "@/lib/dates";
 import { dutyLabel, holidayOn, schoolYear, schoolYearStart, termOn, weekNumber, type Country } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import { periodsFrom } from "@/lib/timetable";
+import { Menu } from "@/components/menu";
 
 type View = "week" | "month" | "year";
 
@@ -26,7 +28,7 @@ function WeekAgenda({ dates, country }: { dates: string[]; country: Country }) {
   const blocks = useApp((s) => s.blocks);
   const timetable = useApp((s) => s.timetable);
   const classes = useApp((s) => s.classes);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const today = useApp((s) => s.today);
   const weekSlots = slots.filter((s) => s.date >= dates[0] && s.date <= dates[4]);
   const weekBlocks = blocks.filter((b) => b.date >= dates[0] && b.date <= dates[4]);
@@ -326,15 +328,14 @@ function Calendar() {
                 </IconButton>
               </div>
             )}
-            <Button variant="secondary" size="sm" className="h-9" onClick={() => setAdding(true)}>
-              <Plus className="size-4" /> Μάθημα
-            </Button>
-            <ButtonLink href="/journal" variant="secondary" size="sm" className="h-9">
-              <BookOpenCheck className="size-4" /> Ύλη
-            </ButtonLink>
-            <ButtonLink href="/settings/timetable" variant="secondary" size="sm" className="h-9">
-              <CalendarCog className="size-4" /> Ωρολόγιο
-            </ButtonLink>
+            <Menu
+              label="Περισσότερα"
+              items={[
+                { label: "Έκτακτο μάθημα", icon: <Plus />, onClick: () => setAdding(true) },
+                { label: "Ύλη και προγραμματισμός", icon: <BookOpenCheck />, href: "/journal" },
+                { label: "Ωρολόγιο πρόγραμμα", icon: <CalendarCog />, href: "/settings/timetable" },
+              ]}
+            />
           </div>
         }
       />

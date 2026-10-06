@@ -7,10 +7,9 @@ export type QuickAction = "simpler" | "harder" | "versionAB" | "solutions" | "sp
 export const QUICK_ACTIONS: { id: QuickAction; label: string }[] = [
   { id: "simpler", label: "Πιο απλό" },
   { id: "harder", label: "Πιο απαιτητικό" },
-  { id: "versionAB", label: "Εκδοχή Α / Β" },
+  { id: "versionAB", label: "Δεύτερη εκδοχή" },
   { id: "solutions", label: "Πρόσθεσε λύσεις" },
   { id: "space", label: "Περισσότερος χώρος" },
-  { id: "bw", label: "Ασπρόμαυρο" },
 ];
 
 export interface AdaptInput {

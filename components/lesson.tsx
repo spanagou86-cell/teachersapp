@@ -7,6 +7,7 @@ import Link from "next/link";
 import { timeToMin } from "@/lib/dates";
 import { dutyLabel } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import type { LessonSlot, LessonStatus, TimeBlock } from "@/lib/types";
 import { SUBJECT_STYLE } from "./subject";
 
@@ -46,7 +47,7 @@ export function StatusPill({ slot }: { slot: LessonSlot }) {
       </span>
     );
   if (needsLog(slot, clock))
-    return <span className="inline-flex items-center gap-1 rounded-md bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger">Καταγραφή;</span>;
+    return <span className="inline-flex items-center gap-1 rounded-md bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger">Πώς πήγε;</span>;
   const map: Record<LessonStatus, { cls: string; Icon: typeof Check } | null> = {
     planned: null,
     done: { cls: "bg-brand-50 text-brand", Icon: Check },
@@ -63,7 +64,7 @@ export function StatusPill({ slot }: { slot: LessonSlot }) {
 }
 
 export function LessonRow({ slot, compact }: { slot: LessonSlot; compact?: boolean }) {
-  const subject = useApp((s) => s.subjects.find((x) => x.id === slot.subjectId));
+  const subject = useSubjects().find((x) => x.id === slot.subjectId);
   const cls = useApp((s) => s.classes.find((x) => x.id === slot.classId));
   const style = SUBJECT_STYLE[slot.subjectId];
   const live = isNow(slot, useClock());

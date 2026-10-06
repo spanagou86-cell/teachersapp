@@ -32,7 +32,8 @@ export default function OnboardingPage() {
   const addStudents = useApp((s) => s.addStudents);
   const [name, setName] = useState(profile.displayName);
   const [school, setSchool] = useState(profile.schoolName);
-  const [country, setCountry] = useState(profile.country);
+  // Cyprus first: a new teacher starts from the Cypriot calendar, one tap to switch.
+  const [country, setCountry] = useState(profile.onboarded ? profile.country : "cy");
   const [drafts, setDrafts] = useState<Draft[]>([blank(1)]);
   const [busy, setBusy] = useState(false);
 
@@ -71,8 +72,8 @@ export default function OnboardingPage() {
               value={country}
               onChange={setCountry}
               options={[
-                { value: "gr", label: "Ελλάδα" },
                 { value: "cy", label: "Κύπρος" },
+                { value: "gr", label: "Ελλάδα" },
               ]}
             />
           </Field>

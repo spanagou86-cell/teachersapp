@@ -15,6 +15,7 @@ import { addDays, dayName, isISODate, longDate, shortDate, weekday } from "@/lib
 import { sortSlots } from "@/lib/schedule";
 import { holidayOn } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import type { ClassGroup, Student } from "@/lib/types";
 import { AutoText } from "@/components/text";
 
@@ -93,7 +94,7 @@ function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
           <CheckCheck className="size-4" /> Όλοι παρόντες
         </Button>
         <span className="ml-auto text-xs text-muted">
-          {recordedAt ? `Καταγράφηκε ${recordedAt.getHours().toString().padStart(2, "0")}:${recordedAt.getMinutes().toString().padStart(2, "0")}` : "Δεν έχει καταγραφεί"}
+          {recordedAt ? `Πάρθηκαν ${recordedAt.getHours().toString().padStart(2, "0")}:${recordedAt.getMinutes().toString().padStart(2, "0")}` : "Δεν έχουν παρθεί"}
         </span>
       </div>
 
@@ -171,7 +172,7 @@ function Students({ roster }: { roster: Student[] }) {
 
 function Progress({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
   const slots = useApp((s) => s.slots);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const attendance = useApp((s) => s.attendance);
   const today = useApp((s) => s.today);
   const past = useMemo(() => sortSlots(slots.filter((s) => s.classId === cls.id && s.date <= today)), [slots, cls.id, today]);
@@ -238,7 +239,7 @@ function Progress({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold">Τι διδάχθηκε</h2>
           <ButtonLink href={`/journal?class=${cls.id}`} variant="secondary" size="sm">
-            <BookOpenCheck className="size-4" /> Ημερολόγιο ύλης
+            <BookOpenCheck className="size-4" /> Ύλη
           </ButtonLink>
         </div>
         <ol className="relative space-y-4 border-l border-line pl-5">

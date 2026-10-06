@@ -38,28 +38,40 @@ async function flow(name, viewport, mobile) {
   const todayHeight = await page.evaluate(() => document.documentElement.scrollHeight / window.innerHeight);
   console.log(`  · Today is ${todayHeight.toFixed(2)} screens tall`);
 
-  // 1. Upload → wizard (from the materials library)
+  // 1. «✨ Ετοίμασε» from anywhere: it opens on the next lesson, one tap makes a test and files it there.
+  const prepare = mobile ? page.getByRole("navigation", { name: "Κύρια πλοήγηση" }).getByRole("button", { name: /Ετοίμασε/ }) : page.locator("aside").getByRole("button", { name: /Ετοίμασε/ });
+  await prepare.click();
+  const sheet = page.getByRole("dialog", { name: "Ετοίμασε" });
+  await sheet.getByText("Μαθηματικά · Δ1").waitFor();
+  assert((await sheet.getByLabel("Θέμα μαθήματος").inputValue()) === "Γραφικές παραστάσεις", "«Ετοίμασε» opens on the next lesson, with its topic");
+  await shot("02-prepare");
+  await sheet.getByRole("button", { name: /Τεστ 10′/ }).click();
+  await page.waitForURL(/\/materials\/[0-9a-f-]{36}\?created=1&slot=l-2026-10-05-0920/);
+  await page.getByText("Το υλικό είναι έτοιμο.").waitFor();
+  assert(true, "one tap: a 10′ test, filed in the 09:20 lesson");
+
+  // 2. Upload: the file goes straight to the library; a worksheet is made from it on request.
   await page.goto(`${BASE}/materials`);
   await page.locator("input[type=file]").first().setInputFiles(pdf);
-  await page.waitForURL("**/materials/new");
-  await page.getByText("Το αρχείο ανέβηκε").waitFor();
-  await page.getByRole("radio", { name: "Προχωρημένο" }).click();
-  await shot("02-wizard");
-  await page.getByRole("button", { name: "Ετοίμασε το υλικό" }).click();
-  await page.waitForURL(/\/materials\/[0-9a-f-]{36}/);
+  await page.waitForURL(/\/materials\/[0-9a-f-]{36}$/);
+  await page.getByText("Φτιάξε φύλλο από αυτό το αρχείο").waitFor();
+  assert(true, "upload files the PDF as it is, no forced wizard");
+  await page.getByRole("main").getByRole("button", { name: "Ετοίμασε", exact: true }).click();
+  await sheet.getByText("Με βάση τη σελίδα σου").waitFor();
+  await sheet.getByRole("button", { name: /Φύλλο εργασίας/ }).click();
+  await page.waitForURL(/\/materials\/[0-9a-f-]{36}\?created=1/);
   await page.getByText("Το υλικό είναι έτοιμο.").waitFor();
   const materialUrl = page.url().split("?")[0];
-  assert(true, "material created from upload");
+  assert(true, "worksheet made from the uploaded file");
   await shot("03-editor");
 
-  // 2. Adapt exercise 2 with the AI panel
-  if (mobile) await page.getByRole("radio", { name: "Προσαρμογή" }).click();
-  await page.getByLabel("Οδηγία").fill("Άλλαξε μόνο τη δεύτερη άσκηση, πιο απλά.");
+  // 3. Change exercise 2 with AI: the proposal shows on the sheet, with Εφαρμογή / Ακύρωση.
+  if (mobile) await page.getByRole("button", { name: /Άλλαξέ το/ }).click();
+  await page.getByRole("textbox", { name: "Οδηγία" }).fill("Άλλαξε μόνο τη δεύτερη άσκηση, πιο απλά.");
   await page.getByRole("button", { name: "Δημιουργία πρότασης" }).click();
-  await page.getByText("Η πρόταση είναι έτοιμη").waitFor();
+  await page.getByRole("button", { name: /Εφαρμογή/ }).first().waitFor();
   await shot("04-suggestion");
-  await page.getByRole("button", { name: "Εφαρμογή", exact: true }).click();
-  if (mobile) await page.getByRole("radio", { name: "Μάθημα & ιστορικό" }).click();
+  await page.getByRole("button", { name: /Εφαρμογή/ }).first().click();
   const history = page.locator("h2", { hasText: "Ιστορικό αλλαγών" }).locator("..");
   await history.getByText("Δημιουργία από αρχείο").waitFor();
   assert((await history.locator("li").count()) === 2, "AI change recorded in history (2 versions)");
@@ -69,7 +81,7 @@ async function flow(name, viewport, mobile) {
   assert((await history.locator("li").count()) === 3, "restore creates a new version (3)");
   await page.getByText(/^Επαναφορά: Δημιουργία/).first().waitFor();
 
-  // 3. Link to Monday 09:20 lesson
+  // 4. Link to Monday 09:20 lesson
   const select = page.getByLabel("Μάθημα", { exact: true });
   const option = await select.locator("option", { hasText: "Δευτέρα 5 Οκτ · 09:20" }).getAttribute("value");
   await select.selectOption(option);
@@ -80,9 +92,9 @@ async function flow(name, viewport, mobile) {
 
   await page.goto(`${BASE}/lessons/l-2026-10-05-0920`);
   await page.getByText("Υλικό μαθήματος").waitFor(); // lesson hasn't started: "Πριν" stage
-  assert((await page.getByText("2 αρχεία").count()) > 0, "lesson shows 2 files");
+  assert((await page.getByText("3 αρχεία").count()) > 0, "lesson shows 3 files (sheet, test, new worksheet)");
 
-  // 4. Attendance: mark 2 absent, survives reload
+  // 5. Attendance: mark 2 absent, survives reload
   await page.goto(`${BASE}/classes/d1`);
   await page.getByRole("button", { name: /Γιώργος Δ\./ }).click();
   await page.getByRole("button", { name: /Πέτρος Σ\./ }).click();
@@ -96,7 +108,7 @@ async function flow(name, viewport, mobile) {
   assert(late[0] === "23" && late[1] === "1" && late[2] === "1", `second tap marks late (got ${late})`);
   await shot("06-attendance");
 
-  // 5. Lesson log + carry over with conflict check
+  // 6. Lesson log + carry over with conflict check
   await page.goto(`${BASE}/lessons/l-2026-10-05-0920`);
   await page.getByRole("button", { name: /Μετά/ }).click();
   await page.getByRole("radio", { name: "Μερικώς" }).click();
@@ -250,7 +262,12 @@ async function mobileQuality(name) {
 
     // Sheets with the keyboard open (half the screen left): the save button stays reachable.
     const sheets = [
-      ["/", async () => page.getByRole("button", { name: "Γρήγορη καταγραφή" }).click(), async () => page.getByRole("button", { name: "Σημείωση" }).first().click(), "Αποθήκευση"],
+      [
+        "/",
+        async () => page.getByRole("navigation", { name: "Κύρια πλοήγηση" }).getByRole("button", { name: /Ετοίμασε/ }).click(),
+        async () => page.getByRole("dialog").getByRole("button", { name: "Σημείωση" }).click(),
+        "Αποθήκευση",
+      ],
       ["/classes", async () => page.getByRole("button", { name: /Νέο τμήμα/ }).click(), null, "Αποθήκευση"],
       ["/lessons/l-2026-10-05-0920", async () => page.getByRole("button", { name: /Αλλαγή ώρας/ }).click(), null, "Αποθήκευση"],
       ["/students/d1-s1", async () => page.getByRole("button", { name: "Επεξεργασία" }).click(), null, "Αποθήκευση"],
@@ -298,7 +315,16 @@ async function schoolAndSignOut(name) {
   await page.getByRole("button", { name: /Κράτησε/ }).click();
   await page.waitForTimeout(300);
   assert((await page.getByRole("button", { name: "Το σχολείο σου" }).innerText()).includes("Ηλιαχτίδα"), "a school not on the list can be kept as typed");
+  await page.getByLabel("Τοπική γιορτή σχολείου").fill("2026-12-07");
+  await page.getByText(/χωρίς μαθήματα κάθε χρόνο/).waitFor();
   await page.screenshot({ path: path.join(OUT, `${name}-01-settings.png`), fullPage: true });
+  await page.goto(BASE + "/schedule?view=year");
+  for (const h of ["Αποστόλου Βαρνάβα", "Αναλήψεως", "Τοπική γιορτή"]) assert((await page.getByText(h).count()) > 0, `Cyprus year shows «${h}»`);
+  assert((await page.getByText("Κατακλυσμός").count()) === 0, "no holiday after the last school day (16/6)");
+  await page.goto(BASE + "/");
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  assert((await page.getByText("Ελληνικά").count()) > 0 && (await page.getByText("Γλώσσα", { exact: true }).count()) === 0, "Cypriot subject names (Ελληνικά, not Γλώσσα)");
+  await page.screenshot({ path: path.join(OUT, `${name}-02-today-cy.png`), fullPage: true });
   await page.getByRole("button", { name: "Έξοδος από την επίδειξη" }).click();
   await page.waitForURL("**/login");
   assert(true, "sidebar sign-out returns to the login page");
@@ -370,7 +396,7 @@ async function editingFlow(name) {
   await ctx.close();
 }
 
-/** Ημερολόγιο ύλης and Εβδομαδιαίος προγραμματισμός: gaps, filling in place, printing. */
+/** Ύλη (what was taught) and Εβδομαδιαίος προγραμματισμός: gaps, filling in place, printing. */
 async function journalFlow(name) {
   console.log(`\n## ${name}`);
   for (const [vp, mobile, tag] of [[{ width: 390, height: 844 }, true, "mobile"], [{ width: 1280, height: 900 }, false, "desktop"]]) {
@@ -383,22 +409,22 @@ async function journalFlow(name) {
 
     // From the class page, through the "Πρόοδος" tab.
     await page.goto(`${BASE}/classes/d1?tab=progress`);
-    await page.getByRole("link", { name: "Ημερολόγιο ύλης" }).click();
+    await page.getByRole("link", { name: "Ύλη" }).click();
     await page.waitForURL(/\/journal\?class=d1/);
-    await page.getByText("1 μάθημα δεν έχει καταγραφή").waitFor();
+    await page.getByText("1 μάθημα χωρίς σημείωση").waitFor();
     assert(true, `${tag}: the month shows the lesson without a record`);
 
     await page.getByRole("button", { name: "Συμπλήρωση" }).click();
     await page.getByLabel(/Δευτέρα 5 Οκτ · 08:00 · Γλώσσα/).fill("Ασκήσεις ορθογραφίας 1–4");
     await page.getByRole("button", { name: "Αποθήκευση" }).click();
-    await page.getByText("Καταγράφηκε").first().waitFor();
-    assert((await page.getByText(/δεν (έχει|έχουν) καταγραφή/).count()) === 0, `${tag}: filled in place, no gaps left`);
+    await page.getByText("Αποθηκεύτηκε").first().waitFor();
+    assert((await page.getByText(/\d+ μαθήματ?α? χωρίς σημείωση/).count()) === 0, `${tag}: filled in place, no gaps left`);
     assert((await page.getByText("Ασκήσεις ορθογραφίας 1–4").count()) > 0, `${tag}: the new line appears in the journal`);
     await page.screenshot({ path: path.join(OUT, `${name}-${tag}-01-log.png`), fullPage: true });
 
     await page.getByRole("radio", { name: "Τρίμηνο" }).click();
     await page.getByText(/Α΄ τρίμηνο|τρίμηνο/).first().waitFor();
-    await page.getByRole("radio", { name: "Εβδομαδιαίος προγραμματισμός" }).click();
+    await page.getByRole("radio", { name: "Προγραμματισμός" }).click();
     await page.waitForURL(/view=plan/);
     await page.screenshot({ path: path.join(OUT, `${name}-${tag}-02-plan.png`), fullPage: true });
     if (!mobile) {
@@ -411,7 +437,62 @@ async function journalFlow(name) {
   }
 }
 
+/** «Ετοίμασε» in the background: three levels, the toast, the lesson with Α/Β/Γ; a lesson plan in phases. */
+async function prepareFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  const next = page.getByText(/Σήμερα ακόμη: 2 μαθήματα χωρίς υλικό/);
+  await next.waitFor();
+  assert(true, "Today suggests the next step: 2 lessons without material");
+
+  // From the lesson's «Πριν»: three levels, then keep working while it's made.
+  await page.goto(`${BASE}/lessons/l-2026-10-05-1020`);
+  await page.getByText("Ετοίμασε για αυτό το μάθημα").waitFor();
+  await page.getByRole("button", { name: /3 επίπεδα/ }).click();
+  await page.getByRole("button", { name: "Συνέχισε σε άλλη δουλειά" }).click();
+  const tab = page.getByRole("navigation", { name: "Κύρια πλοήγηση" }).getByRole("button", { name: /Φτιάχνω/ });
+  assert((await tab.count()) === 1, "the centre button shows the job running");
+  await page.getByText("Έτοιμα τα 3 φύλλα: Α, Β, Γ").waitFor();
+  await page.getByRole("button", { name: "Άνοιγμα" }).click();
+  await page.waitForURL(/\/lessons\/l-2026-10-05-1020/);
+  for (const l of ["Α", "Β", "Γ"]) assert((await page.getByText(new RegExp(`Επίπεδο ${l}$`)).count()) > 0, `lesson has the «Επίπεδο ${l}» sheet`);
+  await page.screenshot({ path: path.join(OUT, `${name}-01-levels.png`), fullPage: true });
+
+  // A lesson plan: phases as sections, no answer lines.
+  await page.getByRole("button", { name: /Σχέδιο μαθήματος/ }).click();
+  await page.waitForURL(/\/materials\/[0-9a-f-]{36}\?created=1/);
+  await page.getByRole("heading", { name: /Αφόρμηση/ }).waitFor();
+  assert((await page.locator("article h3").count()) >= 5, "lesson plan has its phases as sections");
+  await page.screenshot({ path: path.join(OUT, `${name}-02-plan.png`), fullPage: true });
+
+  // Delete with undo, no browser dialog.
+  await page.goto(`${BASE}/materials`);
+  const rows = page.locator("ul li").filter({ has: page.getByRole("button", { name: /^Διαγραφή:/ }) });
+  const before = await rows.count();
+  await rows.first().getByRole("button", { name: /^Διαγραφή:/ }).click();
+  await page.waitForTimeout(150);
+  assert((await rows.count()) === before - 1, "material removed at once");
+  await page.getByRole("button", { name: "Αναίρεση" }).click();
+  await page.waitForTimeout(150);
+  assert((await rows.count()) === before, "«Αναίρεση» brings it back");
+
+  // Search and the bell on the phone.
+  await page.goto(BASE + "/");
+  await page.getByRole("button", { name: "Αναζήτηση" }).click();
+  await page.getByRole("dialog").getByRole("textbox", { name: "Αναζήτηση" }).fill("μαρια");
+  await page.getByRole("dialog").getByRole("link", { name: /Μαρία Κ\./ }).click();
+  await page.waitForURL(/\/students\/d1-s1/);
+  assert(true, "phone search finds a pupil and opens their page");
+  await ctx.close();
+}
+
 try {
+  await prepareFlow("prepare");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
   await dark("dark-mobile", { width: 390, height: 844 }, true);

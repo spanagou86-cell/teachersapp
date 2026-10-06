@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Atom, BookOpen, Calculator, Church, Dumbbell, FileImage, FileText, FileType2, Globe2, Landmark, Languages, Leaf, Monitor, Music, Palette, Puzzle, Shapes } from "@/components/icons";
+import { Atom, BookOpen, Calculator, Church, Dumbbell, FileImage, FileText, FileType2, Globe2, HeartHandshake, Landmark, Languages, Leaf, Monitor, Music, Palette, Puzzle, Seedling, Shapes, UsersGroup } from "@/components/icons";
 import { fileKindLabel } from "@/lib/materials";
 import type { FileMeta, SubjectId } from "@/lib/types";
 
@@ -17,6 +17,9 @@ export const SUBJECT_STYLE: Record<SubjectId, { bar: string; soft: string; text:
   fa: { bar: "bg-fa", soft: "bg-fa-50", text: "text-fa", border: "border-fa", Icon: Dumbbell },
   tpe: { bar: "bg-tpe", soft: "bg-tpe-50", text: "text-tpe", border: "border-tpe", Icon: Monitor },
   ergastiria: { bar: "bg-ergastiria", soft: "bg-ergastiria-50", text: "text-ergastiria", border: "border-ergastiria", Icon: Puzzle },
+  zoi: { bar: "bg-zoi", soft: "bg-zoi-50", text: "text-zoi", border: "border-zoi", Icon: HeartHandshake },
+  kpa: { bar: "bg-kpa", soft: "bg-kpa-50", text: "text-kpa", border: "border-kpa", Icon: UsersGroup },
+  aeiforia: { bar: "bg-aeiforia", soft: "bg-aeiforia-50", text: "text-aeiforia", border: "border-aeiforia", Icon: Seedling },
   allo: { bar: "bg-allo", soft: "bg-allo-50", text: "text-allo", border: "border-allo", Icon: Shapes },
 };
 

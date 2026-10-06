@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { dayName, shortDate, timeToMin } from "@/lib/dates";
 import { useApp } from "@/lib/store";
-import { isValidTime } from "@/lib/timetable";
+import { useSubjects } from "@/lib/store/hooks";
+import { BELLS, isValidTime } from "@/lib/timetable";
 import type { LessonSlot, SubjectId } from "@/lib/types";
 import { toast } from "./toast";
 import { Button, cx, Field, inputClass, Select, Sheet } from "./ui";
+import { subjectChoices } from "@/lib/subjects";
 
 const addMinutes = (t: string, m: number) => {
   const total = timeToMin(t) + m;
@@ -22,16 +24,17 @@ const addMinutes = (t: string, m: number) => {
 export function LessonSheet({ open, onClose, slot, date }: { open: boolean; onClose: () => void; slot?: LessonSlot; date?: string }) {
   const router = useRouter();
   const classes = useApp((s) => s.classes);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const today = useApp((s) => s.today);
   const editSlot = useApp((s) => s.editSlot);
   const addSlot = useApp((s) => s.addSlot);
   const deleteSlot = useApp((s) => s.deleteSlot);
   const restoreSlot = useApp((s) => s.restoreSlot);
 
+  const country = useApp((s) => s.profile.country);
   const [day, setDay] = useState(slot?.date ?? date ?? today);
-  const [start, setStart] = useState(slot?.start ?? "08:15");
-  const [end, setEnd] = useState(slot?.end ?? "09:00");
+  const [start, setStart] = useState(slot?.start ?? BELLS[country][0].start);
+  const [end, setEnd] = useState(slot?.end ?? BELLS[country][0].end);
   const [classId, setClassId] = useState(slot?.classId ?? classes[0]?.id ?? "");
   const [subjectId, setSubjectId] = useState<SubjectId>(slot?.subjectId ?? "glossa");
   const [topic, setTopic] = useState("");
@@ -69,7 +72,6 @@ export function LessonSheet({ open, onClose, slot, date }: { open: boolean; onCl
               variant="danger"
               aria-label="Διαγραφή μαθήματος"
               onClick={() => {
-                if (!confirm("Να διαγραφεί αυτό το μάθημα; Οι σημειώσεις του θα χαθούν.")) return;
                 const removed = deleteSlot(slot.id);
                 onClose();
                 router.replace("/schedule");
@@ -120,7 +122,7 @@ export function LessonSheet({ open, onClose, slot, date }: { open: boolean; onCl
           </Field>
           <Field label="Μάθημα">
             <Select value={subjectId} onChange={(e) => setSubjectId(e.target.value as SubjectId)}>
-              {subjects.map((s) => (
+              {subjectChoices(subjects, subjectId).map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>

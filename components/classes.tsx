@@ -10,6 +10,7 @@ import { Button, cx, Field, inputClass, Select, Sheet } from "./ui";
 import { AutoText, GrowingTextarea } from "./text";
 import { RosterImport } from "./roster";
 import type { RosterName } from "@/lib/ai/client";
+import { confirmAction } from "./confirm";
 
 /** Create a class, or edit one: name, grade, room, students. */
 export function ClassSheet({ open, onClose, cls }: { open: boolean; onClose: () => void; cls?: ClassGroup }) {
@@ -53,8 +54,14 @@ export function ClassSheet({ open, onClose, cls }: { open: boolean; onClose: () 
             <Button
               variant="danger"
               aria-label="Διαγραφή τμήματος"
-              onClick={() => {
-                if (!confirm(`Διαγραφή του τμήματος ${cls.name}; Θα σβηστούν οι μαθητές, οι παρουσίες, τα μαθήματα και το υλικό του.`)) return;
+              onClick={async () => {
+                const yes = await confirmAction({
+                  title: `Διαγραφή του τμήματος ${cls.name};`,
+                  text: "Σβήνονται οριστικά οι μαθητές, οι παρουσίες, τα μαθήματα και το υλικό του τμήματος. Δεν αναιρείται.",
+                  action: "Διαγραφή",
+                  danger: true,
+                });
+                if (!yes) return;
                 deleteClass(cls.id);
                 toast("Το τμήμα διαγράφηκε");
                 onClose();
@@ -103,7 +110,10 @@ export function ClassSheet({ open, onClose, cls }: { open: boolean; onClose: () 
                 <button
                   type="button"
                   aria-label={`Αφαίρεση: ${s.firstName} ${s.lastName}`}
-                  onClick={() => confirm(`Αφαίρεση του/της ${s.firstName} ${s.lastName}; Θα σβηστούν και οι σημειώσεις του/της.`) && removeStudent(s.id)}
+                  onClick={() => {
+                    const undo = removeStudent(s.id);
+                    toast(`Αφαιρέθηκε: ${s.firstName} ${s.lastName}`, undo && { label: "Αναίρεση", run: undo });
+                  }}
                   className="flex size-9 items-center justify-center rounded-lg text-muted hover:text-danger"
                 >
                   <X className="size-4" />

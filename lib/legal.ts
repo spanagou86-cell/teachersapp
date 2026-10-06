@@ -11,7 +11,7 @@ export const COMPANY = {
   registry: process.env.NEXT_PUBLIC_COMPANY_GEMI || "",
 };
 
-export const LEGAL_UPDATED = "5 Οκτωβρίου 2026";
+export const LEGAL_UPDATED = "6 Οκτωβρίου 2026";
 
 /** Services that process data for us (GDPR art. 28 sub-processors). */
 export const SUBPROCESSORS = [

@@ -15,12 +15,17 @@ export type SubjectId =
   | "fa"
   | "tpe"
   | "ergastiria"
+  | "zoi"
+  | "kpa"
+  | "aeiforia"
   | "allo";
 
 export interface Subject {
   id: SubjectId;
   name: string;
   short: string;
+  /** Not taught in the teacher's country; kept for lessons made before a change of country. */
+  legacy?: boolean;
 }
 
 export interface ClassGroup {
@@ -82,6 +87,8 @@ export interface Profile {
   schoolName: string;
   onboarded: boolean;
   country: "gr" | "cy";
+  /** The school's feast day (Άγιος της κοινότητας / πολιούχος), "MM-DD". */
+  localHoliday?: string;
 }
 
 export interface StudentNote {

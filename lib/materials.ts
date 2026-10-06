@@ -1,4 +1,4 @@
-import type { Block, Material, MaterialKind } from "./types";
+import type { Block, Material, MaterialKind, SubjectId } from "./types";
 
 export const MAX_VERSIONS = 40;
 
@@ -87,6 +87,19 @@ const GREEKLISH: [RegExp, string][] = [
 const GRADE: Record<string, string> = { a: "Α΄", b: "Β΄", g: "Γ΄", c: "Γ΄", d: "Δ΄", e: "Ε΄", st: "ΣΤ΄", f: "ΣΤ΄" };
 
 /** "mathimatika_d.pdf" → "Μαθηματικά Δ΄"; anything unrecognised is kept, tidied. */
+/** The subject a file name hints at ("mathimatika_d.pdf" → Μαθηματικά). */
+export function guessSubject(name: string): SubjectId | undefined {
+  const n = name.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  if (/math|μαθημ|arithm|grafik|γραφ/.test(n)) return "math";
+  if (/gloss|γλωσσ|ellinik|ελληνικ|orthogr|ορθογρ/.test(n)) return "glossa";
+  if (/melet|μελετ|perivall/.test(n)) return "meleti";
+  if (/eikast|εικαστ|techni|τεχνη|afisa|αφισ/.test(n)) return "eikastika";
+  if (/istor|ιστορ/.test(n)) return "istoria";
+  if (/fysik|φυσικ/.test(n)) return "fysika";
+  if (/geograf|γεωγρ/.test(n)) return "geografia";
+  if (/agglik|english|αγγλ/.test(n)) return "agglika";
+}
+
 export function titleFromFileName(name: string): string {
   const words = name
     .replace(/\.[^.]+$/, "")

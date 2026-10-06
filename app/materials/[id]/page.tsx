@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import {
-  ArrowRight, CalendarPlus, Check, CheckCircle2, ChevronDown, Download, Eye, FileQuestion, FileText, History, Link2Off, Plus, Redo2, RotateCcw, Sparkles, Trash2, Type, Undo2, X,
+  ArrowRight, CalendarPlus, Check, CheckCircle2, ChevronDown, Download, Eye, FileQuestion, FileText, History, Link2Off, Paperclip, Plus, Redo2, RotateCcw, Sparkles, Trash2, Undo2, X,
 } from "@/components/icons";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -11,18 +11,18 @@ import { AdaptPanel, type Suggestion } from "@/components/doc/AdaptPanel";
 import { DocPage } from "@/components/doc/DocPage";
 import { BackButton } from "@/components/shell/PageHeader";
 import { toast } from "@/components/toast";
-import { Button, ButtonLink, Card, EmptyState, IconButton, Segmented, Select, Sheet, Tabs, Toggle } from "@/components/ui";
+import { Button, ButtonLink, Card, EmptyState, IconButton, Segmented, Select, Sheet, Toggle } from "@/components/ui";
+import { openPrepare } from "@/components/prepare";
 import { dayName, relativeTime, shortDate } from "@/lib/dates";
 import { uid } from "@/lib/id";
 import { exerciseNumber, fileKindLabel, KIND_LABEL, LEVEL_LABEL } from "@/lib/materials";
 import { sortSlots } from "@/lib/schedule";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import { loadBlob } from "@/lib/store/blobs";
 import { remote } from "@/lib/store/remote";
 import type { Block, Material } from "@/lib/types";
-
-type Tab = "original" | "edit" | "solutions";
-type Pane = "doc" | "ai" | "more";
+import { subjectChoices } from "@/lib/subjects";
 
 function OriginalView({ material }: { material: Material }) {
   const [url, setUrl] = useState<string>();
@@ -86,7 +86,7 @@ function OriginalView({ material }: { material: Material }) {
 /** Class, subject and delete: the material's own details. */
 function MaterialDetails({ material }: { material: Material }) {
   const classes = useApp((s) => s.classes);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const patch = useApp((s) => s.patchMaterial);
   const remove = useApp((s) => s.deleteMaterial);
   const router = useRouter();
@@ -102,7 +102,7 @@ function MaterialDetails({ material }: { material: Material }) {
           ))}
         </Select>
         <Select value={material.subjectId} onChange={(e) => patch(material.id, { subjectId: e.target.value as Material["subjectId"] })} aria-label="Μάθημα υλικού">
-          {subjects.map((x) => (
+          {subjectChoices(subjects, material.subjectId).map((x) => (
             <option key={x.id} value={x.id}>
               {x.name}
             </option>
@@ -118,15 +118,14 @@ function MaterialDetails({ material }: { material: Material }) {
               </option>
             ))}
           </Select>
-          <Segmented<Material["level"]>
-            value={material.level}
-            onChange={(level) => patch(material.id, { level })}
-            options={(["basic", "standard", "advanced"] as const).map((v) => ({ value: v, label: LEVEL_LABEL[v] }))}
-          />
-          <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
-            Φύλλο λύσεων
-            <Toggle label="Φύλλο λύσεων" checked={material.withSolutions} onChange={(v) => patch(material.id, { withSolutions: v })} />
-          </label>
+          {(material.kind === "worksheet" || material.kind === "quiz") && <div className="grid gap-1.5">
+            <Segmented<Material["level"]>
+              value={material.level}
+              onChange={(level) => patch(material.id, { level })}
+              options={(["basic", "standard", "advanced"] as const).map((v) => ({ value: v, label: LEVEL_LABEL[v] }))}
+            />
+            <p className="text-xs text-muted">Στο χαρτί γράφει «Επίπεδο Α, Β ή Γ», για να μη χαρακτηρίζεται κανένα παιδί.</p>
+          </div>}
           <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
             Ασπρόμαυρη εκτύπωση
             <Toggle label="Ασπρόμαυρη εκτύπωση" checked={material.blackAndWhite} onChange={(v) => patch(material.id, { blackAndWhite: v })} />
@@ -137,9 +136,8 @@ function MaterialDetails({ material }: { material: Material }) {
         variant="ghost"
         className="justify-self-start !text-danger"
         onClick={() => {
-          if (!confirm(`Διαγραφή του «${material.title}»; Θα αφαιρεθεί και από τα μαθήματα όπου είναι συνδεδεμένο.`)) return;
-          remove(material.id);
-          toast("Το υλικό διαγράφηκε");
+          const undo = remove(material.id);
+          toast("Το υλικό διαγράφηκε", undo && { label: "Αναίρεση", run: undo });
           router.replace("/materials");
         }}
       >
@@ -151,7 +149,7 @@ function MaterialDetails({ material }: { material: Material }) {
 
 function LessonLinks({ material }: { material: Material }) {
   const slots = useApp((s) => s.slots);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const classes = useApp((s) => s.classes);
   const attach = useApp((s) => s.attachMaterial);
   const detach = useApp((s) => s.detachMaterial);
@@ -283,24 +281,92 @@ function HistoryCard({ material }: { material: Material }) {
   );
 }
 
+/** «Εξαγωγή PDF»: the pupil's sheet or the answer sheet, through the print dialog. */
+function ExportMenu({ onPrint, className }: { onPrint: (solutions: boolean) => void; className?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={clsx("relative", className)}>
+      <Button onClick={() => setOpen((o) => !o)} className="w-full" aria-expanded={open}>
+        <Download className="size-4" /> Εξαγωγή PDF <ChevronDown className="size-4 opacity-80" />
+      </Button>
+      {open && (
+        <div className="absolute right-0 top-12 z-30 w-60 animate-fade-in rounded-2xl border border-line bg-surface p-1.5 shadow-pop">
+          {[
+            { sol: false, label: "Φύλλο μαθητή" },
+            { sol: true, label: "Φύλλο λύσεων" },
+          ].map((o) => (
+            <button
+              key={o.label}
+              type="button"
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium hover:bg-line-2"
+              onClick={() => {
+                setOpen(false);
+                onPrint(o.sol);
+              }}
+            >
+              <FileText className="size-4 text-brand" /> {o.label}
+            </button>
+          ))}
+          <p className="px-3 pb-1 pt-1 text-[11px] text-muted">Επίλεξε «Αποθήκευση ως PDF» στο παράθυρο εκτύπωσης.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** New exercise, heading or text at the end of the sheet. */
+function AddMenu({ onAdd }: { onAdd: (b: Block, label: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const items: { label: string; make: () => Block }[] = [
+    { label: "Άσκηση", make: () => ({ id: uid(), type: "exercise", text: "Νέα άσκηση", lines: 2, level: "standard" }) },
+    { label: "Επικεφαλίδα", make: () => ({ id: uid(), type: "heading", text: "Νέα επικεφαλίδα" }) },
+    { label: "Κείμενο", make: () => ({ id: uid(), type: "text", text: "Νέο κείμενο" }) },
+  ];
+  return (
+    <div className="relative">
+      <IconButton label="Νέα άσκηση, επικεφαλίδα ή κείμενο" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <Plus className="size-4" />
+      </IconButton>
+      {open && (
+        <div className="absolute left-0 top-11 z-30 w-48 animate-fade-in rounded-xl border border-line bg-surface p-1 shadow-pop">
+          {items.map((it) => (
+            <button
+              key={it.label}
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-line-2"
+              onClick={() => {
+                setOpen(false);
+                onAdd(it.make(), `Προσθήκη: ${it.label.toLowerCase()}`);
+              }}
+            >
+              <Plus className="size-4 text-muted" /> {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Editor() {
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
   const router = useRouter();
   const material = useApp((s) => s.materials.find((m) => m.id === id));
   const slots = useApp((s) => s.slots);
-  const subjects = useApp((s) => s.subjects);
+  const today = useApp((s) => s.today);
+  const subjects = useSubjects();
   const classes = useApp((s) => s.classes);
   const changeBlocks = useApp((s) => s.changeBlocks);
   const patch = useApp((s) => s.patchMaterial);
   const duplicate = useApp((s) => s.duplicateMaterial);
 
-  const [tab, setTab] = useState<Tab>("edit");
-  const [pane, setPane] = useState<Pane>("doc");
+  const [showSolutions, setShowSolutions] = useState(false);
+  const [originalOpen, setOriginalOpen] = useState(false);
+  const [changeOpen, setChangeOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const [suggestion, setSuggestion] = useState<Suggestion>();
   const [preview, setPreview] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
   const [printSolutions, setPrintSolutions] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -325,6 +391,12 @@ function Editor() {
   const subject = subjects.find((s) => s.id === material.subjectId);
   const cls = classes.find((c) => c.id === material.classId);
   const createdSlot = slots.find((s) => s.id === params.get("slot"));
+  // An uploaded file with no sheet made from it yet: the file is the document.
+  const fileOnly = material.blocks.length === 0;
+  const print = (solutions: boolean) => {
+    setPrintSolutions(solutions);
+    setPrinting(true);
+  };
 
   const commit = (blocks: Block[], label: string) => {
     undoStack.current.push(material.blocks);
@@ -357,106 +429,141 @@ function Editor() {
     const changed = suggestion.changedIds.length > 0;
     if (changed) commit(suggestion.blocks, `AI: ${suggestion.summary.replace(/^Προτείνω /, "").replace(/\.$/, "")}`);
     if (suggestion.withSolutions && !material.withSolutions) patch(material.id, { withSolutions: true });
-    if (suggestion.blackAndWhite) patch(material.id, { blackAndWhite: !material.blackAndWhite });
+    if (suggestion.blackAndWhite) patch(material.id, { blackAndWhite: true });
     if (suggestion.versionB) {
-      const bId = duplicate(material.id, suggestion.versionB, "(Εκδοχή Β)");
-      if (!material.title.endsWith("(Εκδοχή Α)")) patch(material.id, { title: `${material.title} (Εκδοχή Α)` });
-      toast("Δημιουργήθηκε η Εκδοχή Β", { label: "Άνοιγμα", run: () => router.push(`/materials/${bId}`) });
+      const bId = duplicate(material.id, suggestion.versionB, "(Δεύτερη εκδοχή)");
+      toast("Δημιουργήθηκε δεύτερη εκδοχή του φύλλου", { label: "Άνοιγμα", run: () => router.push(`/materials/${bId}`) });
     } else {
       toast(changed ? "Η αλλαγή εφαρμόστηκε" : "Εφαρμόστηκε", changed ? { label: "Αναίρεση", run: undo } : undefined);
     }
-    if (suggestion.withSolutions) setTab("solutions");
+    if (suggestion.withSolutions) setShowSolutions(true);
     setSuggestion(undefined);
-    setPane("doc");
   };
 
-  const docBlocks = suggestion && tab === "edit" ? suggestion.blocks : material.blocks;
+  const prepareFromFile = () => {
+    const lesson = sortSlots(slots.filter((s) => s.materialIds.includes(material.id) && s.date >= today))[0];
+    openPrepare({
+      slotId: lesson?.id ?? null,
+      source: material.file && { meta: material.file },
+      defaults: { classId: material.classId, subjectId: material.subjectId },
+    });
+  };
 
-  const doc = (
-    <div>
-      {tab === "edit" && (
-        <div className="no-print mb-3 flex flex-wrap items-center gap-1 rounded-xl border border-line bg-surface p-1.5">
-          <IconButton label="Αναίρεση" onClick={undo} disabled={!undoStack.current.length}>
-            <Undo2 className="size-4" />
-          </IconButton>
-          <IconButton label="Επανάληψη" onClick={redo} disabled={!redoStack.current.length}>
-            <Redo2 className="size-4" />
-          </IconButton>
-          <span className="mx-1 h-6 w-px bg-line" />
-          <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid(), type: "exercise", text: "Νέα άσκηση", lines: 2, level: "standard" }], "Προσθήκη άσκησης")}>
-            <Plus className="size-4" /> Άσκηση
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid(), type: "heading", text: "Νέα επικεφαλίδα" }], "Προσθήκη επικεφαλίδας")}>
-            <Plus className="size-4" /> Επικεφαλίδα
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => commit([...material.blocks, { id: uid(), type: "text", text: "Νέο κείμενο" }], "Προσθήκη κειμένου")}>
-            <Type className="size-4" /> Κείμενο
-          </Button>
-          <span className="ml-auto hidden px-2 text-xs text-muted sm:block">{selectedId ? `Επιλογή: ${blockLabel(selectedId)}` : "Πάτησε ένα μπλοκ για επεξεργασία"}</span>
-        </div>
-      )}
-      <div className="rounded-2xl bg-line-2/70 p-2 sm:p-6">
-        {tab === "original" ? (
-          <OriginalView material={material} />
-        ) : (
-          <DocPage
-            material={material}
-            blocks={docBlocks}
-            mode={tab === "solutions" ? "solutions" : "edit"}
-            highlight={suggestion && tab === "edit" ? suggestion.changedIds : []}
-            edit={
-              suggestion
-                ? undefined
-                : {
-                    selectedId,
-                    onSelect: setSelectedId,
-                    // Hand-written wording replaces the generated variants, so later AI steps start from it.
-                    onSave: (bid, p) => commit(material.blocks.map((b) => (b.id === bid ? { ...b, ...p, variants: undefined, variantB: undefined } : b)), `Επεξεργασία: ${blockLabel(bid)}`),
-                    onMove: (bid, dir) => {
-                      const i = material.blocks.findIndex((b) => b.id === bid);
-                      const next = [...material.blocks];
-                      [next[i], next[i + dir]] = [next[i + dir], next[i]];
-                      commit(next, "Αλλαγή σειράς");
-                    },
-                    onDelete: (bid) => {
-                      const label = blockLabel(bid);
-                      commit(material.blocks.filter((b) => b.id !== bid), `Διαγραφή: ${label}`);
-                      setSelectedId(undefined);
-                      toast(`Διαγράφηκε: ${label}`, { label: "Αναίρεση", run: undo });
-                    },
-                  }
-            }
-          />
+  const changes = suggestion ? suggestion.changedIds.length : 0;
+  const bar = suggestion ? (
+    <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 p-1.5 pl-3 shadow-pop" role="status">
+      <Sparkles className="size-4 shrink-0 text-amber" />
+      <p className="min-w-0 flex-1 text-[13px] font-semibold leading-tight">
+        {changes ? `${changes} ${changes === 1 ? "αλλαγή" : "αλλαγές"}` : "Η πρόταση είναι έτοιμη"}
+        {changes > 0 && <span className="block text-xs font-normal text-ink-2">με κίτρινο στο φύλλο</span>}
+      </p>
+      <Button size="sm" onClick={applySuggestion}>
+        <Check className="size-4" /> Εφαρμογή
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => setSuggestion(undefined)}>
+        Ακύρωση
+      </Button>
+    </div>
+  ) : (
+    <div className="flex items-center gap-1 rounded-xl border border-line bg-surface/95 p-1.5 shadow-card backdrop-blur">
+      <Button size="sm" className="lg:hidden" onClick={() => setChangeOpen(true)}>
+        <Sparkles className="size-4" /> Άλλαξέ το
+      </Button>
+      <IconButton label="Αναίρεση" onClick={undo} disabled={!undoStack.current.length}>
+        <Undo2 className="size-4" />
+      </IconButton>
+      <IconButton label="Επανάληψη" onClick={redo} disabled={!redoStack.current.length} className="max-sm:hidden">
+        <Redo2 className="size-4" />
+      </IconButton>
+      <AddMenu onAdd={(b, label) => commit([...material.blocks, b], label)} />
+      <span className="ml-auto hidden px-2 text-xs text-muted xl:block">{selectedId ? `Επιλογή: ${blockLabel(selectedId)}` : "Πάτησε ένα κομμάτι για να το αλλάξεις"}</span>
+      <button
+        type="button"
+        aria-pressed={showSolutions}
+        onClick={() => setShowSolutions((v) => !v)}
+        className={clsx(
+          "ml-auto flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold transition-colors xl:ml-0",
+          showSolutions ? "bg-brand-50 text-brand shadow-[inset_0_0_0_1px_var(--color-brand-100)]" : "text-ink-2 hover:bg-line-2",
         )}
-      </div>
-      {suggestion && tab === "edit" && (
-        <p className="no-print mt-2 text-center text-xs font-medium text-amber">Προεπισκόπηση πρότασης — οι αλλαγές φαίνονται με κίτρινο</p>
+      >
+        <Eye className="size-4" /> Λύσεις
+      </button>
+      {material.file && (
+        <Button variant="ghost" size="sm" onClick={() => setOriginalOpen(true)} aria-label="Πρωτότυπο αρχείο" title="Πρωτότυπο αρχείο">
+          <Paperclip className="size-4" /> <span className="max-sm:hidden">Πρωτότυπο</span>
+        </Button>
       )}
     </div>
   );
 
-  const side = (
-    <div className="space-y-4">
-      <div className={clsx(pane !== "ai" && "max-lg:hidden")}>
-        <AdaptPanel
-          material={material}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          suggestion={suggestion}
-          onSuggest={(s) => {
-            setSuggestion(s);
-            setTab("edit");
-          }}
-          onApply={applySuggestion}
-          onDiscard={() => setSuggestion(undefined)}
-        />
-      </div>
-      <div className={clsx("space-y-4", pane !== "more" && "max-lg:hidden")}>
-        <LessonLinks material={material} />
-        <MaterialDetails material={material} />
-        <HistoryCard material={material} />
+  const doc = fileOnly ? (
+    <div className="grid gap-4">
+      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
+          <Sparkles className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Φτιάξε φύλλο από αυτό το αρχείο</p>
+          <p className="text-sm text-muted">Φύλλο εργασίας, τεστ, 3 επίπεδα ή σχέδιο μαθήματος, με βάση τη σελίδα σου.</p>
+        </div>
+        <Button onClick={prepareFromFile}>
+          <Sparkles className="size-4" /> Ετοίμασε
+        </Button>
+      </Card>
+      <div className="rounded-2xl bg-line-2/70 p-2 sm:p-6">
+        <OriginalView material={material} />
       </div>
     </div>
+  ) : (
+    <div>
+      <div className="no-print sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-20 mb-3 lg:top-[4.75rem]">{bar}</div>
+      <div className="rounded-2xl bg-line-2/70 p-2 sm:p-6">
+        <DocPage
+          material={material}
+          blocks={suggestion ? suggestion.blocks : material.blocks}
+          mode={showSolutions && !suggestion ? "solutions" : "edit"}
+          highlight={suggestion ? suggestion.changedIds : []}
+          edit={
+            suggestion || showSolutions
+              ? undefined
+              : {
+                  selectedId,
+                  onSelect: setSelectedId,
+                  // Hand-written wording replaces the generated variants, so later AI steps start from it.
+                  onSave: (bid, p) => commit(material.blocks.map((b) => (b.id === bid ? { ...b, ...p, variants: undefined, variantB: undefined } : b)), `Επεξεργασία: ${blockLabel(bid)}`),
+                  onMove: (bid, dir) => {
+                    const i = material.blocks.findIndex((b) => b.id === bid);
+                    const next = [...material.blocks];
+                    [next[i], next[i + dir]] = [next[i + dir], next[i]];
+                    commit(next, "Αλλαγή σειράς");
+                  },
+                  onDelete: (bid) => {
+                    const label = blockLabel(bid);
+                    commit(material.blocks.filter((b) => b.id !== bid), `Διαγραφή: ${label}`);
+                    setSelectedId(undefined);
+                    toast(`Διαγράφηκε: ${label}`, { label: "Αναίρεση", run: undo });
+                  },
+                }
+          }
+        />
+      </div>
+    </div>
+  );
+
+  const adapt = (
+    <AdaptPanel
+      material={material}
+      selectedId={selectedId}
+      onSelect={setSelectedId}
+      suggestion={suggestion}
+      onSuggest={(s) => {
+        setSuggestion(s);
+        setShowSolutions(false);
+        setChangeOpen(false);
+      }}
+      onApply={applySuggestion}
+      onDiscard={() => setSuggestion(undefined)}
+    />
   );
 
   return (
@@ -495,41 +602,17 @@ function Editor() {
             {cls?.grade} · {KIND_LABEL[material.kind]}
           </p>
         </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
-          <span className="mr-1 hidden items-center gap-1.5 text-sm text-muted md:flex">
-            <CheckCircle2 className="size-4 text-brand-500" /> Αποθηκεύτηκε
-          </span>
-          <Button variant="secondary" onClick={() => setPreview(true)} className="flex-1 sm:flex-none">
-            <Eye className="size-4" /> Προεπισκόπηση
-          </Button>
-          <div className="relative flex-1 sm:flex-none">
-            <Button onClick={() => setExportOpen((o) => !o)} className="w-full" aria-expanded={exportOpen}>
-              <Download className="size-4" /> Εξαγωγή PDF <ChevronDown className="size-4 opacity-80" />
+        {!fileOnly && (
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <span className="mr-1 hidden items-center gap-1.5 text-sm text-muted md:flex">
+              <CheckCircle2 className="size-4 text-brand-500" /> Αποθηκεύτηκε
+            </span>
+            <Button variant="secondary" onClick={() => setPreview(true)} className="max-lg:hidden">
+              <Eye className="size-4" /> Προεπισκόπηση
             </Button>
-            {exportOpen && (
-              <div className="absolute right-0 top-12 z-30 w-60 animate-fade-in rounded-2xl border border-line bg-surface p-1.5 shadow-pop">
-                {[
-                  { sol: false, label: "Φύλλο μαθητή" },
-                  { sol: true, label: "Φύλλο λύσεων" },
-                ].map((o) => (
-                  <button
-                    key={o.label}
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium hover:bg-line-2"
-                    onClick={() => {
-                      setPrintSolutions(o.sol);
-                      setExportOpen(false);
-                      setPrinting(true);
-                    }}
-                  >
-                    <FileText className="size-4 text-brand" /> {o.label}
-                  </button>
-                ))}
-                <p className="px-3 pb-1 pt-1 text-[11px] text-muted">Επίλεξε «Αποθήκευση ως PDF» στο παράθυρο εκτύπωσης.</p>
-              </div>
-            )}
+            <ExportMenu onPrint={print} className="flex-1 sm:flex-none" />
           </div>
-        </div>
+        )}
       </div>
 
       {showCreated && (
@@ -539,14 +622,14 @@ function Editor() {
             <span className="font-bold">Το υλικό είναι έτοιμο.</span>{" "}
             {createdSlot ? (
               <>
-                Συνδέθηκε με το μάθημα{" "}
+                Μπήκε στο μάθημα{" "}
                 <Link href={`/lessons/${createdSlot.id}`} className="font-semibold text-brand underline">
                   {dayName(createdSlot.date)} {createdSlot.start}
                 </Link>
-                .
+                . Έλεγξέ το πριν το μοιράσεις.
               </>
             ) : (
-              "Προσάρμοσέ το ή πρόσθεσέ το σε ένα μάθημα."
+              "Έλεγξέ το πριν το μοιράσεις και πρόσθεσέ το σε ένα μάθημα."
             )}
           </p>
           <IconButton label="Κλείσιμο" className="size-8" onClick={() => setShowCreated(false)}>
@@ -555,33 +638,23 @@ function Editor() {
         </div>
       )}
 
-      <Segmented<Pane>
-        value={pane}
-        onChange={setPane}
-        className="no-print mb-4 lg:hidden"
-        options={[
-          { value: "doc", label: "Έγγραφο" },
-          { value: "ai", label: suggestion ? "Πρόταση •" : "Προσαρμογή" },
-          { value: "more", label: "Μάθημα & ιστορικό" },
-        ]}
-      />
-
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className={clsx("no-print min-w-0", pane !== "doc" && "max-lg:hidden")}>
-          <Tabs<Tab>
-            value={tab}
-            onChange={setTab}
-            className="mb-4"
-            tabs={[
-              { value: "original", label: "Πρωτότυπο" },
-              { value: "edit", label: "Επεξεργασία" },
-              { value: "solutions", label: "Λύσεις" },
-            ]}
-          />
-          {doc}
+        <div className="no-print min-w-0">{doc}</div>
+        <div className="no-print space-y-4">
+          {!fileOnly && <div className="max-lg:hidden">{adapt}</div>}
+          <LessonLinks material={material} />
+          <MaterialDetails material={material} />
+          <HistoryCard material={material} />
         </div>
-        <div className="no-print">{side}</div>
       </div>
+
+      <Sheet open={changeOpen} onClose={() => setChangeOpen(false)} title="Άλλαξέ το">
+        <div className="-mx-5 -my-4 [&>*]:rounded-none [&>*]:border-0 [&>*]:shadow-none">{adapt}</div>
+      </Sheet>
+
+      <Sheet open={originalOpen} onClose={() => setOriginalOpen(false)} title="Πρωτότυπο" wide>
+        <OriginalView material={material} />
+      </Sheet>
 
       <Sheet open={preview} onClose={() => setPreview(false)} title="Προεπισκόπηση" wide>
         <div className="rounded-xl bg-line-2 p-2 sm:p-4">

@@ -7,7 +7,7 @@ import { uid } from "@/lib/id";
 import { useApp } from "@/lib/store";
 import { saveBlob } from "@/lib/store/blobs";
 import { remote } from "@/lib/store/remote";
-import { usePendingUpload } from "@/lib/store/pending";
+import { guessSubject, titleFromFileName } from "@/lib/materials";
 import type { FileMeta } from "@/lib/types";
 import { toast } from "./toast";
 import { shrinkImage } from "@/lib/ai/client";
@@ -55,7 +55,10 @@ export async function ingestFile(original: File): Promise<{ meta: FileMeta; prev
   return { meta: { name: file.name, size: file.size, type: file.type, blobKey: stored ? blobKey : undefined }, previewUrl };
 }
 
-/** Opens the file picker and hands the chosen file to the material wizard. */
+/**
+ * Opens the file picker and files the upload as it is: in the library, and in the lesson when
+ * there is one. Making a worksheet from it is a choice the teacher makes afterwards.
+ */
 export function UploadTrigger({
   children,
   className,
@@ -69,7 +72,6 @@ export function UploadTrigger({
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const setPending = usePendingUpload((s) => s.set);
   const [busy, setBusy] = useState(false);
   return (
     <>
@@ -86,12 +88,27 @@ export function UploadTrigger({
           const file = e.target.files?.[0];
           e.target.value = "";
           if (!file) return;
+          const { slots, classes, createMaterial, attachMaterial } = useApp.getState();
+          const slot = slotId ? slots.find((s) => s.id === slotId) : undefined;
+          const classId = slot?.classId ?? classes[0]?.id;
+          if (!classId) return toast("Πρόσθεσε πρώτα ένα τμήμα από τις «Τάξεις».");
           setBusy(true);
           const r = await ingestFile(file);
           setBusy(false);
           if ("error" in r) return toast(r.error);
-          setPending(r.meta, r.previewUrl);
-          router.push(`/materials/new${slotId ? `?slot=${slotId}` : ""}`);
+          const id = createMaterial({
+            title: titleFromFileName(file.name),
+            classId,
+            subjectId: slot?.subjectId ?? guessSubject(file.name) ?? "allo",
+            kind: "file",
+            level: "standard",
+            withSolutions: false,
+            file: r.meta,
+            blocks: [],
+          });
+          if (slot) attachMaterial(slot.id, id);
+          toast(slot ? "Το αρχείο ανέβηκε και μπήκε στο μάθημα" : "Το αρχείο ανέβηκε");
+          router.push(`/materials/${id}`);
         }}
       />
     </>

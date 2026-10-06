@@ -1,22 +1,21 @@
 "use client";
 
 import clsx from "clsx";
-import { Bell, LogOut, Plus, Search, Settings } from "@/components/icons";
+import { Bell, Loader2, LogOut, Search, Settings, Sparkles } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { shortDate } from "@/lib/dates";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushWrites, useApp } from "@/lib/store";
 import { supabase } from "@/lib/supabase/client";
-import { SUBJECTS } from "@/lib/seed";
 import { isBarePath, useSession } from "@/lib/store/session";
 import { trackVisit } from "@/lib/history";
 import { useKeyboardFlag } from "@/lib/viewport";
 import { Avatar } from "../ui";
 import { Toaster } from "../toast";
-import { CaptureSheet } from "../capture";
-import { SubjectIcon } from "../subject";
-import { needsLog, useClock } from "../lesson";
+import { ConfirmHost } from "../confirm";
+import { openPrepare, PrepareSheet, useJobState } from "../prepare";
+import { setJobNavigator } from "@/lib/store/jobs";
+import { FoundList, PendingList, usePendingLessons, useSearch } from "./finders";
 import { isActive, NAV } from "./nav";
 
 /** The app mark: a «τ» on ink, with the red dot of the teacher's pen. */
@@ -70,7 +69,8 @@ function Sidebar() {
         {mode === "demo" && <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber">Επίδειξη</span>}
       </div>
       {profile.schoolName && <p className="mt-1 truncate px-2 text-[13px] text-muted">{profile.schoolName}</p>}
-      <nav className="mt-6 flex flex-col gap-1">
+      <PrepareButton />
+      <nav className="mt-4 flex flex-col gap-1">
         {NAV.map(({ href, label, Icon, key }) => (
           <Link key={href} href={href} className={item(isActive(pathname, href))}>
             <Icon className="size-[18px]" />
@@ -111,11 +111,7 @@ function SearchBox() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const materials = useApp((s) => s.materials);
-  const slots = useApp((s) => s.slots);
-  const students = useApp((s) => s.students);
-  const classes = useApp((s) => s.classes);
-  const today = useApp((s) => s.today);
+  const results = useSearch(q);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -128,32 +124,6 @@ function SearchBox() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  const results = useMemo(() => {
-    const norm = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-    const term = norm(q.trim());
-    if (!term) return [];
-    const out: { key: string; href: string; title: string; sub: string; icon: ReactNode }[] = [];
-    for (const m of materials)
-      if (norm(m.title).includes(term))
-        out.push({ key: m.id, href: `/materials/${m.id}`, title: m.title, sub: "Υλικό", icon: <SubjectIcon id={m.subjectId} size="sm" /> });
-    const seen = new Set<string>();
-    for (const s of slots)
-      if (s.date >= today && s.topic && norm(s.topic).includes(term) && !seen.has(s.topic)) {
-        seen.add(s.topic);
-        out.push({ key: s.id, href: `/lessons/${s.id}`, title: s.topic, sub: `Μάθημα · ${shortDate(s.date)} ${s.start}`, icon: <SubjectIcon id={s.subjectId} size="sm" /> });
-      }
-    for (const st of students)
-      if (norm(`${st.firstName} ${st.lastName}`).includes(term))
-        out.push({
-          key: st.id,
-          href: `/classes/${st.classId}`,
-          title: `${st.firstName} ${st.lastName}`,
-          sub: `Μαθητής · ${classes.find((c) => c.id === st.classId)?.name}`,
-          icon: <Avatar name={`${st.firstName} ${st.lastName}`} size="sm" />,
-        });
-    return out.slice(0, 8);
-  }, [q, materials, slots, students, classes, today]);
 
   return (
     <div className="relative max-w-2xl flex-1">
@@ -182,48 +152,33 @@ function SearchBox() {
       <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-line bg-line-2 px-1.5 py-0.5 font-mono text-[11px] text-muted">⌘ K</kbd>
       {open && q.trim() && (
         <div className="absolute inset-x-0 top-12 z-40 animate-fade-in overflow-hidden rounded-2xl border border-line bg-surface p-1.5 shadow-pop">
-          {results.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-muted">Δεν βρέθηκε κάτι για «{q}».</p>
-          ) : (
-            results.map((r) => (
-              <Link
-                key={r.key}
-                href={r.href}
-                onClick={() => setQ("")}
-                className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-line-2"
-              >
-                {r.icon}
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">{r.title}</span>
-                  <span className="block text-xs text-muted">{r.sub}</span>
-                </span>
-              </Link>
-            ))
-          )}
+          <FoundList q={q} results={results} onPick={() => setQ("")} />
         </div>
       )}
     </div>
   );
 }
 
-function CaptureButton({ onOpen }: { onOpen: () => void }) {
+/** The AI's front door on a computer: first thing in the sidebar. */
+function PrepareButton() {
+  const { running, ready } = useJobState();
   return (
     <button
       type="button"
-      onClick={onOpen}
-      className="flex h-10 items-center gap-2 rounded-lg bg-brand pl-3 pr-3.5 text-[14px] font-semibold text-white hover:bg-brand-hover"
+      onClick={() => openPrepare()}
+      className="relative mt-5 flex h-10 items-center gap-2 rounded-lg bg-brand px-3 text-[14px] font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_1px_2px_rgb(26_34_56/0.2)] transition-[background-color,transform] hover:bg-brand-hover active:scale-[0.98]"
     >
-      <Plus className="size-[18px]" /> Καταγραφή
-      <kbd className="ml-1 rounded border border-white/30 px-1.5 font-mono text-[10.5px] font-medium">N</kbd>
+      {running ? <Loader2 className="size-[18px] animate-spin" /> : <Sparkles className="size-[18px]" />}
+      {running ? "Φτιάχνω…" : "Ετοίμασε"}
+      {ready && !running && <span className="size-2 rounded-full bg-white" aria-label="Έτοιμο υλικό" />}
+      <kbd className="ml-auto rounded border border-white/30 px-1.5 font-mono text-[10.5px] font-medium">N</kbd>
     </button>
   );
 }
 
 function Notifications() {
-  const slots = useApp((s) => s.slots);
   const [open, setOpen] = useState(false);
-  const clock = useClock();
-  const pending = slots.filter((s) => needsLog(s, clock));
+  const pending = usePendingLessons();
   return (
     <div className="relative">
       <button
@@ -238,39 +193,40 @@ function Notifications() {
       </button>
       {open && (
         <div className="absolute right-0 top-12 z-40 w-80 animate-fade-in rounded-2xl border border-line bg-surface p-2 shadow-pop">
-          <p className="px-2 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-muted">Χρειάζονται καταγραφή</p>
-          {pending.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-muted">Όλα τα μαθήματα έχουν καταγραφεί.</p>
-          ) : (
-            pending.map((s) => (
-              <Link key={s.id} href={`/lessons/${s.id}`} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-line-2">
-                <SubjectIcon id={s.subjectId} size="sm" />
-                <span className="text-sm">
-                  <span className="block font-semibold">{s.topic || SUBJECTS.find((x) => x.id === s.subjectId)?.name}</span>
-                  <span className="text-xs text-muted">{shortDate(s.date)} · {s.start} — τι διδάχθηκε;</span>
-                </span>
-              </Link>
-            ))
-          )}
+          <p className="px-2 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-muted">Περιμένουν «Πώς πήγε;»</p>
+          <PendingList />
         </div>
       )}
     </div>
   );
 }
 
-function TopBar({ onCapture }: { onCapture: () => void }) {
+function TopBar() {
   return (
     <header className="no-print sticky top-0 z-20 hidden items-center gap-3 border-b border-line bg-bg/85 px-8 py-3 backdrop-blur lg:flex">
       <SearchBox />
       <div className="ml-auto flex items-center gap-2">
         <Notifications />
-        <CaptureButton onOpen={onCapture} />
       </div>
     </header>
   );
 }
 
-function BottomNav({ onCapture }: { onCapture: () => void }) {
+/** The middle of the bottom bar: AI, one tap away from every screen. */
+function PrepareTab() {
+  const { running, ready } = useJobState();
+  return (
+    <button type="button" onClick={() => openPrepare()} className="flex flex-col items-center gap-1 pb-2 pt-1.5 text-[11px] font-semibold text-brand">
+      <span className="relative flex h-[30px] w-12 items-center justify-center rounded-[10px] bg-brand text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_2px_6px_-1px_rgb(30_58_138/0.45)] transition-transform active:scale-95">
+        {running ? <Loader2 className="size-[18px] animate-spin" /> : <Sparkles className="size-[19px]" strokeWidth={1.8} />}
+        {ready && !running && <span className="absolute -right-1 -top-1 size-3 rounded-full border-2 border-surface bg-now" aria-label="Έτοιμο υλικό" />}
+      </span>
+      {running ? "Φτιάχνω…" : "Ετοίμασε"}
+    </button>
+  );
+}
+
+function BottomNav() {
   const pathname = usePathname();
   const tab = ({ href, label, Icon }: (typeof NAV)[number]) => {
     const active = isActive(pathname, href);
@@ -285,22 +241,15 @@ function BottomNav({ onCapture }: { onCapture: () => void }) {
     <nav className="no-print kb-hide fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden" aria-label="Κύρια πλοήγηση">
       <div className="mx-auto grid max-w-lg grid-cols-5 items-center">
         {NAV.slice(0, 2).map(tab)}
-        <button
-          type="button"
-          onClick={onCapture}
-          aria-label="Γρήγορη καταγραφή"
-          className="mx-auto flex size-11 items-center justify-center rounded-lg bg-brand text-white hover:bg-brand-hover active:scale-95 transition-transform"
-        >
-          <Plus className="size-6" strokeWidth={2} />
-        </button>
+        <PrepareTab />
         {NAV.slice(2).map(tab)}
       </div>
     </nav>
   );
 }
 
-/** Single-key shortcuts on a keyboard: T Σήμερα, H Ημερολόγιο, C Τάξεις, M Υλικό, N καταγραφή. */
-function useShortcuts(onCapture: () => void) {
+/** Single-key shortcuts on a keyboard: T Σήμερα, P Πρόγραμμα, C Τάξεις, M Υλικό, N Ετοίμασε. */
+function useShortcuts() {
   const router = useRouter();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -311,7 +260,7 @@ function useShortcuts(onCapture: () => void) {
       const k = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : e.key.toLowerCase();
       if (k === "n") {
         e.preventDefault();
-        onCapture();
+        openPrepare();
         return;
       }
       const hit = NAV.find((n) => n.key === k);
@@ -319,7 +268,7 @@ function useShortcuts(onCapture: () => void) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router, onCapture]);
+  }, [router]);
 }
 
 function Skeleton() {
@@ -347,9 +296,10 @@ function Offline({ retry }: { retry: () => void }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const { ready, failed, retry } = useSession();
   const pathname = usePathname();
-  const [capture, setCapture] = useState(false);
-  const openCapture = useCallback(() => setCapture(true), []);
-  useShortcuts(openCapture);
+  const router = useRouter();
+  useShortcuts();
+  // A finished AI job opens through the router, without reloading the app.
+  useEffect(() => setJobNavigator((href) => router.push(href)), [router]);
   useKeyboardFlag();
   // Remember the in-app trail, so "Πίσω" returns where the teacher actually came from.
   useEffect(() => trackVisit(pathname + window.location.search), [pathname]);
@@ -357,6 +307,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="min-h-dvh">
         {failed ? <Offline retry={retry} /> : ready ? children : <div className="mx-auto max-w-md p-6"><Skeleton /></div>}
+        <ConfirmHost />
         <Toaster />
       </div>
     );
@@ -364,11 +315,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-dvh">
       <Sidebar />
       <div className="lg:pl-60">
-        <TopBar onCapture={openCapture} />
+        <TopBar />
         <main className="mx-auto max-w-6xl px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-12 lg:pt-2">{failed ? <Offline retry={retry} /> : ready ? children : <Skeleton />}</main>
       </div>
-      <BottomNav onCapture={openCapture} />
-      {capture && <CaptureSheet open onClose={() => setCapture(false)} />}
+      <BottomNav />
+      <PrepareSheet />
+      <ConfirmHost />
       <Toaster />
     </div>
   );

@@ -1,19 +1,22 @@
 "use client";
 
-import { ArrowRight, CalendarClock, CalendarOff, NotebookPen, Plus, Trash2 } from "@/components/icons";
+import { ArrowRight, CalendarClock, CalendarOff, CheckCircle2, NotebookPen, Plus, Sparkles, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useState } from "react";
 import { needsLog, useClock } from "@/components/lesson";
 import { MobileBrandBar } from "@/components/shell/PageHeader";
 import { SubjectIcon } from "@/components/subject";
-import { LogRing, Timeline } from "@/components/timeline";
+import { openPrepare } from "@/components/prepare";
+import { Timeline } from "@/components/timeline";
 import { toast } from "@/components/toast";
-import { ButtonLink, Card, cx } from "@/components/ui";
-import { dayName, longDate, shortDate, timeToMin } from "@/lib/dates";
+import { Button, ButtonLink, Card, cx } from "@/components/ui";
+import { addDays, dayName, longDate, shortDate, timeToMin } from "@/lib/dates";
+import { upcoming } from "@/lib/prepare";
 import { slotsOn, sortSlots, upcomingLesson } from "@/lib/schedule";
 import { holidayOn, termOn, weekNumber } from "@/lib/schoolYear";
 import { vocative } from "@/lib/greek";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import { AutoText } from "@/components/text";
 
 function Tasks() {
@@ -86,7 +89,7 @@ function Tasks() {
 /** Lessons from earlier days that still wait for a note. */
 function Backlog() {
   const slots = useApp((s) => s.slots);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const clock = useClock();
   const old = sortSlots(slots.filter((s) => s.date < clock.today && needsLog(s, clock))).slice(-5).reverse();
   if (!old.length) return null;
@@ -109,18 +112,82 @@ function Backlog() {
   );
 }
 
+/**
+ * One suggestion at a time, so Today always says what to do next: close the day, or get the
+ * coming lessons ready (the next lesson has its own button on its card).
+ */
+function NextStep() {
+  const slots = useApp((s) => s.slots);
+  const subjects = useSubjects();
+  const clock = useClock();
+  const { today, now } = clock;
+  const todays = slotsOn(slots, today);
+  const toLog = todays.filter((s) => needsLog(s, clock));
+  const dayOver = todays.length > 0 && timeToMin(now) >= timeToMin(todays.at(-1)!.end);
+  const [, ...later] = upcoming(slots, today, now, 16).filter((s) => !s.carriedToId);
+  const days = [...new Set(later.map((s) => s.date))].slice(0, 2);
+  const bare = later.filter((s) => days.includes(s.date) && !s.materialIds.length);
+  const group = bare.filter((s) => s.date === bare[0]?.date);
+  const name = (id: string) => subjects.find((x) => x.id === id)?.name;
+  const box = "flex items-center gap-3 rounded-2xl border border-line bg-surface px-3.5 py-3";
+
+  if (dayOver && toLog.length)
+    return (
+      <div className={box}>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber">
+          <NotebookPen className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Κλείσε τη μέρα</p>
+          <p className="text-[13px] text-muted">
+            {toLog.length} {toLog.length === 1 ? "μάθημα περιμένει" : "μαθήματα περιμένουν"} «Έγινε» και δύο λέξεις για το τι διδάχθηκε.
+          </p>
+        </div>
+        <ButtonLink href={`/lessons/${toLog[0].id}`} variant="secondary" size="sm">
+          Άνοιγμα
+        </ButtonLink>
+      </div>
+    );
+  if (group.length) {
+    const d = group[0].date;
+    const when = d === today ? "Σήμερα ακόμη" : d === addDays(today, 1) ? "Αύριο" : dayName(d);
+    return (
+      <div className={box}>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
+          <Sparkles className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">
+            {when}: {group.length} {group.length === 1 ? "μάθημα" : "μαθήματα"} χωρίς υλικό
+          </p>
+          <p className="truncate text-[13px] text-muted">{group.map((s) => `${name(s.subjectId)} ${s.start}`).join(" · ")}</p>
+        </div>
+        <Button size="sm" onClick={() => openPrepare({ slotId: group[0].id })}>
+          Ετοίμασε
+        </Button>
+      </div>
+    );
+  }
+  if (todays.length && !toLog.length)
+    return (
+      <p className="flex items-center gap-2 px-1 text-[13px] text-muted">
+        <CheckCircle2 className="size-4 text-brand-500" /> Τα επόμενα μαθήματα έχουν υλικό.
+      </p>
+    );
+  return null;
+}
+
 export default function TodayPage() {
   const slots = useApp((s) => s.slots);
   const profile = useApp((s) => s.profile);
   const timetable = useApp((s) => s.timetable);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const clock = useClock();
   const { today, now } = clock;
   const country = profile.country;
 
   const todays = slotsOn(slots, today);
   const ended = todays.filter((s) => timeToMin(s.end) <= timeToMin(now));
-  const logged = ended.filter((s) => s.status !== "planned").length;
   const week = weekNumber(country, today);
   const term = termOn(country, today);
   const holiday = holidayOn(country, today);
@@ -169,21 +236,9 @@ export default function TodayPage() {
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="grid min-w-0 content-start gap-3">
-          {ended.length > 0 && (
-            <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-3.5 py-2.5">
-              <LogRing done={logged} total={ended.length} />
-              <div className="min-w-0">
-                <p className="font-bold">
-                  {logged} από {ended.length} {ended.length === 1 ? "καταγράφηκε" : "καταγράφηκαν"}
-                </p>
-                <p className="text-[12.5px] text-muted">
-                  {logged < ended.length ? "Πάτα «Έγινε» στο μάθημα που τελείωσε." : "Όλα τα μαθήματα που τελείωσαν έχουν καταγραφεί."}
-                </p>
-              </div>
-            </div>
-          )}
-          <Timeline date={today} empty={nothingToday} />
+        <div className="grid min-w-0 grid-cols-1 content-start gap-3">
+          <NextStep />
+          <Timeline date={today} empty={nothingToday} ai />
           {todays.length > 0 && (
             <Link href="/schedule" className="inline-flex items-center gap-1 justify-self-start px-1 text-sm font-semibold text-brand-500 hover:underline">
               Όλη η εβδομάδα <ArrowRight className="size-4" />
@@ -195,7 +250,7 @@ export default function TodayPage() {
           <Tasks />
           {ended.length === 0 && todays.length > 0 && (
             <p className="flex items-center gap-2 text-[13px] text-muted">
-              <NotebookPen className="size-4" /> Μετά από κάθε μάθημα θα σου ζητάμε δύο λέξεις για το τι διδάχθηκε.
+              <NotebookPen className="size-4" /> Μετά από κάθε μάθημα, πάτα «Έγινε» και γράψε δύο λέξεις για το τι διδάχθηκε.
             </p>
           )}
         </div>

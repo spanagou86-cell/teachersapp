@@ -5,8 +5,8 @@ import { ArrowDown, ArrowUp, BookOpen, GripVertical, Pencil, Trash2, Target } fr
 import { useEffect, useRef, useState } from "react";
 import { GrowingTextarea } from "../text";
 import { buttonClass, cx, inputClass } from "../ui";
-import { SUBJECTS } from "@/lib/seed";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import type { Block, Material } from "@/lib/types";
 
 const BAR_COLORS = ["#ef8f9d", "#f6d36b", "#f4a259", "#5f9fdc", "#9b7fd6"];
@@ -169,7 +169,7 @@ export function DocPage({
   className?: string;
 }) {
   const [editingId, setEditingId] = useState<string>();
-  const subject = SUBJECTS.find((x) => x.id === material.subjectId)?.name;
+  const subject = useSubjects().find((x) => x.id === material.subjectId)?.name;
   const school = useApp((s) => s.profile.schoolName);
   const grade = useApp((s) => s.classes.find((c) => c.id === material.classId)?.grade);
   const isSheet = material.kind === "worksheet" || material.kind === "quiz";
@@ -190,7 +190,8 @@ export function DocPage({
         )}
         <span className="flex items-center gap-2 text-xs">
           <span className="text-ink-2">{subject}</span>
-          <span className={clsx("rounded-md px-2 py-0.5 font-semibold", material.blackAndWhite ? "bg-line-2 text-ink" : "bg-info-50 text-info")}>{material.level === "basic" ? "Επίπεδο Α" : material.level === "advanced" ? "Επίπεδο Γ" : "Επίπεδο Β"}</span>
+          {/* Pupils see a letter, not «easy» or «hard». */}
+          {isSheet && <span className={clsx("rounded-md px-2 py-0.5 font-semibold", material.blackAndWhite ? "bg-line-2 text-ink" : "bg-info-50 text-info")}>{material.level === "basic" ? "Επίπεδο Α" : material.level === "advanced" ? "Επίπεδο Γ" : "Επίπεδο Β"}</span>}
         </span>
       </header>
       {mode === "solutions" && <p className="mt-3 rounded-md bg-amber-50 px-3 py-1.5 text-center text-xs font-bold tracking-wide text-amber">ΦΥΛΛΟ ΛΥΣΕΩΝ</p>}
@@ -218,7 +219,12 @@ export function DocPage({
               );
             switch (b.type) {
               case "heading":
-                return <h2 className="py-2 text-center text-xl font-semibold tracking-[-0.02em] leading-snug sm:text-2xl">{b.text}</h2>;
+                // The first heading is the page title; later ones open a section (a lesson plan's phases).
+                return i === 0 ? (
+                  <h2 className="py-2 text-center text-xl font-semibold tracking-[-0.02em] leading-snug sm:text-2xl">{b.text}</h2>
+                ) : (
+                  <h3 className="pt-3 text-[16px] font-semibold tracking-[-0.01em] text-brand-700 sm:text-[17px]">{b.text}</h3>
+                );
               case "text":
                 return <p className="whitespace-pre-line text-[14px] leading-relaxed sm:text-[15px]">{b.text}</p>;
               case "chart":
@@ -233,7 +239,7 @@ export function DocPage({
                     {mode === "solutions" ? (
                       <p className="mt-1 rounded-md bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700">{b.answer ?? "Ελεύθερη απάντηση"}</p>
                     ) : (
-                      <AnswerLines n={b.lines ?? 2} />
+                      isSheet && <AnswerLines n={b.lines ?? 2} />
                     )}
                   </div>
                 );

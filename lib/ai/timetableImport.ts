@@ -13,17 +13,29 @@ export function normClass(name: string): string {
     .replace(/[a-z]/g, (c) => latin[c] ?? c);
 }
 
+/** A short form on its own ("ΓΛ", "Μαθ.", "ΚΠΑ"), not the start of a longer word. */
+const abbr = (forms: string) => new RegExp(`(?:^|[^α-ωa-z])(?:${forms})(?:$|[^α-ωa-z])`);
+
 const SUBJECT_WORDS: [RegExp, SubjectId][] = [
-  [/γλωσσ|νεοελλ|γλ\b/, "glossa"],
-  [/μαθημ|μαθ\b/, "math"],
+  [/γλωσσ|νεοελλ|ελληνικ/, "glossa"],
+  [abbr("γλ|ελλ"), "glossa"],
+  [/αγωγη ζωης|αγωγη υγει/, "zoi"],
+  [/κοινωνικ|πολιτικη αγωγ/, "kpa"],
+  [abbr("κπα"), "kpa"],
+  [/αειφορ/, "aeiforia"],
+  [abbr("εαα"), "aeiforia"],
+  [/μαθημ/, "math"],
+  [abbr("μαθ"), "math"],
   [/μελετ|περιβαλλ/, "meleti"],
   [/ιστορ/, "istoria"],
-  [/φυσικη αγωγ|γυμναστ|φ\.?α\b/, "fa"],
-  [/φυσικ|φυσ\b|πειραμ/, "fysika"],
-  [/γεωγρ/, "geografia"],
+  [/φυσικη αγωγ|γυμναστ/, "fa"],
+  [abbr("φα|φ\\.α\\.?"), "fa"],
+  [/φυσικ|πειραμ/, "fysika"],
+  [abbr("φυσ"), "fysika"],
+  [/γεωγρ|κηπο/, "geografia"],
   [/αγγλ|english/, "agglika"],
   [/θρησκ/, "thriskeftika"],
-  [/εικαστ|καλλιτεχ/, "eikastika"],
+  [/εικαστ|καλλιτεχ|τεχνη/, "eikastika"],
   [/μουσ/, "mousiki"],
   [/πληροφ|τπε|τ\.π\.ε|υπολογ/, "tpe"],
   [/εργαστ|δεξιοτ/, "ergastiria"],

@@ -12,11 +12,12 @@ import { Button, Card, cx, Field, inputClass, Segmented, Select, Toggle } from "
 import { ACCEPT, ingestFile } from "@/components/upload";
 import { aiCreate } from "@/lib/ai/client";
 import { shortDate } from "@/lib/dates";
-import { fileKindLabel, formatBytes, KIND_LABEL, LEVEL_LABEL, titleFromFileName } from "@/lib/materials";
-import { SUBJECTS } from "@/lib/seed";
+import { fileKindLabel, formatBytes, guessSubject, KIND_LABEL, LEVEL_LABEL, titleFromFileName } from "@/lib/materials";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import { usePendingUpload } from "@/lib/store/pending";
 import type { Block, Level, MaterialKind, SubjectId } from "@/lib/types";
+import { subjectChoices } from "@/lib/subjects";
 
 const KINDS: { value: Exclude<MaterialKind, "file">; Icon: typeof FileText }[] = [
   { value: "worksheet", Icon: FileText },
@@ -26,14 +27,6 @@ const KINDS: { value: Exclude<MaterialKind, "file">; Icon: typeof FileText }[] =
 ];
 
 const SAMPLE = { name: "mathimatika_d.pdf", size: 1_240_000, type: "application/pdf" };
-
-function guessSubject(name: string): SubjectId | undefined {
-  const n = name.toLowerCase();
-  if (/math|μαθημ|arithm|grafik|γραφ/.test(n)) return "math";
-  if (/gloss|γλωσσ|orthogr|ορθογρ/.test(n)) return "glossa";
-  if (/melet|μελετ|nero|νερ|perivall/.test(n)) return "meleti";
-  if (/eikast|εικαστ|afisa|αφισ/.test(n)) return "eikastika";
-}
 
 function SampleSheet() {
   return (
@@ -87,7 +80,7 @@ function Wizard() {
   const slotId = params.get("slot");
   const slot = useApp((s) => s.slots.find((x) => x.id === slotId));
   const classes = useApp((s) => s.classes);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const create = useApp((s) => s.createMaterial);
   const mode = useApp((s) => s.mode);
   const cloud = mode === "cloud";
@@ -144,7 +137,7 @@ function Wizard() {
         mediaType: file?.type,
         title: title.trim(),
         kindLabel: KIND_LABEL[kind],
-        subject: SUBJECTS.find((x) => x.id === subjectId)?.name ?? "",
+        subject: subjects.find((x) => x.id === subjectId)?.name ?? "",
         grade,
         levelLabel: LEVEL_LABEL[level],
         withSolutions,
@@ -320,7 +313,7 @@ function Wizard() {
             </Field>
             <Field label="Μάθημα">
               <Select value={subjectId} onChange={(e) => setSubjectId(e.target.value as SubjectId)}>
-                {subjects.map((s) => (
+                {subjectChoices(subjects, subjectId).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>

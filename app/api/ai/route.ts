@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AiError, aiConfigured, callTool, type Part } from "@/lib/ai/claude";
-import { ADAPT_SYSTEM, ADAPT_TOOL, CREATE_SYSTEM, CREATE_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, TIMETABLE_SYSTEM, TIMETABLE_TOOL } from "@/lib/ai/prompts";
+import { ADAPT_SYSTEM, ADAPT_TOOL, createSystem, CREATE_TOOL, isCountry, LEVELS_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, timetableSystem, TIMETABLE_TOOL } from "@/lib/ai/prompts";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
     return fail(400, "Λάθος αίτημα.");
   }
   const str = (k: string, max = 300) => (typeof body[k] === "string" ? (body[k] as string).slice(0, max) : "");
+  const country = isCountry(body.country) ? body.country : "gr";
 
   const { data: allowed, error: quotaError } = await client.rpc("ai_take", { daily_limit: DAILY_LIMIT });
   if (quotaError) return fail(500, "Δεν ήταν δυνατός ο έλεγχος ορίου.");
@@ -77,13 +78,20 @@ export async function POST(req: NextRequest) {
             `Επίπεδο: ${str("levelLabel")}`,
             `Τίτλος/θέμα: ${str("title")}`,
             `Λύσεις: ${body.withSolutions ? "ναι, συμπλήρωσε answer σε κάθε άσκηση" : "όχι"}`,
-            str("hint", 500) && `Οδηγία εκπαιδευτικού: ${str("hint", 500)}`,
+            str("hint", 1500) && `Τι ζητά ο εκπαιδευτικός:\n${str("hint", 1500)}`,
             path ? "Βασίσου στο συνημμένο αρχείο." : "Δεν υπάρχει αρχείο· φτιάξε πρωτότυπο υλικό για το θέμα.",
           ]
             .filter(Boolean)
             .join("\n"),
         });
-        const out = await callTool<{ blocks: unknown[] }>({ tier: "quality", system: CREATE_SYSTEM, content, tool: CREATE_TOOL, maxTokens: 8000 });
+        const levels = body.levels === true;
+        const out = await callTool<{ blocks: unknown[] }>({
+          tier: "quality",
+          system: createSystem(country),
+          content,
+          tool: levels ? LEVELS_TOOL : CREATE_TOOL,
+          maxTokens: levels ? 12000 : 8000,
+        });
         return NextResponse.json(out);
       }
       case "adapt": {
@@ -128,7 +136,7 @@ export async function POST(req: NextRequest) {
         if (!file) return fail(415, "Ανέβασε φωτογραφία ή PDF του προγράμματος.");
         const out = await callTool<{ entries: unknown[]; teacher?: string; notes?: string }>({
           tier: "fast",
-          system: TIMETABLE_SYSTEM,
+          system: timetableSystem(country),
           content: [
             file,
             {

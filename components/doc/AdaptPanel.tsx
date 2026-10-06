@@ -5,8 +5,8 @@ import { Columns2, Contrast, FileText, Lightbulb, Maximize2, Sparkles, TrendingD
 import { useState } from "react";
 import { aiAdapt } from "@/lib/ai/client";
 import { QUICK_ACTIONS, type AdaptResult, type QuickAction } from "@/lib/ai/mock";
-import { SUBJECTS } from "@/lib/seed";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import { toast } from "../toast";
 import { exerciseNumber } from "@/lib/materials";
 import type { Block, Material } from "@/lib/types";
@@ -46,6 +46,7 @@ export function AdaptPanel({
   onApply: () => void;
   onDiscard: () => void;
 }) {
+  const subjects = useSubjects();
   const [actions, setActions] = useState<QuickAction[]>([]);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -69,7 +70,7 @@ export function AdaptPanel({
       actions,
       prompt,
       targetId: selectedId,
-      subject: SUBJECTS.find((x) => x.id === material.subjectId)?.name ?? "",
+      subject: subjects.find((x) => x.id === material.subjectId)?.name ?? "",
       grade,
       demo,
     });
@@ -85,8 +86,8 @@ export function AdaptPanel({
           <Sparkles className="size-6" />
         </span>
         <div className="flex-1">
-          <h2 className="text-lg font-bold leading-tight">Προσάρμοσε το υλικό</h2>
-          <p className="text-sm text-muted">Με βάση το αρχείο σου</p>
+          <h2 className="text-lg font-bold leading-tight">Άλλαξέ το με AI</h2>
+          <p className="text-sm text-muted">Βλέπεις την πρόταση πάνω στο φύλλο πριν την εφαρμόσεις.</p>
         </div>
       </div>
 

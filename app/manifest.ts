@@ -21,7 +21,7 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       { name: "Σήμερα", url: "/", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
-      { name: "Ημερολόγιο", url: "/schedule", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "Πρόγραμμα", url: "/schedule", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
       { name: "Νέο υλικό", url: "/materials/new", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
     ],
   };

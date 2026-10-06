@@ -13,6 +13,7 @@ import { addDays, dayName, isISODate, shortDate, startOfWeek, weekday } from "@/
 import { journal, periodFor, shiftPeriod, weekPlan, type PeriodKind } from "@/lib/journal";
 import { weekNumber, yearFor } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 import { remote } from "@/lib/store/remote";
 import type { LessonSlot } from "@/lib/types";
 
@@ -49,7 +50,8 @@ function Journal() {
   const router = useRouter();
   const params = useSearchParams();
   const classes = useApp((s) => s.classes);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
+  const stored = useApp((s) => s.slots);
   const materials = useApp((s) => s.materials);
   const profile = useApp((s) => s.profile);
   const updateSlot = useApp((s) => s.updateSlot);
@@ -98,14 +100,14 @@ function Journal() {
     return (
       <Card className="p-6 text-center">
         <p className="font-bold">Δεν υπάρχουν τμήματα ακόμη</p>
-        <p className="mt-1 text-sm text-muted">Πρόσθεσε τμήμα και ωρολόγιο, και το ημερολόγιο ύλης θα γεμίζει μόνο του.</p>
+        <p className="mt-1 text-sm text-muted">Πρόσθεσε τμήμα και ωρολόγιο, και η ύλη θα γεμίζει μόνη της.</p>
         <Link href="/classes" className="mt-3 inline-block font-semibold text-brand-500 hover:underline">
           Τάξεις
         </Link>
       </Card>
     );
 
-  const docTitle = view === "log" ? "Ημερολόγιο ύλης" : "Εβδομαδιαίος προγραμματισμός";
+  const docTitle = view === "log" ? "Ύλη που διδάχθηκε" : "Εβδομαδιαίος προγραμματισμός";
   const docPeriod = view === "log" ? `${period.label} (${shortDate(period.from)} – ${shortDate(period.to)})` : `${week ? `Εβδομάδα ${week} · ` : ""}${shortDate(planMonday)} – ${shortDate(period.to)}`;
 
   return (
@@ -126,8 +128,8 @@ function Journal() {
           value={view}
           onChange={(v) => set({ view: v === "plan" ? "plan" : undefined, d: undefined })}
           options={[
-            { value: "log", label: "Ημερολόγιο ύλης" },
-            { value: "plan", label: "Εβδομαδιαίος προγραμματισμός" },
+            { value: "log", label: "Τι διδάχθηκε" },
+            { value: "plan", label: "Προγραμματισμός" },
           ]}
           className="mb-3"
         />
@@ -143,7 +145,7 @@ function Journal() {
           </Select>
           <Select value={subjectId ?? ""} onChange={(e) => set({ subject: e.target.value || undefined })} aria-label="Μάθημα">
             <option value="">Όλα τα μαθήματα</option>
-            {subjects.map((s) => (
+            {subjects.filter((s) => !s.legacy || s.id === subjectId || stored.some((x) => x.subjectId === s.id)).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -184,13 +186,13 @@ function Journal() {
 
         {view === "log" && log.missing.length > 0 && (
           <Gaps
-            title={`${log.missing.length} ${log.missing.length === 1 ? "μάθημα δεν έχει" : "μαθήματα δεν έχουν"} καταγραφή`}
+            title={`${log.missing.length} ${log.missing.length === 1 ? "μάθημα" : "μαθήματα"} χωρίς σημείωση`}
             hint="Συμπλήρωσε τι διδάχθηκε, για να μη μείνουν κενές γραμμές στην εκτύπωση."
             lessons={log.missing}
             label={(s) => `${dayName(s.date)} ${shortDate(s.date)} · ${s.start} · ${subjectName(s.subjectId)}${allClasses ? ` · ${className(s.classId)}` : ""}`}
             placeholder={(s) => s.topic || "Τι διδάχθηκε"}
             onSave={(s, text) => updateSlot(s.id, { status: "done", taughtNote: text })}
-            done="Καταγράφηκε"
+            done="Αποθηκεύτηκε"
           />
         )}
         {view === "plan" && plan.noTopic.length > 0 && (
@@ -233,7 +235,7 @@ function Journal() {
             empty={view === "log" ? "Δεν υπάρχουν μαθήματα που έγιναν σε αυτή την περίοδο." : "Δεν υπάρχουν μαθήματα αυτή την εβδομάδα."}
             subjectName={subjectName}
             className={allClasses ? className : undefined}
-            missingText={view === "log" ? "Χωρίς καταγραφή" : "Χωρίς θέμα"}
+            missingText={view === "log" ? "Χωρίς σημείωση" : "Χωρίς θέμα"}
           />
         )}
         <p className="mt-4 text-center text-xs text-muted">Με το «Εκτύπωση / PDF» βγαίνει σε σελίδα Α4, με κεφαλίδα σχολείου και υπογραφές.</p>

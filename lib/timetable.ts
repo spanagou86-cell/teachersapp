@@ -18,9 +18,42 @@ export const KIND_LABEL: Record<TimetableEntry["kind"], string> = {
 /** Same as KIND_LABEL, with the duty wording of the teacher's country. */
 export const kindLabel = (kind: TimetableEntry["kind"], country: Country) => (kind === "duty" ? dutyLabel(country) : KIND_LABEL[kind]);
 
+/** The school day of each system, breaks included so yard duty has a row. */
+export const BELLS: Record<Country, readonly Period[]> = {
+  gr: [
+    { start: "08:15", end: "09:00" },
+    { start: "09:00", end: "09:45" },
+    { start: "09:45", end: "10:05" },
+    { start: "10:05", end: "10:50" },
+    { start: "10:50", end: "11:35" },
+    { start: "11:35", end: "11:50" },
+    { start: "11:50", end: "12:35" },
+    { start: "12:35", end: "13:15" },
+  ],
+  // One bell for every public primary school in Cyprus: seven 40′ periods and three breaks.
+  cy: [
+    { start: "07:45", end: "08:25" },
+    { start: "08:25", end: "09:05" },
+    { start: "09:05", end: "09:25" },
+    { start: "09:25", end: "10:05" },
+    { start: "10:05", end: "10:45" },
+    { start: "10:45", end: "10:55" },
+    { start: "10:55", end: "11:35" },
+    { start: "11:35", end: "12:15" },
+    { start: "12:15", end: "12:25" },
+    { start: "12:25", end: "13:05" },
+  ],
+};
+
+/** Length of a teaching period in each system, in minutes. */
+export const PERIOD_MINUTES: Record<Country, number> = { gr: 45, cy: 40 };
+
+/** The teaching periods of a bell (breaks are the short rows). */
+export const teachingPeriods = (country: Country): Period[] => BELLS[country].filter((p) => timeToMin(p.end) - timeToMin(p.start) >= 30);
+
 /** Rows of the weekly grid: every distinct time window in the template, or the default school day. */
-export function periodsFrom(entries: TimetableEntry[]): Period[] {
-  if (!entries.length) return PERIODS;
+export function periodsFrom(entries: TimetableEntry[], country?: Country): Period[] {
+  if (!entries.length) return country ? teachingPeriods(country) : PERIODS;
   const map = new Map<string, Period>();
   for (const e of entries) map.set(`${e.start}-${e.end}`, { start: e.start, end: e.end });
   return [...map.values()].sort((a, b) => timeToMin(a.start) - timeToMin(b.start) || timeToMin(a.end) - timeToMin(b.end));

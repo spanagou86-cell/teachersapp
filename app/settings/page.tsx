@@ -11,6 +11,7 @@ import { toast } from "@/components/toast";
 import { SchoolPicker } from "@/components/schoolPicker";
 import { Button, Card, cx, Field, inputClass, Segmented, Toggle } from "@/components/ui";
 import { usePrefs } from "@/lib/prefs";
+import { longDate } from "@/lib/dates";
 import { schoolYear, schoolYearStart } from "@/lib/schoolYear";
 import { flushWrites, useApp } from "@/lib/store";
 import { remote } from "@/lib/store/remote";
@@ -60,6 +61,7 @@ export default function SettingsPage() {
   const profile = useApp((s) => s.profile);
   const update = useApp((s) => s.updateProfile);
   const setCountry = useApp((s) => s.setCountry);
+  const setLocalHoliday = useApp((s) => s.setLocalHoliday);
   const [moving, setMoving] = useState(false);
   const mode = useApp((s) => s.mode);
   const email = useApp((s) => s.email);
@@ -77,7 +79,7 @@ export default function SettingsPage() {
       const st = useApp.getState();
       const data =
         mode === "cloud"
-          ? await remote.exportAll()
+          ? { ...(await remote.exportAll()), account: { localHoliday: st.profile.localHoliday ?? null } }
           : { profile: st.profile, classes: st.classes, students: st.students, timetable: st.timetable, lessons: st.slots, materials: st.materials, attendance: st.attendance, tasks: st.tasks, notes: st.notes, studentNotes: st.studentNotes };
       const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), email, ...data }, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
@@ -111,6 +113,20 @@ export default function SettingsPage() {
 
   const country = profile.country;
   const year = schoolYear(country, schoolYearStart(today));
+  // The feast day as a date inside this school year (it repeats every year).
+  const feast = profile.localHoliday ? `${(Number(profile.localHoliday.slice(0, 2)) >= 7 ? year.start : year.end).slice(0, 4)}-${profile.localHoliday}` : "";
+  const changeFeast = async (date: string) => {
+    if (moving) return;
+    setMoving(true);
+    try {
+      await setLocalHoliday(date ? date.slice(5) : undefined);
+      toast(date ? `${longDate(date)}: χωρίς μαθήματα κάθε χρόνο` : "Η τοπική γιορτή αφαιρέθηκε");
+    } catch {
+      toast("Δεν αποθηκεύτηκε. Δοκίμασε ξανά.");
+    } finally {
+      setMoving(false);
+    }
+  };
 
   return (
     <div className="mx-auto grid max-w-2xl gap-6">
@@ -141,7 +157,7 @@ export default function SettingsPage() {
               setMoving(true);
               try {
                 await setCountry(c);
-                toast(c === "cy" ? "Το ημερολόγιο άλλαξε σε Κύπρου" : "Το ημερολόγιο άλλαξε σε Ελλάδας");
+                toast(c === "cy" ? "Το σχολικό ημερολόγιο άλλαξε σε Κύπρου" : "Το σχολικό ημερολόγιο άλλαξε σε Ελλάδας");
               } catch {
                 toast("Δεν ολοκληρώθηκε η αλλαγή. Δοκίμασε ξανά.");
               } finally {
@@ -149,8 +165,8 @@ export default function SettingsPage() {
               }
             }}
             options={[
-              { value: "gr", label: "Ελλάδα" },
               { value: "cy", label: "Κύπρος" },
+              { value: "gr", label: "Ελλάδα" },
             ]}
           />
         </Row>
@@ -214,6 +230,25 @@ export default function SettingsPage() {
             Η χρονιά με μια ματιά
           </Link>
         </div>
+        <Row label="Τοπική γιορτή σχολείου" hint="Η γιορτή του Αγίου της κοινότητας, που δηλώνει το σχολείο. Εκείνη τη μέρα δεν μπαίνουν μαθήματα.">
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              aria-label="Τοπική γιορτή σχολείου"
+              value={feast}
+              min={year.start}
+              max={year.end}
+              disabled={moving}
+              onChange={(e) => void changeFeast(e.target.value)}
+              className={cx(inputClass, "h-11 w-44")}
+            />
+            {feast && (
+              <Button variant="ghost" size="sm" disabled={moving} onClick={() => void changeFeast("")}>
+                Καμία
+              </Button>
+            )}
+          </div>
+        </Row>
       </Section>
 
       <Section title="Εμφάνιση">

@@ -10,12 +10,13 @@ import { Button, Card, cx, EmptyState } from "@/components/ui";
 import { nextLesson } from "@/lib/schedule";
 import { plural } from "@/lib/plural";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
 
 export default function ClassesPage() {
   const classes = useApp((s) => s.classes);
   const students = useApp((s) => s.students);
   const slots = useApp((s) => s.slots);
-  const subjects = useApp((s) => s.subjects);
+  const subjects = useSubjects();
   const attendance = useApp((s) => s.attendance);
   const today = useApp((s) => s.today);
   const now = useApp((s) => s.now);
@@ -71,7 +72,7 @@ export default function ClassesPage() {
                     <p className="mt-1 font-bold">{att ? (
                         `${count - att.absentIds.length}/${count} παρόντες`
                       ) : slots.some((s) => s.classId === c.id && s.date === today) ? (
-                        <span className="text-danger">Δεν καταγράφηκαν</span>
+                        <span className="text-danger">Χωρίς παρουσίες</span>
                       ) : (
                         <span className="font-medium text-muted">Χωρίς μάθημα σήμερα</span>
                       )}</p>

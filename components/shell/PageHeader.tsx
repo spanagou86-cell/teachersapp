@@ -8,6 +8,7 @@ import { canGoBack } from "@/lib/history";
 import { useApp } from "@/lib/store";
 import { Avatar } from "../ui";
 import { Logo } from "./AppShell";
+import { MobileFinders } from "./finders";
 
 /** Top of the main screens on phones: logo, the teacher's school, and settings one tap away. */
 export function MobileBrandBar() {
@@ -19,6 +20,7 @@ export function MobileBrandBar() {
         <Logo />
         {school && <p className="mt-0.5 truncate text-[13px] text-muted">{school}</p>}
       </div>
+      <MobileFinders />
       <Link
         href="/settings"
         aria-label="Ρυθμίσεις: σχολείο, προφίλ, εμφάνιση"
