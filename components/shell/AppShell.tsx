@@ -17,6 +17,8 @@ import { openPrepare, PrepareSheet, useJobState } from "../prepare";
 import { setJobNavigator } from "@/lib/store/jobs";
 import { FoundList, PendingList, usePendingLessons, useSearch } from "./finders";
 import { isActive, NAV } from "./nav";
+import { SyllabusSheet } from "../syllabus";
+import { CloseDaySheet } from "../closeDay";
 
 /** The app mark: a «τ» on ink, with the red dot of the teacher's pen. */
 export function LogoMark({ className }: { className?: string }) {
@@ -320,6 +322,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       <BottomNav />
       <PrepareSheet />
+      <SyllabusSheet />
+      <CloseDaySheet />
       <ConfirmHost />
       <Toaster />
     </div>

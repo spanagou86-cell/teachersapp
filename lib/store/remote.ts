@@ -368,6 +368,11 @@ export const remote = {
         })
         .eq("id", id),
     ),
+  /** Many lesson topics at once (a syllabus laid over the year), a few requests at a time. */
+  updateTopics: async (patches: { id: string; topic: string }[]) => {
+    for (let i = 0; i < patches.length; i += 8)
+      await Promise.all(patches.slice(i, i + 8).map((p) => run(db().from("lesson_slots").update({ topic: p.topic }).eq("id", p.id))));
+  },
   insertSlot: async (s: LessonSlot) => {
     await run(
       db().from("lesson_slots").insert({

@@ -18,6 +18,7 @@ import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import type { ClassGroup, Student } from "@/lib/types";
 import { AutoText } from "@/components/text";
+import { openSyllabus } from "@/components/syllabus";
 
 type Tab = "attendance" | "students" | "progress" | "notes";
 
@@ -185,7 +186,12 @@ function Progress({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       <Card className="p-5">
-        <h2 className="mb-4 text-lg font-bold">Ύλη ανά μάθημα</h2>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-bold">Ύλη ανά μάθημα</h2>
+          <Button variant="soft" size="sm" onClick={() => openSyllabus({ classId: cls.id })}>
+            <BookOpenCheck className="size-4" /> Πρόσθεσε ύλη
+          </Button>
+        </div>
         <ul className="space-y-4">
           {subjects.map((sub) => {
             const list = past.filter((s) => s.subjectId === sub.id);

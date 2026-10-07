@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AiError, aiConfigured, callTool, type Part } from "@/lib/ai/claude";
-import { ADAPT_SYSTEM, ADAPT_TOOL, createSystem, CREATE_TOOL, isCountry, LEVELS_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, timetableSystem, TIMETABLE_TOOL } from "@/lib/ai/prompts";
+import { ADAPT_SYSTEM, ADAPT_TOOL, createSystem, CREATE_TOOL, CY_MATHS_PROGRAMME, isCountry, LEVELS_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, SYLLABUS_SYSTEM, SYLLABUS_TOOL, timetableSystem, TIMETABLE_TOOL } from "@/lib/ai/prompts";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -150,6 +150,36 @@ export async function POST(req: NextRequest) {
           tool: TIMETABLE_TOOL,
           maxTokens: 6000,
         });
+        return NextResponse.json(out);
+      }
+      case "syllabus": {
+        const content: Part[] = [];
+        const grade = Number(body.grade);
+        if (body.source === "cy-maths") {
+          // The Ministry's own programme, fetched here so the teacher doesn't have to find it.
+          if (!Number.isInteger(grade) || grade < 0 || grade > 5) return fail(400, "Λάθος τάξη.");
+          const res = await fetch(CY_MATHS_PROGRAMME(grade), { signal: AbortSignal.timeout(20_000) }).catch(() => undefined);
+          if (!res?.ok) return fail(502, "Ο επίσημος προγραμματισμός δεν άνοιξε αυτή τη στιγμή. Δοκίμασε με φωτογραφία των περιεχομένων.");
+          const parts = await fileParts(await res.arrayBuffer(), "application/pdf", "programmatismos.pdf");
+          if (typeof parts === "string") return fail(415, parts);
+          content.push(...parts);
+        } else {
+          const path = str("path", 500);
+          if (path) {
+            if (!path.startsWith(`${user.id}/`)) return fail(403, "Δεν επιτρέπεται.");
+            const { data, error } = await client.storage.from("materials").download(path);
+            if (error || !data) return fail(404, "Δεν βρέθηκε το αρχείο.");
+            const parts = await fileParts(await data.arrayBuffer(), data.type || str("mediaType"), str("fileName"));
+            if (typeof parts === "string") return fail(415, parts);
+            content.push(...parts);
+          } else {
+            const file = inlineFile(str("mediaType"), str("data", 16_000_000));
+            if (!file) return fail(415, "Ανέβασε φωτογραφία ή PDF των περιεχομένων.");
+            content.push(file);
+          }
+        }
+        content.push({ type: "text", text: `Μάθημα: ${str("subject")} · Τάξη: ${str("gradeLabel")}` });
+        const out = await callTool<{ items: unknown[]; notes?: string }>({ tier: "quality", system: SYLLABUS_SYSTEM, content, tool: SYLLABUS_TOOL, maxTokens: 8000 });
         return NextResponse.json(out);
       }
       default:

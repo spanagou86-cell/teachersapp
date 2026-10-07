@@ -231,3 +231,24 @@ export async function aiReadRoster(file: Blob, className: string): Promise<AiAns
   if (!students.length) return { ok: false, error: "Δεν βρήκα ονόματα σε αυτή την εικόνα. Δοκίμασε πιο καθαρή φωτογραφία, ίσια και με καλό φως." };
   return { ok: true, data: { students, notes: r.data.notes } };
 }
+
+export interface ReadSyllabus {
+  source: "cy-maths" | "file";
+  /** Grade index 0–5 (Α΄–ΣΤ΄) for the Ministry's programme. */
+  grade?: number;
+  file?: { data: string; mediaType: string };
+  subject: string;
+  gradeLabel: string;
+}
+
+/** The syllabus of a subject, from the Ministry's programme or a photo/PDF of the book's contents. */
+export async function aiReadSyllabus(req: ReadSyllabus): Promise<AiAnswer<{ items: { unit?: string; title: string; periods: number }[]; notes?: string }>> {
+  const r = await post<{ items: unknown; notes?: string }>({ op: "syllabus", source: req.source, grade: req.grade, ...req.file, subject: req.subject, gradeLabel: req.gradeLabel });
+  if (!r.ok) return r.unavailable ? { ok: false, error: "Η ανάγνωση με AI δεν είναι ενεργή αυτή τη στιγμή. Γράψε ή επικόλλησε τα θέματα." } : r;
+  const clip = (v: unknown, n: number) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, n) : "");
+  const items = (Array.isArray(r.data.items) ? (r.data.items as Record<string, unknown>[]) : [])
+    .map((x) => ({ unit: clip(x?.unit, 120) || undefined, title: clip(x?.title, 160), periods: Math.max(1, Math.min(40, Math.round(Number(x?.periods)) || 1)) }))
+    .filter((x) => x.title);
+  if (!items.length) return { ok: false, error: "Δεν βρήκα θέματα εδώ. Δοκίμασε πιο καθαρή φωτογραφία των περιεχομένων." };
+  return { ok: true, data: { items, notes: r.data.notes } };
+}

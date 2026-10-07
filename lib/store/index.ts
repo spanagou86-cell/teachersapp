@@ -9,7 +9,8 @@ import { uid } from "../id";
 import { applyChange, restoreOriginal, restoreVersion } from "../materials";
 import { carryOverLesson, findConflicts, undoCarryOver, type CarryOverResult, type TimeWindow } from "../schedule";
 import { seed, type SeedState } from "../seed";
-import { CALENDAR_VERSION, isSchoolDay, setLocalHoliday } from "../schoolYear";
+import { CALENDAR_VERSION, isSchoolDay, setLocalHoliday, yearFor } from "../schoolYear";
+import { bump, openLessons, spread, type SyllabusItem, type TopicPatch } from "../syllabus";
 import { materialize } from "../timetable";
 import type {
   Block,
@@ -111,6 +112,15 @@ interface Actions {
   attachMaterial: (slotId: string, materialId: string) => void;
   detachMaterial: (slotId: string, materialId: string) => void;
   carryOver: (slotId: string, target: TimeWindow) => CarryOverResult;
+  /** Writes many lesson topics; returns the «Αναίρεση» that puts the old ones back. */
+  setTopics: (patches: TopicPatch[]) => () => void;
+  /**
+   * Lays a syllabus over the class's lessons of a subject, from a date to the end of the year
+   * (in an account, also lessons not loaded yet). Returns how far it reached.
+   */
+  spreadSyllabus: (classId: string, subjectId: string, items: SyllabusItem[], from: ISODate) => Promise<{ count: number; until?: ISODate; left: number; undo: () => void }>;
+  /** «Δεν έγινε»: the lesson's topic and the ones after it move one lesson on. */
+  bumpTopics: (slotId: string) => (() => void) | undefined;
   undoCarryOver: (newSlotId: string) => void;
 
   createMaterial: (input: NewMaterialInput) => string;
@@ -573,6 +583,45 @@ export const useApp = create<AppState>()(
           set((s) => ({ slots: [...s.slots, slot] }));
           sync(() => remote.insertSlot(slot));
           return { ok: true, id: slot.id };
+        },
+        setTopics: (patches) => {
+          const before = new Map<string, string>();
+          for (const p of patches) before.set(p.id, get().slots.find((x) => x.id === p.id)?.topic ?? "");
+          const apply = (list: TopicPatch[]) => {
+            const by = new Map(list.map((p) => [p.id, p.topic]));
+            set((s) => ({ slots: s.slots.map((x) => (by.has(x.id) ? { ...x, topic: by.get(x.id)! } : x)) }));
+            sync(() => remote.updateTopics(list));
+          };
+          apply(patches);
+          return () => apply(patches.filter((p) => before.has(p.id)).map((p) => ({ id: p.id, topic: before.get(p.id)! })));
+        },
+        spreadSyllabus: async (classId, subjectId, items, from) => {
+          const { mode, slots, profile } = get();
+          let pool = slots;
+          let previous = new Map(slots.map((s) => [s.id, s.topic]));
+          if (mode === "cloud") {
+            // The app keeps a few months in memory; the syllabus runs to June.
+            await flushWrites();
+            const far = await remote.fetchSlots(from, yearFor(profile.country, from).end);
+            const local = new Map(slots.map((s) => [s.id, s]));
+            pool = [...far.map((s) => local.get(s.id) ?? s), ...slots.filter((s) => s.date < from)];
+            previous = new Map(pool.map((s) => [s.id, s.topic]));
+          }
+          const lessons = openLessons(pool, classId, subjectId, from);
+          const { patches, left } = spread(items, lessons);
+          const until = lessons.find((s) => s.id === patches.at(-1)?.id)?.date;
+          const write = (list: TopicPatch[]) => {
+            const by = new Map(list.map((p) => [p.id, p.topic]));
+            set((s) => ({ slots: s.slots.map((x) => (by.has(x.id) ? { ...x, topic: by.get(x.id)! } : x)) }));
+            sync(() => remote.updateTopics(list));
+          };
+          write(patches);
+          return { count: patches.length, until, left: left.length, undo: () => write(patches.map((p) => ({ id: p.id, topic: previous.get(p.id) ?? "" }))) };
+        },
+        bumpTopics: (slotId) => {
+          const patches = bump(get().slots, slotId);
+          if (!patches.length) return undefined;
+          return get().setTopics(patches);
         },
         carryOver: (slotId, target) => {
           const { slots, blocks, today } = get();

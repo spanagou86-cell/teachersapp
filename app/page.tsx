@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarClock, CalendarOff, CheckCircle2, NotebookPen, Plus, Sparkles, Trash2 } from "@/components/icons";
+import { ArrowRight, BookOpenCheck, CalendarClock, CalendarOff, CheckCircle2, NotebookPen, Plus, Sparkles, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useState } from "react";
 import { needsLog, useClock } from "@/components/lesson";
@@ -18,6 +18,8 @@ import { vocative } from "@/lib/greek";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import { AutoText } from "@/components/text";
+import { openSyllabus } from "@/components/syllabus";
+import { openCloseDay } from "@/components/closeDay";
 
 function Tasks() {
   const tasks = useApp((s) => s.tasks);
@@ -143,11 +145,30 @@ function NextStep() {
             {toLog.length} {toLog.length === 1 ? "μάθημα περιμένει" : "μαθήματα περιμένουν"} «Έγινε» και δύο λέξεις για το τι διδάχθηκε.
           </p>
         </div>
-        <ButtonLink href={`/lessons/${toLog[0].id}`} variant="secondary" size="sm">
-          Άνοιγμα
-        </ButtonLink>
+        <Button size="sm" onClick={openCloseDay}>
+          Κλείσιμο
+        </Button>
       </div>
     );
+  // Lessons without a topic: the syllabus, given once, fills them for the whole year.
+  const noTopic = upcoming(slots, today, now, 10).filter((s) => !s.topic.trim());
+  if (noTopic.length >= 3) {
+    const first = noTopic[0];
+    return (
+      <div className={box}>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
+          <BookOpenCheck className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{noTopic.length} επόμενα μαθήματα χωρίς θέμα</p>
+          <p className="text-[13px] text-muted">Δώσε μία φορά την ύλη· τα θέματα μπαίνουν μόνα τους ως τον Ιούνιο.</p>
+        </div>
+        <Button size="sm" onClick={() => openSyllabus({ classId: first.classId, subjectId: first.subjectId })}>
+          Ύλη
+        </Button>
+      </div>
+    );
+  }
   if (group.length) {
     const d = group[0].date;
     const when = d === today ? "Σήμερα ακόμη" : d === addDays(today, 1) ? "Αύριο" : dayName(d);

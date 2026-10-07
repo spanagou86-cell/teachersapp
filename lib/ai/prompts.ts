@@ -191,3 +191,38 @@ export const ROSTER_TOOL = {
     required: ["students"],
   },
 };
+
+export const SYLLABUS_SYSTEM = `Διαβάζεις την ύλη ενός μαθήματος Δημοτικού από φωτογραφία ή PDF (περιεχόμενα σχολικού βιβλίου, επίσημο προγραμματισμό του Υπουργείου, λίστα του εκπαιδευτικού) και τη δίνεις ως σειρά θεμάτων.
+- Κράτα τη σειρά του εγγράφου. Κάθε θέμα (κεφάλαιο, μάθημα) είναι μία εγγραφή, με την ενότητα στην οποία ανήκει (π.χ. «Ενότητα 3: Κλάσματα»).
+- periods: οι διδακτικές περίοδοι του θέματος, αν φαίνονται· αλλιώς μια εύλογη εκτίμηση (συνήθως 1–3).
+- Όταν το έγγραφο δίνει περιόδους μόνο ανά ενότητα, μοίρασέ τες στα θέματά της ώστε το άθροισμα να ταιριάζει.
+- Αγνόησε επαναλήψεις στήλης, αριθμούς σελίδων, προλόγους, παραρτήματα.
+- Γράψε τους τίτλους σύντομα και σωστά, σε μονοτονικό. Μην επινοείς θέματα που δεν υπάρχουν· ό,τι δεν διαβάζεται γράψ' το στις notes.`;
+
+export const SYLLABUS_TOOL = {
+  name: "syllabus",
+  description: "Η ύλη ως σειρά θεμάτων.",
+  input_schema: {
+    type: "object",
+    properties: {
+      items: {
+        type: "array",
+        maxItems: 200,
+        items: {
+          type: "object",
+          properties: {
+            unit: { type: "string" },
+            title: { type: "string" },
+            periods: { type: "integer", minimum: 1, maximum: 40 },
+          },
+          required: ["title"],
+        },
+      },
+      notes: { type: "string" },
+    },
+    required: ["items"],
+  },
+};
+
+/** The Cyprus Ministry's indicative Maths programmes, one PDF per grade (2026–27). */
+export const CY_MATHS_PROGRAMME = (grade: number) => `https://sch.cy/sd/98/programmatismos_${["a", "b", "c", "d", "e", "st"][grade]}_dim.pdf`;

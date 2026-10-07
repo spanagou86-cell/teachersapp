@@ -491,7 +491,42 @@ async function prepareFlow(name) {
   await ctx.close();
 }
 
+/** The syllabus, given once: topics over the year; a lesson that didn't happen moves it on. */
+async function syllabusFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+
+  // «Δεν έγινε» → the topic goes to the next lesson.
+  await page.getByRole("group", { name: "Πώς πήγε;" }).first().getByRole("button", { name: "Δεν έγινε" }).click();
+  await page.getByRole("button", { name: "Πάει στο επόμενο" }).click();
+  await page.getByText("Η ύλη προχώρησε μία ώρα").waitFor();
+  assert(true, "a lesson that didn't happen moves the syllabus one lesson on");
+
+  await page.goto(`${BASE}/classes/d1?tab=progress`);
+  await page.getByRole("button", { name: "Πρόσθεσε ύλη" }).click();
+  const sheet = page.getByRole("dialog", { name: "Ύλη μαθήματος" });
+  await sheet.getByRole("button", { name: /Γράψε ή επικόλλησε/ }).click();
+  await sheet.getByLabel("Θέματα, ένα σε κάθε γραμμή").fill("Ενότητα 1:\nΑριθμοί ως το 10 000 (2)\nΣτρογγυλοποίηση (1)\nΕνότητα 2:\nΚλάσματα (3)");
+  await sheet.getByRole("button", { name: "Συνέχεια" }).click();
+  await sheet.getByText(/3 θέματα · 6 περίοδοι/).waitFor();
+  const wide = await sheet.evaluate((el) => [...el.querySelectorAll("*")].filter((x) => x.getBoundingClientRect().right > window.innerWidth + 1).length);
+  assert(wide === 0, `syllabus list stays inside the screen (${wide} wider)`);
+  await page.screenshot({ path: path.join(OUT, `${name}-01-review.png`), fullPage: true });
+  await page.getByRole("button", { name: /Μοίρασε στα μαθήματα/ }).click();
+  await page.getByText(/Θέμα σε \d+ μαθήματα/).waitFor();
+  await page.goto(`${BASE}/lessons/l-2026-10-05-0920`);
+  await page.getByLabel("Θέμα μαθήματος").first().waitFor();
+  assert((await page.getByLabel("Θέμα μαθήματος").first().inputValue()) === "Ενότητα 1: Αριθμοί ως το 10 000", "the next maths lesson gets the first topic");
+  await ctx.close();
+}
+
 try {
+  await syllabusFlow("syllabus");
   await prepareFlow("prepare");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);

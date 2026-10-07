@@ -37,8 +37,20 @@ function NowLine({ now }: { now: string }) {
 
 function LogButtons({ slot }: { slot: LessonSlot }) {
   const updateSlot = useApp((s) => s.updateSlot);
+  const bumpTopics = useApp((s) => s.bumpTopics);
   const set = (status: LessonStatus) => {
     updateSlot(slot.id, { status });
+    // A lesson that didn't happen leaves its topic for the next one, and the syllabus moves on.
+    if (status === "skipped" && slot.topic.trim()) {
+      toast("Σημειώθηκε: δεν έγινε", {
+        label: "Πάει στο επόμενο",
+        run: () => {
+          const undo = bumpTopics(slot.id);
+          toast(undo ? "Η ύλη προχώρησε μία ώρα" : "Δεν υπάρχει επόμενο μάθημα", undo && { label: "Αναίρεση", run: undo });
+        },
+      });
+      return;
+    }
     toast(status === "done" ? "Σημειώθηκε: έγινε" : status === "partial" ? "Σημειώθηκε: μερικώς" : "Σημειώθηκε: δεν έγινε", {
       label: "Αναίρεση",
       run: () => updateSlot(slot.id, { status: "planned" }),
