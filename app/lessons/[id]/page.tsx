@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, CalendarArrowUp, Camera, CalendarClock, CalendarCog, Check, CloudUpload, CornerDownRight, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "@/components/icons";
+import { AlertTriangle, ArrowRight, CalendarArrowUp, Camera, Presentation, CalendarClock, CalendarCog, Check, CloudUpload, CornerDownRight, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -444,6 +444,31 @@ export default function LessonPage() {
 
         {stage === "class" && (
           <>
+            {/* The lesson on the class board: one exercise at a time, the answer, a timer, who answers. */}
+            <section className="relative isolate overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#14275f,#1e3a8a_60%,#2c4fb0)] p-5 text-white shadow-lift">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+                  <Presentation className="size-6" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-lg font-semibold">Στον πίνακα</h2>
+                  <p className="text-[13.5px] text-white/75">Μία άσκηση τη φορά με μεγάλα γράμματα, «Δείξε τη λύση», χρονόμετρο και «Ποιος απαντά;».</p>
+                </div>
+                {linked.some((m) => m.blocks.length > 0) ? (
+                  <Link href={`/board?lesson=${slot.id}`} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-[15px] font-semibold text-ink hover:bg-white/90 sm:w-auto">
+                    Άνοιξε στον πίνακα <ArrowRight className="size-4" />
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openPrepare({ slotId: slot.id })}
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-white/15 px-4 text-[15px] font-semibold ring-1 ring-white/25 hover:bg-white/25 sm:w-auto"
+                  >
+                    <Sparkles className="size-4" /> Ετοίμασε πρώτα υλικό
+                  </button>
+                )}
+              </div>
+            </section>
             <Card className="p-5">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h2 className="text-lg font-bold">Παρουσίες</h2>

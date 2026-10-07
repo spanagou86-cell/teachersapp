@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, ArrowUp, CalendarClock, CheckCircle2, NotebookPen, Paperclip, Sparkles, Timer } from "@/components/icons";
+import { ArrowRight, ArrowUp, CalendarClock, CheckCircle2, NotebookPen, Paperclip, Presentation, Sparkles, Timer } from "@/components/icons";
 import Link from "next/link";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { openCloseDay } from "./closeDay";
@@ -133,16 +133,26 @@ function NowCard() {
           </span>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => openPrepare({ slotId: slot.id })}
-            className={clsx(
-              "flex h-11 items-center justify-center gap-2 rounded-xl text-[14px] font-semibold transition-colors",
-              bare ? "bg-brand text-white hover:bg-brand-hover" : "border border-line bg-surface hover:bg-line-2",
-            )}
-          >
-            <Sparkles className="size-4" /> {bare ? "Ετοίμασε" : "Κι άλλο υλικό"}
-          </button>
+          {current && !bare ? (
+            // The lesson is on: put it on the class board.
+            <Link
+              href={`/board?lesson=${slot.id}`}
+              className="flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface text-[14px] font-semibold transition-colors hover:bg-line-2"
+            >
+              <Presentation className="size-4" /> Στον πίνακα
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openPrepare({ slotId: slot.id })}
+              className={clsx(
+                "flex h-11 items-center justify-center gap-2 rounded-xl text-[14px] font-semibold transition-colors",
+                bare ? "bg-brand text-white hover:bg-brand-hover" : "border border-line bg-surface hover:bg-line-2",
+              )}
+            >
+              <Sparkles className="size-4" /> {bare ? "Ετοίμασε" : "Κι άλλο υλικό"}
+            </button>
+          )}
           <Link
             href={`/lessons/${slot.id}`}
             className={clsx(

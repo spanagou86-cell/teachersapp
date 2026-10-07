@@ -871,6 +871,45 @@ async function weekFlow(name) {
   await ctx.close();
 }
 
+/** «Στην τάξη» on the class board: one exercise at a time, the answer, a timer, who answers. */
+async function boardFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, deviceScaleFactor: 1.5, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  await page.goto(`${BASE}/lessons/l-2026-10-05-0925`);
+  await page.getByRole("button", { name: /Στην τάξη/ }).click();
+  await page.getByRole("link", { name: /Άνοιξε στον πίνακα/ }).click();
+  await page.waitForURL(/\/board\?lesson=l-2026-10-05-0925/);
+  const board = page.getByRole("dialog", { name: "Στον πίνακα" });
+  await board.getByRole("heading", { name: /Διαβάζω μια γραφική παράσταση/ }).waitFor();
+  assert(true, "the lesson's sheet opens on the board, title first");
+  await page.keyboard.press("ArrowRight");
+  await board.getByText("Άσκηση 1").waitFor();
+  assert((await board.locator("svg").filter({ hasText: "Μήλο" }).count()) > 0, "the exercise shows with the sheet's chart");
+  await board.getByRole("button", { name: "Δείξε τη λύση" }).click();
+  await board.getByText("Λύση", { exact: true }).waitFor();
+  assert(true, "«Δείξε τη λύση» reveals the answer");
+  await page.screenshot({ path: path.join(OUT, `${name}-01-exercise.png`) });
+  await board.getByRole("button", { name: /Χρόνος/ }).click();
+  await board.getByRole("button", { name: "3′" }).click();
+  await board.getByText(/^(3:00|2:5\d)$/).waitFor();
+  assert(true, "a 3′ timer runs in the corner");
+  await board.getByRole("button", { name: /Ποιος απαντά/ }).click();
+  await board.getByText("Απαντά").waitFor();
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: path.join(OUT, `${name}-02-who.png`) });
+  assert(true, "«Ποιος απαντά;» picks a pupil who is present");
+  await page.keyboard.press("Escape");
+  await board.getByRole("button", { name: "Έξοδος από τον πίνακα" }).click();
+  await page.waitForURL(/\/lessons\/l-2026-10-05-0925$/);
+  assert(true, "leaving the board returns to the lesson");
+  await ctx.close();
+}
+
 try {
   await syllabusFlow("syllabus");
   await programmeFlow("programme");
@@ -882,6 +921,7 @@ try {
   await prepareFlow("prepare");
   await bookPagesFlow("pages");
   await weekFlow("week");
+  await boardFlow("board");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
   await dark("dark-mobile", { width: 390, height: 844 }, true);

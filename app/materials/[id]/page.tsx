@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import {
-  ArrowRight, CalendarPlus, Check, Download, CheckCircle2, Eye, FileQuestion, FileText, History, Link2Off, Paperclip, Pencil, Plus, Printer, RotateCcw, Settings2, Sparkles, Trash2, Undo2,
+  ArrowRight, Presentation, CalendarPlus, Check, Download, CheckCircle2, Eye, FileQuestion, FileText, History, Link2Off, Paperclip, Pencil, Plus, Printer, RotateCcw, Settings2, Sparkles, Trash2, Undo2,
 } from "@/components/icons";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -438,6 +438,7 @@ function Editor() {
               { label: showSolutions ? "Κρύψε τις λύσεις" : "Δείξε τις λύσεις", icon: <Eye />, onClick: () => (setShowSolutions((v) => !v), setEditing(false)) },
               { label: "Πρόσθεσε άσκηση", icon: <Plus />, onClick: () => (setEditing(true), addExercise()) },
             ]),
+        ...(fileOnly ? [] : [{ label: "Στον πίνακα", icon: <Presentation />, onClick: () => router.push(`/board?m=${material.id}`) }]),
         { label: linked.length ? "Στα μαθήματα…" : "Βάλε σε μάθημα", icon: <CalendarPlus />, onClick: () => setPanel("lesson") },
         ...(fileOnly ? [] : [{ label: "Ιστορικό αλλαγών", icon: <History />, onClick: () => setPanel("history") }]),
         ...(material.file && !fileOnly ? [{ label: "Πρωτότυπο αρχείο", icon: <Paperclip />, onClick: () => setPanel("original") }] : []),
