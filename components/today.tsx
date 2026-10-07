@@ -446,3 +446,31 @@ export function WeekStrip({ index = 4 }: { index?: number }) {
     </section>
   );
 }
+
+/** A new teacher's first minute: one sheet for the next lesson, so the value shows before anything else. */
+export function FirstRun() {
+  const materials = useApp((s) => s.materials);
+  const mode = useApp((s) => s.mode);
+  const { slots, clock } = useToday();
+  const next = upcomingLesson(slots, clock.today, clock.now);
+  if (mode !== "cloud" || materials.length || !next) return null;
+  const r = rise(1);
+  return (
+    <section {...r} aria-label="Πρώτο βήμα" className={clsx(r.className, "flex flex-wrap items-center gap-4 rounded-2xl border border-amber-100 bg-amber-50 p-4")}>
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-amber shadow-card">
+        <Sparkles className="size-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">Το πρώτο σου φύλλο, σε ένα λεπτό</p>
+        <p className="text-[13.5px] text-ink-2">Φωτογράφισε τη σελίδα του βιβλίου για το επόμενο μάθημα, ή πάτα «Φύλλο εργασίας». Μπαίνει μόνο του στο μάθημα.</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => openPrepare({ slotId: next.id })}
+        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[14px] font-semibold text-white hover:bg-brand-hover sm:w-auto"
+      >
+        <Sparkles className="size-4" /> Ξεκίνα
+      </button>
+    </section>
+  );
+}

@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarClock, Check, ChevronRight, Download, FileText, Info, Loader2, LogIn, LogOut, ShieldCheck, Trash2 } from "@/components/icons";
+import { CalendarClock, Check, ChevronRight, Download, FileText, Info, Loader2, LogIn, LogOut, MessageSquareText, ShieldCheck, Trash2 } from "@/components/icons";
+import { openFeedback } from "@/components/feedback";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -263,6 +264,19 @@ export default function SettingsPage() {
         <InstallRow />
       </Section>
 
+
+      <Section title="Βοήθεια">
+        <Card className="flex flex-wrap items-center gap-3 p-4">
+          <MessageSquareText className="size-5 shrink-0 text-brand-500" />
+          <p className="min-w-0 flex-1 text-[14px]">
+            <b className="block">Στείλε μας σχόλιο ή ιδέα</b>
+            <span className="text-muted">Τι σε δυσκόλεψε, τι λείπει. Το διαβάζει άνθρωπος.</span>
+          </p>
+          <Button variant="secondary" size="sm" onClick={openFeedback}>
+            Γράψε μας
+          </Button>
+        </Card>
+      </Section>
 
       <Section title="Τα δεδομένα σου">
         <Row label="Κατέβασε τα δεδομένα σου" hint="Όλα όσα έχεις καταχωρίσει, σε ένα αρχείο (JSON).">

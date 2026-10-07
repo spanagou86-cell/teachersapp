@@ -951,6 +951,36 @@ async function loopFlow(name) {
   await ctx.close();
 }
 
+/** «Στείλε μας σχόλιο» from the sidebar, and the ΣΕΠ one skill at a time for the whole class. */
+async function extrasFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 860 }, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  await page.getByRole("button", { name: "Στείλε μας σχόλιο" }).click();
+  const fb = page.getByRole("dialog", { name: "Στείλε μας σχόλιο" });
+  await fb.getByLabel("Το σχόλιό σου").fill("Θα ήθελα δύο φύλλα σε μία σελίδα.");
+  await fb.getByRole("button", { name: "Αποστολή" }).click();
+  await page.getByText(/Στην επίδειξη δεν στέλνεται/).waitFor();
+  assert(true, "feedback opens from the sidebar (in the demo it says it isn't sent)");
+
+  await page.goto(`${BASE}/classes/d1/sep?by=item`);
+  const list = page.getByRole("list", { name: /Συγκεντρώνεται στο μάθημα: όλη η τάξη/ });
+  await list.waitFor();
+  await list.getByRole("radiogroup").first().getByRole("radio").nth(2).click();
+  await list.getByRole("radiogroup").nth(1).getByRole("radio").nth(3).click();
+  await page.getByText("2 από 24 παιδιά με βαθμίδα").waitFor();
+  assert(true, "ΣΕΠ: one skill for the whole class, a row of stars per pupil");
+  await page.getByRole("button", { name: "Επόμενη", exact: true }).first().click();
+  await page.getByRole("list", { name: /Συμμετέχει ενεργά.*όλη η τάξη/ }).waitFor();
+  assert(true, "…then on to the next skill");
+  await page.screenshot({ path: path.join(OUT, `${name}-sep-by-skill.png`) });
+  await ctx.close();
+}
+
 try {
   await syllabusFlow("syllabus");
   await programmeFlow("programme");
@@ -964,6 +994,7 @@ try {
   await weekFlow("week");
   await boardFlow("board");
   await loopFlow("loop");
+  await extrasFlow("extras");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
   await dark("dark-mobile", { width: 390, height: 844 }, true);

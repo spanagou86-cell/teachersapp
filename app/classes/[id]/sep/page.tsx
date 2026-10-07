@@ -431,6 +431,7 @@ function Report() {
   const year = schoolYearStart(clock.today);
   const term: Term = params.get("term") === "2" ? 2 : params.get("term") === "1" ? 1 : termFor(yearInfo, clock.today);
   const tab: Tab = (["skills", "learning", "texts"] as const).find((t) => t === params.get("tab")) ?? "skills";
+  const by: "child" | "item" = params.get("by") === "item" ? "item" : "child";
   const student = roster.find((s) => s.id === params.get("s")) ?? roster[0];
   const range1 = termRange(yearInfo, 1);
   const range2 = termRange(yearInfo, 2);
@@ -581,13 +582,34 @@ function Report() {
 
         {tab !== "texts" ? (
           <div className="grid grid-cols-1 gap-4">
+            {/* Teachers often think one behaviour at a time across the class: same stars, another order. */}
+            <Segmented<"child" | "item">
+              value={by}
+              onChange={(v) => set({ by: v === "item" ? "item" : undefined })}
+              size="sm"
+              className="sm:w-96"
+              options={[
+                { value: "child", label: "Ανά παιδί" },
+                { value: "item", label: tab === "skills" ? "Ανά δεξιότητα, όλη η τάξη" : "Ανά περιοχή, όλη η τάξη" },
+              ]}
+            />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Legend scale={tab === "skills" ? FREQUENCY : ACHIEVEMENT} />
               <Button variant="soft" size="sm" onClick={fillClass}>
                 Όλη η τάξη ★★★ όπου λείπει
               </Button>
             </div>
-            {tab === "skills"
+            {by === "item" ? (
+              <ByItem
+                items={tab === "skills" ? SKILLS.map((x) => ({ id: x.id, label: x.label })) : AREAS.map((a) => ({ id: a.id, label: a.label }))}
+                current={params.get("i") ?? undefined}
+                onPick={(i) => set({ i })}
+                roster={roster}
+                scale={tab === "skills" ? FREQUENCY : ACHIEVEMENT}
+                value={(sid, item) => reports[reportKey(sid, year, term)]?.ratings[item]}
+                onRate={(sid, item, r) => rate(sid, year, term, item, r)}
+              />
+            ) : tab === "skills"
               ? SKILL_GROUPS.map((g) => (
                   <Card key={g.id} className="px-4 py-2">
                     <h2 className="pt-2 text-[13px] font-bold uppercase tracking-wide text-muted">{g.title}</h2>
@@ -628,6 +650,7 @@ function Report() {
                     </ul>
                   </Card>
                 ))}
+            {by === "child" && (
             <div className="flex items-center justify-between gap-2 text-sm text-muted">
               <span>
                 {ids.filter((x) => report?.ratings[x]).length} από {ids.length} με βαθμίδα
@@ -642,6 +665,7 @@ function Report() {
                 </Button>
               )}
             </div>
+            )}
           </div>
         ) : (
           <Texts key={`${student.id}${term}`} cls={cls} student={student} report={report} year={year} term={term} absent={absences(student.id)[term]} />
@@ -664,5 +688,76 @@ export default function SepPage() {
     <Suspense>
       <Report />
     </Suspense>
+  );
+}
+
+/** One skill (or learning area) for the whole class: pick it, then a row of stars per pupil. */
+function ByItem({
+  items,
+  current,
+  onPick,
+  roster,
+  scale,
+  value,
+  onRate,
+}: {
+  items: { id: string; label: string }[];
+  current?: string;
+  onPick: (id: string) => void;
+  roster: Student[];
+  scale: Record<Rating, string>;
+  value: (studentId: string, item: string) => Rating | undefined;
+  onRate: (studentId: string, item: string, r?: Rating) => void;
+}) {
+  const i = Math.max(0, items.findIndex((x) => x.id === current));
+  const item = items[i];
+  const done = roster.filter((s) => value(s.id, item.id)).length;
+  return (
+    <Card className="px-4 py-3">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Προηγούμενη"
+          disabled={i === 0}
+          onClick={() => onPick(items[i - 1].id)}
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface hover:bg-line-2 disabled:opacity-40"
+        >
+          <ChevronLeft className="size-5" />
+        </button>
+        <Select value={item.id} onChange={(e) => onPick(e.target.value)} aria-label="Δεξιότητα" className="min-w-0 flex-1">
+          {items.map((x, k) => (
+            <option key={x.id} value={x.id}>
+              {k + 1}. {x.label}
+            </option>
+          ))}
+        </Select>
+        <button
+          type="button"
+          aria-label="Επόμενη"
+          disabled={i >= items.length - 1}
+          onClick={() => onPick(items[i + 1].id)}
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface hover:bg-line-2 disabled:opacity-40"
+        >
+          <ChevronRight className="size-5" />
+        </button>
+      </div>
+      <p className="mt-2 text-[13px] text-muted tabular-nums">
+        {done} από {roster.length} παιδιά με βαθμίδα
+      </p>
+      <ul key={item.id} aria-label={`${item.label}: όλη η τάξη`}>
+        {roster.map((s) => (
+          <Row key={s.id} label={fullName(s)}>
+            <Stars label={`${fullName(s)}: ${item.label}`} scale={scale} value={value(s.id, item.id)} onChange={(r) => onRate(s.id, item.id, r)} />
+          </Row>
+        ))}
+      </ul>
+      {i < items.length - 1 && (
+        <div className="flex justify-end pt-2">
+          <Button variant="secondary" size="sm" onClick={() => onPick(items[i + 1].id)}>
+            Επόμενη <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }

@@ -4,7 +4,8 @@
 import "@/lib/store/reports";
 
 import clsx from "clsx";
-import { Bell, Loader2, LogOut, Search, Settings, Sparkles } from "@/components/icons";
+import { Bell, Loader2, LogOut, MessageSquareText, Search, Settings, Sparkles } from "@/components/icons";
+import { FeedbackSheet, openFeedback } from "../feedback";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -87,6 +88,9 @@ function Sidebar() {
         ))}
       </nav>
       <div className="mt-auto grid gap-1">
+        <button type="button" onClick={openFeedback} className={item(false)}>
+          <MessageSquareText className="size-[18px]" /> Στείλε μας σχόλιο
+        </button>
         <Link href="/settings" className={item(pathname.startsWith("/settings"))}>
           <Settings className="size-[18px]" /> Ρυθμίσεις
         </Link>
@@ -331,6 +335,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <CloseDaySheet />
       <DutySheet />
       <BookletSheet />
+      <FeedbackSheet />
       <ConfirmHost />
       <Toaster />
     </div>

@@ -8,7 +8,7 @@ import { MobileBrandBar } from "@/components/shell/PageHeader";
 import { SubjectIcon } from "@/components/subject";
 import { openPrepare } from "@/components/prepare";
 import { Timeline } from "@/components/timeline";
-import { AskBar, DayStats, rise, TodayHero, WeekStrip } from "@/components/today";
+import { AskBar, DayStats, FirstRun, rise, TodayHero, WeekStrip } from "@/components/today";
 import { toast } from "@/components/toast";
 import { Button, ButtonLink, cx } from "@/components/ui";
 import { addDays, dayName, shortDate, startOfWeek, timeToMin, weekday } from "@/lib/dates";
@@ -281,6 +281,7 @@ export default function TodayPage() {
         <TodayHero />
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="grid min-w-0 grid-cols-1 content-start gap-4">
+            <FirstRun />
             <AskBar index={1} />
             <NextStep />
             {todays.length > 0 && (
