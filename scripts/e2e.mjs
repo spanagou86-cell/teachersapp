@@ -521,6 +521,35 @@ async function programmeFlow(name) {
   }
 }
 
+async function dutyFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  await page.goto(`${BASE}/settings/timetable`);
+  const grid = page.getByRole("grid", { name: /ανά μέρα και διάλειμμα/ });
+  await grid.waitFor();
+  const cell = grid.getByRole("button", { name: /Δευτέρα 10:00/ });
+  assert((await cell.getAttribute("aria-pressed")) === "false", "duty grid shows the breaks of the timetable");
+  await cell.click();
+  assert((await cell.getAttribute("aria-pressed")) === "true", "one tap marks a duty on a break");
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  assert(wide <= 0, `duty grid fits the phone (${wide})`);
+  await page.screenshot({ path: path.join(OUT, `${name}-grid.png`) });
+  await page.getByRole("button", { name: "Αποθήκευση προγράμματος" }).click();
+  await page.waitForURL(BASE + "/");
+  await page.goto(`${BASE}/schedule?view=week&d=2026-10-12`);
+  await page.getByText(/Εφημερία|Παιδονομία/).first().waitFor();
+  assert(true, "the new duty is in the schedule");
+  await page.goto(`${BASE}/settings`);
+  await page.getByText(/Υπενθύμιση (εφημερία|παιδονομία)ς? 5′ πριν|Υπενθύμιση .* 5′ πριν/).first().waitFor();
+  assert(true, "settings offer the 5′ duty reminder");
+  await ctx.close();
+}
+
 async function smartTilesFlow(name) {
   console.log(`\n## ${name}`);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
@@ -631,6 +660,7 @@ try {
   await programmeFlow("programme");
   await sepFlow("sep");
   await smartTilesFlow("tiles");
+  await dutyFlow("duty");
   await prepareFlow("prepare");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);

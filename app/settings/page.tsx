@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { InstallRow } from "@/components/pwa";
+import { PushRow } from "@/components/pushRow";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AutoText } from "@/components/text";
 import { toast } from "@/components/toast";
@@ -249,6 +250,10 @@ export default function SettingsPage() {
             )}
           </div>
         </Row>
+      </Section>
+
+      <Section title="Ειδοποιήσεις">
+        <PushRow />
       </Section>
 
       <Section title="Εμφάνιση">

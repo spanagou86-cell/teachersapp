@@ -1,7 +1,7 @@
 // τάξη — service worker. Kept deliberately small so it can never show stale data:
 // only build assets (hashed, immutable) and icons are cached; pages always come from
 // the network and fall back to the last copy (or an offline page) only without signal.
-const VERSION = "v3";
+const VERSION = "v4";
 const STATIC = `taxi-static-${VERSION}`;
 const PAGES = `taxi-pages-${VERSION}`;
 const OFFLINE_URL = "/offline.html";
@@ -53,4 +53,35 @@ self.addEventListener("fetch", (event) => {
         .catch(async () => (await caches.match(url.pathname, { cacheName: PAGES })) || (await caches.match(OFFLINE_URL))),
     );
   }
+});
+
+// Reminders (e.g. «Σε 5′ έχεις παιδονομία»): shown even when the app is closed.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "τάξη", body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "τάξη", {
+      body: data.body || "",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: data.tag || "taxi",
+      renotify: true,
+      data: { url: data.url || "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) if ("focus" in c) return c.navigate(url).then((w) => (w || c).focus());
+      return self.clients.openWindow(url);
+    }),
+  );
 });

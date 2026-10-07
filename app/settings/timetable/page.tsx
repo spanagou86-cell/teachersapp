@@ -11,6 +11,7 @@ import { Button, Card, cx, Field, IconButton, inputClass, Segmented, Select, She
 import { uid } from "@/lib/id";
 import { dutyLabel, yearFor } from "@/lib/schoolYear";
 import { aiReadTimetable, shrinkImage, toBase64 } from "@/lib/ai/client";
+import { enablePush, pushState } from "@/lib/pushClient";
 import { gradeFromName, planImport } from "@/lib/ai/timetableImport";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
@@ -174,6 +175,100 @@ function CellEditor({
   );
 }
 
+const ORDINAL = ["1ο", "2ο", "3ο", "4ο", "5ο"];
+
+/** «Παιδονομία: πότε έχεις;» — days × breaks, one tap each, so reminders know when to ring. */
+function DutyPicker({
+  breaks,
+  isOn,
+  onToggle,
+  place,
+  setPlace,
+}: {
+  breaks: Period[];
+  isOn: (day: number, b: Period) => boolean;
+  onToggle: (day: number, b: Period) => void;
+  place: string;
+  setPlace: (p: string) => void;
+}) {
+  const country = useApp((s) => s.profile.country);
+  const duty = dutyLabel(country);
+  const count = breaks.reduce((n, b) => n + [1, 2, 3, 4, 5].filter((d) => isOn(d, b)).length, 0);
+  if (!breaks.length) return null;
+  return (
+    <Card className="mb-5 grid grid-cols-1 gap-3 border-amber-100 p-4">
+      <div className="flex flex-wrap items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber">
+          <ShieldCheck className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 font-bold">
+            {duty}: πότε έχεις;
+            {count > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber">{count} τη βδομάδα</span>}
+          </h2>
+          <p className="text-sm text-muted">Πάτα το διάλειμμα κάθε μέρας που έχεις {duty.toLowerCase()}. Θα σε ειδοποιώ 5′ πριν.</p>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-separate border-spacing-1" role="grid" aria-label={`${duty} ανά μέρα και διάλειμμα`}>
+          <thead>
+            <tr>
+              <th className="w-[84px]" />
+              {DAYS_SHORT.map((d) => (
+                <th key={d} className="text-center text-[11px] font-bold text-muted">
+                  {d}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {breaks.map((b, i) => (
+              <tr key={`${b.start}-${b.end}`}>
+                <td className="pr-1 text-left">
+                  <span className="block text-[12.5px] font-semibold leading-tight">{ORDINAL[i] ?? `${i + 1}ο`} διάλειμμα</span>
+                  <span className="block text-[11.5px] tabular-nums text-muted">
+                    {b.start}–{b.end}
+                  </span>
+                </td>
+                {[1, 2, 3, 4, 5].map((day) => {
+                  const on = isOn(day, b);
+                  return (
+                    <td key={day}>
+                      <button
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={`${duty} ${DAYS[day - 1]} ${b.start}`}
+                        onClick={() => onToggle(day, b)}
+                        className={clsx(
+                          "flex h-11 w-full min-w-10 items-center justify-center rounded-lg border transition-colors",
+                          on ? "border-amber bg-amber text-white" : "border-line bg-surface text-line hover:bg-amber-50",
+                        )}
+                      >
+                        <ShieldCheck className="size-4" />
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <label className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted">Σημείο (προαιρετικό):</span>
+        <Select value={place} onChange={(e) => setPlace(e.target.value)} aria-label="Σημείο" className="!h-9 w-auto min-w-36">
+          <option value="">—</option>
+          {DUTY_PLACES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </Select>
+      </label>
+    </Card>
+  );
+}
+
 function Editor() {
   const router = useRouter();
   const params = useSearchParams();
@@ -207,6 +302,7 @@ function Editor() {
   });
   const [editing, setEditing] = useState<{ day: number; row: Row } | null>(null);
   const [mobileDay, setMobileDay] = useState(1);
+  const [place, setPlace] = useState("");
   const [saving, setSaving] = useState(false);
 
   const entries: TimetableEntry[] = useMemo(
@@ -222,6 +318,33 @@ function Editor() {
   const badTimes = rows.filter((r) => !isValidTime(r.start) || !isValidTime(r.end) || timeToMin(r.end) <= timeToMin(r.start));
   const overlaps = overlappingEntries(entries.filter((e) => isValidTime(e.start) && isValidTime(e.end)));
   const lessons = entries.filter((e) => e.kind === "lesson").length;
+
+  // Breaks of this timetable (short rows), or the school system's own when it has none yet.
+  const breaks = useMemo(() => {
+    const short = (p: Period) => isValidTime(p.start) && isValidTime(p.end) && timeToMin(p.end) > timeToMin(p.start) && timeToMin(p.end) - timeToMin(p.start) < 30;
+    const own = rows.filter(short);
+    return (own.length ? own : BELLS[country].filter(short)).map((p) => ({ start: p.start, end: p.end }));
+  }, [rows, country]);
+  const rowFor = (b: Period) => rows.find((r) => r.start === b.start && r.end === b.end);
+  const dutyOn = (day: number, b: Period) => {
+    const r = rowFor(b);
+    return !!r && cells[`${day}|${r.key}`]?.kind === "duty";
+  };
+  const toggleDuty = (day: number, b: Period) => {
+    let row = rowFor(b);
+    if (!row) {
+      row = { key: uid(), start: b.start, end: b.end };
+      const added = row;
+      setRows((rs) => [...rs, added].sort((x, y) => timeToMin(x.start) - timeToMin(y.start)));
+    }
+    const key = `${day}|${row.key}`;
+    setCells((cs) => {
+      const next = { ...cs };
+      if (next[key]?.kind === "duty") delete next[key];
+      else next[key] = { kind: "duty", label: place };
+      return next;
+    });
+  };
 
   const setRow = (key: string, p: Partial<Period>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
   const removeRow = (key: string) => {
@@ -277,7 +400,17 @@ function Editor() {
     setSaving(true);
     try {
       await saveTimetable(entries);
-      toast(mode === "cloud" ? `Το πρόγραμμα δημιουργήθηκε έως ${shortDate(yearFor(country, today).end)}` : "Το πρόγραμμα αποθηκεύτηκε");
+      const duties = entries.filter((e) => e.kind === "duty").length;
+      const remind = mode === "cloud" && duties > 0 && (await pushState()) === "off";
+      toast(
+        mode === "cloud" ? `Το πρόγραμμα δημιουργήθηκε έως ${shortDate(yearFor(country, today).end)}` : "Το πρόγραμμα αποθηκεύτηκε",
+        remind
+          ? {
+              label: `Υπενθύμιση ${dutyLabel(country).toLowerCase()}`,
+              run: () => void enablePush().then((r) => toast(r.ok ? "Έτοιμο · θα σε ειδοποιώ 5′ πριν" : r.error)),
+            }
+          : undefined,
+      );
       router.push("/");
     } catch {
       toast("Δεν αποθηκεύτηκε. Δοκίμασε ξανά.");
@@ -293,7 +426,7 @@ function Editor() {
       inputMode="numeric"
       maxLength={5}
       aria-label={field === "start" ? "Έναρξη" : "Λήξη"}
-      className={cx(inputClass, "h-9 w-[60px] px-1.5 text-center text-xs tabular-nums", !isValidTime(r[field]) && "border-danger")}
+      className={cx(inputClass, "h-9 !w-[74px] shrink-0 px-1 text-center text-xs tabular-nums lg:!w-[60px]", !isValidTime(r[field]) && "border-danger")}
     />
   );
 
@@ -326,6 +459,8 @@ function Editor() {
           }}
         />
       </Card>
+      <DutyPicker breaks={breaks} isOn={dutyOn} onToggle={toggleDuty} place={place} setPlace={setPlace} />
+
       {readNotes && (
         <p role="note" className="mb-5 flex gap-2 rounded-xl bg-amber-50 p-3 text-sm">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber" /> {readNotes}
@@ -350,7 +485,7 @@ function Editor() {
         <div className="space-y-2">
           {rows.map((r) => (
             <div key={r.key} className="flex items-center gap-2">
-              <div className="flex w-[64px] shrink-0 flex-col gap-1">
+              <div className="flex w-[74px] shrink-0 flex-col gap-1">
                 {timeInput(r, "start")}
                 {timeInput(r, "end")}
               </div>
