@@ -1,7 +1,8 @@
 "use client";
 
-import { CheckCircle2, X } from "@/components/icons";
-import { useEffect } from "react";
+import clsx from "clsx";
+import { CheckCircle2 } from "@/components/icons";
+import { useEffect, useState } from "react";
 import { create } from "zustand";
 
 interface Toast {
@@ -21,18 +22,29 @@ export const toast = (text: string, action?: Toast["action"]) => useToasts.getSt
 
 function ToastItem({ t }: { t: Toast }) {
   const dismiss = useToasts((s) => s.dismiss);
+  const [leaving, setLeaving] = useState(false);
+  // Short and quiet: gone in under 3″, a little longer when it offers «Αναίρεση».
   useEffect(() => {
-    const h = setTimeout(() => dismiss(t.id), t.action ? 7000 : 3500);
-    return () => clearTimeout(h);
+    const out = setTimeout(() => setLeaving(true), t.action ? 4800 : 2400);
+    const gone = setTimeout(() => dismiss(t.id), t.action ? 5000 : 2600);
+    return () => (clearTimeout(out), clearTimeout(gone));
   }, [t, dismiss]);
   return (
-    <div role="status" className="pointer-events-auto flex w-full max-w-md animate-slide-up items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-bg shadow-pop">
-      <CheckCircle2 className="size-5 shrink-0 text-brand-500" />
-      <span className="min-w-0 flex-1 break-words">{t.text}</span>
+    <div
+      role="status"
+      onClick={() => !t.action && dismiss(t.id)}
+      className={clsx(
+        "pointer-events-auto flex max-w-[min(26rem,100%)] animate-slide-up items-center gap-2.5 rounded-full bg-ink/95 py-2 pl-3.5 text-[13.5px] font-medium text-bg shadow-pop backdrop-blur transition-[opacity,transform] duration-200",
+        t.action ? "pr-1.5" : "pr-4",
+        leaving && "translate-y-1 opacity-0",
+      )}
+    >
+      <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
+      <span className="min-w-0 truncate">{t.text}</span>
       {t.action && (
         <button
           type="button"
-          className="rounded-lg px-2 py-1 font-semibold text-brand-500 hover:bg-bg/10"
+          className="shrink-0 rounded-full bg-bg/10 px-3 py-1 text-[13px] font-semibold text-bg hover:bg-bg/20"
           onClick={() => {
             t.action!.run();
             dismiss(t.id);
@@ -41,9 +53,6 @@ function ToastItem({ t }: { t: Toast }) {
           {t.action.label}
         </button>
       )}
-      <button type="button" aria-label="Κλείσιμο" className="text-bg/60 hover:text-bg" onClick={() => dismiss(t.id)}>
-        <X className="size-4" />
-      </button>
     </div>
   );
 }

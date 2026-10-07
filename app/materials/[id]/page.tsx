@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import {
-  ArrowRight, CalendarPlus, Check, Download, CheckCircle2, Eye, FileQuestion, FileText, History, Link2Off, Paperclip, Pencil, Plus, Printer, RotateCcw, Settings2, Sparkles, Trash2,
+  ArrowRight, CalendarPlus, Check, Download, CheckCircle2, Eye, FileQuestion, FileText, History, Link2Off, Paperclip, Pencil, Plus, Printer, RotateCcw, Settings2, Sparkles, Trash2, Undo2,
 } from "@/components/icons";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -324,6 +324,8 @@ function Editor() {
   const remove = useApp((s) => s.deleteMaterial);
 
   const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [showSolutions, setShowSolutions] = useState(false);
   const [panel, setPanel] = useState<null | "change" | "print" | "details" | "lesson" | "history" | "original">(null);
   const [selectedId, setSelectedId] = useState<string>();
@@ -374,11 +376,12 @@ function Editor() {
     force((n) => n + 1);
   };
   /** Every change is saved at once; the toast offers to take it back. */
-  const commit = (blocks: Block[], label: string, message = "Αποθηκεύτηκε") => {
+  // While editing, nothing pops up: «Αναίρεση» waits in the editing bar.
+  const commit = (blocks: Block[], label: string, message = "Αποθηκεύτηκε", quiet = false) => {
     undoStack.current.push(material.blocks);
     changeBlocks(material.id, blocks, label);
     force((n) => n + 1);
-    toast(message, { label: "Αναίρεση", run: undo });
+    if (!quiet) toast(message, { label: "Αναίρεση", run: undo });
   };
 
   const blockLabel = (bid: string) => {
@@ -409,12 +412,18 @@ function Editor() {
     });
   };
 
-  const save = () =>
-    toast(`Αποθηκεύτηκε στο Υλικό · ${cls?.name ?? ""} · ${subject?.name ?? ""}`, { label: "Στο Υλικό", run: () => router.push("/materials") });
+  // Everything is saved as it changes; the button just confirms it, in place.
+  const save = () => {
+    setEditing(false);
+    setSelectedId(undefined);
+    setSaved(true);
+    clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSaved(false), 1800);
+  };
 
   const addExercise = () => {
     const b: Block = { id: uid(), type: "exercise", text: "Νέα άσκηση", lines: 2, level: "standard" };
-    commit([...material.blocks, b], "Προσθήκη: άσκηση", "Προστέθηκε άσκηση");
+    commit([...material.blocks, b], "Προσθήκη: άσκηση", "Προστέθηκε άσκηση", true);
     setSelectedId(b.id);
   };
 
@@ -556,6 +565,12 @@ function Editor() {
     <div className="flex items-center gap-2 rounded-xl border border-brand-100 bg-brand-50 p-1.5 pl-3 shadow-pop" role="status">
       <Pencil className="size-4 shrink-0 text-brand" />
       <p className="min-w-0 flex-1 text-[13px] font-semibold leading-tight text-ink">Πάτησε μια άσκηση ή ένα κείμενο για να το διορθώσεις</p>
+      {undoStack.current.length > 0 && (
+        <Button size="sm" variant="secondary" onClick={undo} aria-label="Αναίρεση">
+          <Undo2 className="size-4" />
+          <span className="max-sm:hidden">Αναίρεση</span>
+        </Button>
+      )}
       <Button size="sm" variant="secondary" onClick={addExercise}>
         <Plus className="size-4" /> Άσκηση
       </Button>
@@ -573,14 +588,20 @@ function Editor() {
     </div>
   ) : null;
 
-  const action = (label: string, Icon: typeof Printer, onClick: () => void, primary?: boolean, pressed?: boolean) => (
+  const action = (label: string, Icon: typeof Printer, onClick: () => void, primary?: boolean, pressed?: boolean, done?: boolean) => (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={pressed}
       className={clsx(
         "flex h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl text-[12.5px] font-semibold transition-[background-color,transform] active:scale-[0.97] sm:h-12 sm:flex-row sm:gap-2 sm:text-sm",
-        primary ? "bg-brand text-white shadow-[0_6px_14px_-8px_rgb(30_58_138/0.55)] hover:bg-brand-hover" : pressed ? "bg-brand-50 text-brand" : "text-ink-2 hover:bg-line-2",
+        primary
+          ? "bg-brand text-white shadow-[0_6px_14px_-8px_rgb(30_58_138/0.55)] hover:bg-brand-hover"
+          : done
+            ? "bg-emerald-50 text-emerald-700"
+            : pressed
+              ? "bg-brand-50 text-brand"
+              : "text-ink-2 hover:bg-line-2",
       )}
     >
       <Icon className="size-5" />
@@ -607,16 +628,16 @@ function Editor() {
                   selectedId,
                   onSelect: setSelectedId,
                   // Hand-written wording replaces the generated variants, so later AI steps start from it.
-                  onSave: (bid, p) => commit(material.blocks.map((b) => (b.id === bid ? { ...b, ...p, variants: undefined, variantB: undefined } : b)), `Επεξεργασία: ${blockLabel(bid)}`),
+                  onSave: (bid, p) => commit(material.blocks.map((b) => (b.id === bid ? { ...b, ...p, variants: undefined, variantB: undefined } : b)), `Επεξεργασία: ${blockLabel(bid)}`, undefined, true),
                   onMove: (bid, dir) => {
                     const i = material.blocks.findIndex((b) => b.id === bid);
                     const next = [...material.blocks];
                     [next[i], next[i + dir]] = [next[i + dir], next[i]];
-                    commit(next, "Αλλαγή σειράς");
+                    commit(next, "Αλλαγή σειράς", undefined, true);
                   },
                   onDelete: (bid) => {
                     const label = blockLabel(bid);
-                    commit(material.blocks.filter((b) => b.id !== bid), `Διαγραφή: ${label}`, `Διαγράφηκε: ${label}`);
+                    commit(material.blocks.filter((b) => b.id !== bid), `Διαγραφή: ${label}`, `Διαγράφηκε: ${label}`, true);
                     setSelectedId(undefined);
                   },
                 }
@@ -627,7 +648,7 @@ function Editor() {
       {/* Four things, always in the same place: save, edit, change with AI, print. */}
       <div className="no-print sticky bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] z-20 mt-4 lg:bottom-4">
         <div className="grid grid-cols-4 gap-1 rounded-2xl border border-line bg-surface/95 p-1.5 shadow-pop backdrop-blur" role="toolbar" aria-label="Ενέργειες φύλλου">
-          {action("Αποθήκευση", Check, save)}
+          {action(saved ? "Αποθηκεύτηκε" : "Αποθήκευση", saved ? CheckCircle2 : Check, save, false, undefined, saved)}
           {action(editing ? "Τέλος" : "Επεξεργασία", Pencil, () => (setEditing((v) => !v), setShowSolutions(false), setSelectedId(undefined)), false, editing)}
           {action("Άλλαξέ το", Sparkles, () => (setEditing(false), setPanel("change")))}
           {action("Εκτύπωση", Printer, () => setPanel("print"), true)}

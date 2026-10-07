@@ -109,8 +109,8 @@ async function flow(name, viewport, mobile) {
 
   // Save: a clear button, and it says where the sheet is kept.
   await actions.getByRole("button", { name: "Αποθήκευση" }).click();
-  await page.getByText(/Αποθηκεύτηκε στο Υλικό · Δ1/).waitFor();
-  assert(true, "«Αποθήκευση» confirms where the sheet is kept");
+  await actions.getByRole("button", { name: "Αποθηκεύτηκε" }).waitFor();
+  assert(true, "«Αποθήκευση» confirms in place, nothing pops up");
 
   // 4. Link to Monday 09:20 lesson
   await page.getByRole("button", { name: "Περισσότερα" }).click();
