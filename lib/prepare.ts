@@ -72,14 +72,14 @@ export function inferKind(text: string): PrepKind {
   if (/τεστ|διαγωνισμ|κουιζ|quiz|αξιολογησ/.test(t)) return "quiz";
   if (/σχεδιο|πλανο|πορεια (του )?μαθηματ/.test(t)) return "plan";
   if (/επιπεδ|διαφοροπ/.test(t)) return "levels";
-  if (/κατανοησ\w* κειμεν/.test(t)) return "reading";
+  if (/κατανοησ\S* κειμεν/.test(t)) return "reading";
   if (/ορθογραφ|υπαγορευσ/.test(t)) return "spelling";
   if (/λεξιλογ/.test(t)) return "vocab";
   if (/νοερ/.test(t)) return "mental";
   if (/προβλημα/.test(t)) return "problems";
   if (/πειραμα/.test(t)) return "experiment";
   if (/πηγ(ες|η)|χρονολογ/.test(t)) return "sources";
-  if (/χαρτ(η|ης|ες)\b/.test(t)) return "map";
+  if (/χαρτ(η|ης|ες)(\s|$)/.test(t)) return "map";
   return "worksheet";
 }
 

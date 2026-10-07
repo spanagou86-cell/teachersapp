@@ -48,6 +48,8 @@ describe("prepare", () => {
     expect(inferKind("κατανόηση κειμένου για τα ζώα")).toBe("reading");
     expect(inferKind("προβλήματα με ευρώ")).toBe("problems");
     expect(inferKind("ασκήσεις για τα κλάσματα")).toBe("worksheet");
+    expect(inferKind("φύλλο με τον χάρτη της Κύπρου")).toBe("map");
+    expect(inferKind("χαρτόνι και ψαλίδι")).toBe("worksheet");
   });
 
   it("asks for the lesson's topic, never for anything about pupils", () => {
