@@ -44,7 +44,10 @@ describe("prepare", () => {
     expect(inferKind("Ένα τεστ για τα κλάσματα")).toBe("quiz");
     expect(inferKind("σχέδιο μαθήματος με ομαδική δουλειά")).toBe("plan");
     expect(inferKind("φύλλο σε τρία επίπεδα")).toBe("levels");
-    expect(inferKind("υπαγόρευση με λέξεις σε -ώνω")).toBe("worksheet");
+    expect(inferKind("υπαγόρευση με λέξεις σε -ώνω")).toBe("spelling");
+    expect(inferKind("κατανόηση κειμένου για τα ζώα")).toBe("reading");
+    expect(inferKind("προβλήματα με ευρώ")).toBe("problems");
+    expect(inferKind("ασκήσεις για τα κλάσματα")).toBe("worksheet");
   });
 
   it("asks for the lesson's topic, never for anything about pupils", () => {
