@@ -17,6 +17,7 @@ import { dayName, relativeTime, shortDate } from "@/lib/dates";
 import { uid } from "@/lib/id";
 import { exerciseNumber, fileKindLabel, KIND_LABEL, LEVEL_LABEL } from "@/lib/materials";
 import { sortSlots } from "@/lib/schedule";
+import { useDyslexia } from "@/lib/prefs";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import { loadBlob } from "@/lib/store/blobs";
@@ -89,6 +90,8 @@ function MaterialDetails({ material }: { material: Material }) {
   const subjects = useSubjects();
   const patch = useApp((s) => s.patchMaterial);
   const remove = useApp((s) => s.deleteMaterial);
+  const dyslexia = useDyslexia((s) => s.ids.includes(material.id));
+  const setDyslexia = useDyslexia((s) => s.set);
   const router = useRouter();
   return (
     <Card className="grid gap-3 p-5">
@@ -129,6 +132,13 @@ function MaterialDetails({ material }: { material: Material }) {
           <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
             Ασπρόμαυρη εκτύπωση
             <Toggle label="Ασπρόμαυρη εκτύπωση" checked={material.blackAndWhite} onChange={(v) => patch(material.id, { blackAndWhite: v })} />
+          </label>
+          <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
+            <span>
+              Φιλικό για δυσλεξία
+              <span className="block text-xs text-muted">Μεγαλύτερα γράμματα, πιο αραιό κείμενο</span>
+            </span>
+            <Toggle label="Φιλικό για δυσλεξία" checked={dyslexia} onChange={(v) => setDyslexia(material.id, v)} />
           </label>
         </>
       )}

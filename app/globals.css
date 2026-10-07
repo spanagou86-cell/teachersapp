@@ -209,6 +209,19 @@ html[data-kb] .kb-hide {
   color: var(--color-ink);
 }
 
+/* «Φιλικό για δυσλεξία» (BDA style guide): plain sans serif, larger, airier, left-aligned, no italics. */
+.paper.dyslexia {
+  font-family: Verdana, Tahoma, "Segoe UI", Arial, sans-serif;
+  font-size: 1.1em;
+  letter-spacing: 0.035em;
+  word-spacing: 0.16em;
+  line-height: 1.75;
+}
+.paper.dyslexia * {
+  font-style: normal !important;
+  text-align: left;
+}
+
 /* Times and counts line up in columns. */
 .tabular {
   font-variant-numeric: tabular-nums;

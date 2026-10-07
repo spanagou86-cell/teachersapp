@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, BookOpen, GripVertical, Pencil, Trash2, Target } fr
 import { useEffect, useRef, useState } from "react";
 import { GrowingTextarea } from "../text";
 import { buttonClass, cx, inputClass } from "../ui";
+import { useDyslexia } from "@/lib/prefs";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import type { Block, Material } from "@/lib/types";
@@ -173,10 +174,11 @@ export function DocPage({
   const school = useApp((s) => s.profile.schoolName);
   const grade = useApp((s) => s.classes.find((c) => c.id === material.classId)?.grade);
   const isSheet = material.kind === "worksheet" || material.kind === "quiz";
+  const dyslexia = useDyslexia((s) => s.ids.includes(material.id));
   let exNo = 0;
 
   return (
-    <article className={clsx("paper mx-auto w-full max-w-[680px] bg-white px-5 py-6 text-ink shadow-paper sm:px-10 sm:py-9", className)}>
+    <article className={clsx("paper mx-auto w-full max-w-[680px] bg-white px-5 py-6 text-ink shadow-paper sm:px-10 sm:py-9", dyslexia && "dyslexia", className)}>
       <header className="flex items-center justify-between border-b-2 border-brand-100 pb-3">
         {school ? (
           <span className="min-w-0 leading-tight">

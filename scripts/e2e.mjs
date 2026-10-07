@@ -521,6 +521,30 @@ async function programmeFlow(name) {
   }
 }
 
+async function smartTilesFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  await page.goto(`${BASE}/lessons/l-2026-10-05-0920`);
+  const chips = page.getByRole("group", { name: "Για το μάθημα" });
+  await chips.waitFor();
+  assert((await chips.innerText()).includes("Προβλήματα"), "a maths lesson offers «Προβλήματα» and «Νοερός υπολογισμός»");
+  await chips.getByRole("button", { name: "Νοερός υπολογισμός" }).click();
+  await page.waitForURL(/\/materials\//, { timeout: 30000 });
+  assert(/Νοερός υπολογισμός/.test(await page.locator("main").innerText()), "the subject's own sheet is made in one tap");
+  const toggle = page.getByRole("switch", { name: "Φιλικό για δυσλεξία" });
+  if (await toggle.count()) {
+    await toggle.first().click();
+    assert((await page.locator("article.paper.dyslexia").count()) > 0, "«Φιλικό για δυσλεξία» changes the printed sheet");
+  } else assert(false, "«Φιλικό για δυσλεξία» toggle is reachable");
+  await page.screenshot({ path: path.join(OUT, `${name}-dyslexia.png`), fullPage: false });
+  await ctx.close();
+}
+
 async function sepFlow(name) {
   console.log(`\n## ${name}`);
   for (const [w, h] of [[390, 844], [1280, 900]]) {
@@ -606,6 +630,7 @@ try {
   await syllabusFlow("syllabus");
   await programmeFlow("programme");
   await sepFlow("sep");
+  await smartTilesFlow("tiles");
   await prepareFlow("prepare");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);

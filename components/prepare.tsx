@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { KIND_LABEL, LEVEL_LABEL } from "@/lib/materials";
-import { inferKind, PREP, PREP_KINDS, prepRequest, previousTopic, upcoming, whenLabel, type PrepKind } from "@/lib/prepare";
+import { extrasFor, inferKind, PREP, PREP_KINDS, prepRequest, previousTopic, upcoming, whenLabel, type PrepKind } from "@/lib/prepare";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import { dismissJob, openJob, retryJob, startJob, useJobs, watchJobs, type Job } from "@/lib/store/jobs";
@@ -41,32 +41,53 @@ export const usePrepare = create<{ open: boolean; options: PrepareOptions; show:
 /** Opens «Ετοίμασε» from anywhere: the bottom bar, Today, a lesson, the materials. */
 export const openPrepare = (o?: PrepareOptions) => usePrepare.getState().show(o);
 
-const ICON: Record<PrepKind, typeof FileText> = { worksheet: FileText, quiz: SquareCheckBig, levels: Layers, plan: ListChecks };
+const ICON: Partial<Record<PrepKind, typeof FileText>> = { worksheet: FileText, quiz: SquareCheckBig, levels: Layers, plan: ListChecks };
 
-/** The four results, as big tiles. */
-export function PrepareTiles({ onPick, disabled, compact }: { onPick: (kind: PrepKind) => void; disabled?: boolean; compact?: boolean }) {
+/** The four results as big tiles, then the subject's own sheets («Για Μαθηματικά: Προβλήματα · Νοερός υπολογισμός»). */
+export function PrepareTiles({ onPick, disabled, compact, subjectId }: { onPick: (kind: PrepKind) => void; disabled?: boolean; compact?: boolean; subjectId?: SubjectId }) {
+  const subjects = useSubjects();
+  const extras = extrasFor(subjectId);
   return (
-    <div className={clsx("grid grid-cols-2 gap-2", compact && "sm:grid-cols-4")}>
-      {PREP_KINDS.map((kind) => {
-        const Icon = ICON[kind];
-        return (
-          <button
-            key={kind}
-            type="button"
-            disabled={disabled}
-            onClick={() => onPick(kind)}
-            className="group flex flex-col items-start gap-3 rounded-xl border border-line bg-surface p-3.5 text-left shadow-card transition-[background-color,border-color,transform] hover:border-brand-100 hover:bg-brand-50/50 active:scale-[0.98] disabled:opacity-50"
-          >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand transition-colors group-hover:bg-brand-100">
-              <Icon className="size-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[15px] font-semibold leading-tight text-ink">{PREP[kind].title}</span>
-              <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{PREP[kind].sub}</span>
-            </span>
-          </button>
-        );
-      })}
+    <div className="grid grid-cols-1 gap-2.5">
+      <div className={clsx("grid grid-cols-2 gap-2", compact && "sm:grid-cols-4")}>
+        {PREP_KINDS.map((kind) => {
+          const Icon = ICON[kind] ?? FileText;
+          return (
+            <button
+              key={kind}
+              type="button"
+              disabled={disabled}
+              onClick={() => onPick(kind)}
+              className="group flex flex-col items-start gap-3 rounded-xl border border-line bg-surface p-3.5 text-left shadow-card transition-[background-color,border-color,transform] hover:border-brand-100 hover:bg-brand-50/50 active:scale-[0.98] disabled:opacity-50"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand transition-colors group-hover:bg-brand-100">
+                <Icon className="size-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[15px] font-semibold leading-tight text-ink">{PREP[kind].title}</span>
+                <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{PREP[kind].sub}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {extras.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Για το μάθημα">
+          <span className="mr-0.5 text-[12.5px] font-semibold text-muted">Για {subjects.find((x) => x.id === subjectId)?.name ?? "το μάθημα"}:</span>
+          {extras.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              disabled={disabled}
+              onClick={() => onPick(kind)}
+              title={PREP[kind].sub}
+              className="h-9 rounded-full border border-line bg-surface px-3 text-[13px] font-semibold text-ink-2 transition-colors hover:border-brand-100 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
+            >
+              {PREP[kind].title}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -386,7 +407,7 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
             </div>
           ) : null}
 
-          <PrepareTiles onPick={go} disabled={uploading} />
+          <PrepareTiles onPick={go} disabled={uploading} subjectId={sub} />
 
           {!photo && (
             <button

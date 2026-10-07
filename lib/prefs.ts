@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { PREFS_KEY } from "./prefs-boot";
 
 /** Per-device display settings. */
@@ -41,3 +43,18 @@ export function usePrefs(): [Prefs, (patch: Partial<Prefs>) => void] {
   }, []);
   return [prefs, update];
 }
+
+/**
+ * Sheets printed «φιλικά για δυσλεξία» (British Dyslexia Association style guide: plain sans
+ * serif, bigger text, wider letter, word and line spacing, left-aligned). A choice per sheet,
+ * kept on this device: it changes the print, not the sheet.
+ */
+export const useDyslexia = create<{ ids: string[]; set: (id: string, on: boolean) => void }>()(
+  persist(
+    (set) => ({
+      ids: [],
+      set: (id, on) => set((s) => ({ ids: on ? [...new Set([...s.ids, id])] : s.ids.filter((x) => x !== id) })),
+    }),
+    { name: "taxi-dyslexia", storage: createJSONStorage(() => localStorage) },
+  ),
+);

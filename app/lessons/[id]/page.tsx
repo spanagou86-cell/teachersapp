@@ -372,7 +372,7 @@ export default function LessonPage() {
                   </p>
                 </div>
               </div>
-              <PrepareTiles compact onPick={(kind) => openPrepare({ slotId: slot.id, kind })} />
+              <PrepareTiles compact subjectId={slot.subjectId} onPick={(kind) => openPrepare({ slotId: slot.id, kind })} />
               <button type="button" onClick={() => openPrepare({ slotId: slot.id })} className="mt-3 text-sm font-semibold text-brand-500 hover:underline">
                 Από φωτογραφία βιβλίου ή με δική σου οδηγία
               </button>
