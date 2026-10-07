@@ -137,7 +137,8 @@ function NextStep() {
   const bare = later.filter((s) => days.includes(s.date) && !s.materialIds.length);
   const group = bare.filter((s) => s.date === bare[0]?.date);
   const name = (id: string) => subjects.find((x) => x.id === id)?.name;
-  const box = "flex items-center gap-3 rounded-2xl border border-line bg-surface px-3.5 py-3";
+  const box =
+    "flex items-center gap-3 rounded-2xl border border-brand-100 bg-[linear-gradient(120deg,var(--color-brand-50),var(--color-surface)_65%)] px-3.5 py-3 shadow-card";
 
   if (dayOver && toLog.length)
     return (

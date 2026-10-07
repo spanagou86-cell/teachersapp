@@ -72,6 +72,7 @@ function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
       </Card>
       {holiday && <p className="rounded-xl bg-line-2 px-3 py-2 text-sm text-muted">Αργία · {holiday}</p>}
 
+      {record && (
       <div className="grid grid-cols-3 gap-2">
         {[
           { n: record ? roster.length - absent.length : "—", label: "παρόντες", cls: "text-brand-500" },
@@ -84,6 +85,7 @@ function Attendance({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
           </div>
         ))}
       </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <Button

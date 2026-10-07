@@ -12,14 +12,15 @@ type Variant = "primary" | "secondary" | "ghost" | "soft" | "danger";
 type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-hover shadow-[inset_0_1px_0_rgb(255_255_255/0.12),0_1px_2px_rgb(26_34_56/0.2)] disabled:bg-brand/40 disabled:shadow-none",
+  primary:
+    "bg-brand bg-[linear-gradient(180deg,rgb(255_255_255/0.10),rgb(255_255_255/0))] text-white hover:bg-brand-hover shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_1px_2px_rgb(26_34_56/0.2),0_6px_14px_-8px_rgb(30_58_138/0.55)] disabled:bg-brand/40 disabled:bg-none disabled:shadow-none",
   secondary: "bg-surface text-ink border border-line shadow-[0_1px_2px_rgb(26_34_56/0.05)] hover:bg-line-2 disabled:text-muted",
   ghost: "text-ink-2 hover:bg-line-2 disabled:text-muted",
   soft: "bg-brand-50 text-brand hover:bg-brand-100 disabled:opacity-50",
   danger: "bg-surface text-danger border border-line hover:bg-danger-50",
 };
 const SIZES: Record<Size, string> = {
-  sm: "h-8 px-2.5 text-[13px] gap-1.5 rounded-md",
+  sm: "h-9 px-3 text-[13px] gap-1.5 rounded-lg",
   md: "h-10 px-3.5 text-sm gap-2 rounded-lg",
   lg: "h-12 px-5 text-[15px] gap-2 rounded-lg",
 };

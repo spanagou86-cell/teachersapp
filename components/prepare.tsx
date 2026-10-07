@@ -72,8 +72,8 @@ export function PrepareTiles({ onPick, disabled, compact, subjectId }: { onPick:
         })}
       </div>
       {extras.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Για το μάθημα">
-          <span className="mr-0.5 text-[12.5px] font-semibold text-muted">Για {subjects.find((x) => x.id === subjectId)?.name ?? "το μάθημα"}:</span>
+        <div className="scrollbar-none -mx-1 flex items-center gap-1.5 overflow-x-auto px-1" role="group" aria-label="Για το μάθημα">
+          <span className="mr-0.5 shrink-0 text-[12.5px] font-semibold text-muted">Για {subjects.find((x) => x.id === subjectId)?.name ?? "το μάθημα"}:</span>
           {extras.map((kind) => (
             <button
               key={kind}
@@ -81,7 +81,7 @@ export function PrepareTiles({ onPick, disabled, compact, subjectId }: { onPick:
               disabled={disabled}
               onClick={() => onPick(kind)}
               title={PREP[kind].sub}
-              className="h-9 rounded-full border border-line bg-surface px-3 text-[13px] font-semibold text-ink-2 transition-colors hover:border-brand-100 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
+              className="h-9 shrink-0 rounded-full border border-line bg-surface px-3 text-[13px] font-semibold text-ink-2 transition-colors hover:border-brand-100 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
             >
               {PREP[kind].title}
             </button>

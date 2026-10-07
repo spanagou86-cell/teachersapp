@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Settings } from "@/components/icons";
+import { ArrowLeft } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -15,7 +15,7 @@ export function MobileBrandBar() {
   const name = useApp((s) => s.profile.displayName);
   const school = useApp((s) => s.profile.schoolName);
   return (
-    <div className="mb-4 flex items-center gap-3 lg:hidden">
+    <div className="mb-5 flex items-center gap-1 lg:hidden">
       <div className="min-w-0 flex-1">
         <Logo />
         {school && <p className="mt-0.5 truncate text-[13px] text-muted">{school}</p>}
@@ -24,10 +24,9 @@ export function MobileBrandBar() {
       <Link
         href="/settings"
         aria-label="Ρυθμίσεις: σχολείο, προφίλ, εμφάνιση"
-        className="flex h-11 items-center gap-2 rounded-lg border border-line bg-surface pl-1 pr-3 text-[13px] font-semibold text-ink-2 active:bg-line-2"
+        className="flex size-11 items-center justify-center rounded-full active:bg-line-2"
       >
         <Avatar name={name || "?"} seed={3} size="sm" />
-        <Settings className="size-4" />
       </Link>
     </div>
   );

@@ -109,7 +109,7 @@ export function MobileFinders() {
     setOpen(null);
     setQ("");
   };
-  const btn = "relative flex size-11 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 active:bg-line-2";
+  const btn = "relative flex size-11 items-center justify-center rounded-full text-ink-2 transition-colors active:bg-line-2";
   return (
     <>
       <button type="button" aria-label="Αναζήτηση" onClick={() => setOpen("search")} className={btn}>

@@ -107,18 +107,22 @@ export default function MaterialsPage() {
                   <FileBadge file={m.file} />
                   <Link href={`/materials/${m.id}`} className="min-w-0 flex-1">
                     <span className="block truncate font-semibold group-hover:underline">{m.title}</span>
-                    <span className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
-                      <span>{KIND_LABEL[m.kind]}</span>
-                      <span>· {cls?.name}</span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted">
+                      <span>
+                        {KIND_LABEL[m.kind]}
+                        {cls && ` · ${cls.name}`}
+                      </span>
                       {m.file && <span className="hidden sm:inline">· {fileKindLabel(m.file.type, m.file.name)} {formatBytes(m.file.size)}</span>}
                       {lessons > 0 && (
-                        <span className="inline-flex items-center gap-0.5 text-brand-500">
-                          · <Paperclip className="size-3" /> {lessons} {lessons === 1 ? "μάθημα" : "μαθήματα"}
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-1.5 py-px text-[12px] font-semibold text-brand-500">
+                          <Paperclip className="size-3" /> {lessons} {lessons === 1 ? "μάθημα" : "μαθήματα"}
                         </span>
                       )}
                     </span>
                   </Link>
-                  <SubjectIcon id={m.subjectId} size="sm" className="hidden sm:inline-flex" />
+                  <span className="hidden sm:inline-flex">
+                    <SubjectIcon id={m.subjectId} size="sm" />
+                  </span>
                   <span className="hidden w-28 text-right text-sm text-muted md:block">{relativeTime(m.updatedAt)}</span>
                   <button
                     type="button"

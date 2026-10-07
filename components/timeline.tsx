@@ -19,7 +19,7 @@ type Entry = { kind: "lesson"; slot: LessonSlot } | { kind: "block"; block: Time
 
 function Times({ start, end, strong }: { start: string; end: string; strong?: boolean }) {
   return (
-    <div className={clsx("w-11 shrink-0 pt-2.5 font-mono text-[11.5px] font-medium leading-tight tabular-nums", strong ? "text-ink" : "text-muted")}>
+    <div className={clsx("w-11 shrink-0 pt-2.5 text-[11.5px] font-medium leading-tight tabular-nums", strong ? "text-ink" : "text-muted")}>
       {start}
       <span className="block font-medium opacity-75">{end}</span>
     </div>
@@ -30,7 +30,7 @@ function NowLine({ now }: { now: string }) {
   return (
     <div className="relative my-0.5 ml-[52px] border-t-2 border-now" aria-label={`Τώρα ${now}`}>
       <span className="absolute -left-[7px] -top-[6px] size-2.5 rounded-full bg-now" />
-      <span className="absolute -left-[52px] -top-[9px] font-mono text-[10.5px] font-semibold tabular-nums text-now">{now}</span>
+      <span className="absolute -left-[52px] -top-[9px] text-[10.5px] font-semibold tabular-nums text-now">{now}</span>
     </div>
   );
 }
@@ -56,12 +56,20 @@ function LogButtons({ slot }: { slot: LessonSlot }) {
       run: () => updateSlot(slot.id, { status: "planned" }),
     });
   };
-  const btn = "h-11 rounded-lg border border-line bg-bg text-[13px] font-semibold text-ink-2 transition-colors hover:bg-line-2";
+  const btn =
+    "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-line bg-surface text-[13px] font-semibold text-ink-2 shadow-[0_1px_2px_rgb(26_34_56/0.05)] transition-[background-color,transform] hover:bg-line-2 active:scale-[0.97]";
+  const dot = (c: string) => <span className={clsx("size-2 rounded-full", c)} aria-hidden />;
   return (
     <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Πώς πήγε;">
-      <button type="button" className={btn} onClick={() => set("done")}>Έγινε</button>
-      <button type="button" className={btn} onClick={() => set("partial")}>Μερικώς</button>
-      <button type="button" className={btn} onClick={() => set("skipped")}>Δεν έγινε</button>
+      <button type="button" className={btn} onClick={() => set("done")}>
+        {dot("bg-brand-500")}Έγινε
+      </button>
+      <button type="button" className={btn} onClick={() => set("partial")}>
+        {dot("bg-amber")}Μερικώς
+      </button>
+      <button type="button" className={btn} onClick={() => set("skipped")}>
+        {dot("bg-danger")}Δεν έγινε
+      </button>
     </div>
   );
 }

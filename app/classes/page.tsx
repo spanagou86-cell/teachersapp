@@ -5,7 +5,6 @@ import { useState } from "react";
 import { ClassSheet } from "@/components/classes";
 import Link from "next/link";
 import { MobileBrandBar, PageHeader } from "@/components/shell/PageHeader";
-import { SubjectIcon } from "@/components/subject";
 import { Button, Card, cx, EmptyState } from "@/components/ui";
 import { nextLesson } from "@/lib/schedule";
 import { plural } from "@/lib/plural";
@@ -64,7 +63,7 @@ export default function ClassesPage() {
                   </div>
                   <ChevronRight className="size-5 text-muted transition-transform group-hover:translate-x-0.5" />
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="mt-4 grid grid-cols-2 gap-2.5 text-sm">
                   <div className="rounded-xl bg-line-2 p-3">
                     <p className="flex items-center gap-1.5 text-xs font-semibold text-muted">
                       <UserCheck className="size-3.5" /> Παρουσίες σήμερα
@@ -80,9 +79,9 @@ export default function ClassesPage() {
                   <div className="rounded-xl bg-line-2 p-3">
                     <p className="text-xs font-semibold text-muted">Επόμενο μάθημα</p>
                     {next ? (
-                      <p className="mt-1 flex items-center gap-1.5 font-bold">
-                        <SubjectIcon id={next.subjectId} size="sm" className="size-5 [&>svg]:size-3" />
-                        <span className="truncate">{subjects.find((x) => x.id === next.subjectId)?.name} · {next.start}</span>
+                      <p className="mt-1 min-w-0 font-bold">
+                        <span className="block truncate">{subjects.find((x) => x.id === next.subjectId)?.name}</span>
+                        <span className="block text-xs font-medium tabular-nums text-muted">{next.start}</span>
                       </p>
                     ) : (
                       <p className="mt-1 font-bold text-muted">Όχι άλλο σήμερα</p>

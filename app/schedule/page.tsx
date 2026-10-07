@@ -58,7 +58,7 @@ function WeekAgenda({ dates, country }: { dates: string[]; country: Country }) {
         })}
         {rows.map((r, ri) => (
           <div key={`${r.start}-${r.end}`} className="contents">
-            <div className="border-b border-line-2 bg-bg px-2 py-2 font-mono text-[11px] font-medium leading-tight tabular-nums text-muted">
+            <div className="border-b border-line-2 bg-bg px-2 py-2 text-[11px] font-medium leading-tight tabular-nums text-muted">
               {r.start}
               <br />
               {r.end}
@@ -309,19 +309,20 @@ function Calendar() {
               value={view}
               onChange={(v) => go(v, anchor)}
               size="sm"
-              className="flex-1 sm:w-64 sm:flex-none"
+              className="basis-full sm:w-64 sm:basis-auto"
               options={[
                 { value: "week", label: "Εβδομάδα" },
                 { value: "month", label: "Μήνας" },
                 { value: "year", label: "Χρονιά" },
               ]}
             />
+            <div className="flex flex-1 items-center gap-1 sm:flex-none">
             {view !== "year" && (
-              <div className="flex items-center gap-1">
+              <div className="flex flex-1 items-center gap-1">
                 <IconButton label="Προηγούμενο" onClick={() => step(-1)} className="border border-line bg-surface">
                   <ChevronLeft className="size-5" />
                 </IconButton>
-                <button type="button" onClick={() => go(view, today)} className="h-9 rounded-lg border border-line bg-surface px-3 text-sm font-semibold hover:bg-line-2">
+                <button type="button" onClick={() => go(view, today)} className="h-9 flex-1 rounded-lg border border-line bg-surface px-3 text-sm font-semibold hover:bg-line-2 sm:flex-none">
                   Σήμερα
                 </button>
                 <IconButton label="Επόμενο" onClick={() => step(1)} className="border border-line bg-surface">
@@ -338,6 +339,7 @@ function Calendar() {
                 { label: "Ωρολόγιο πρόγραμμα", icon: <CalendarCog />, href: "/settings/timetable" },
               ]}
             />
+            </div>
           </div>
         }
       />
