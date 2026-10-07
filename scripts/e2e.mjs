@@ -536,6 +536,11 @@ async function dutyFlow(name) {
   assert((await cell.getAttribute("aria-pressed")) === "false", "duty grid shows the breaks of the timetable");
   await cell.click();
   assert((await cell.getAttribute("aria-pressed")) === "true", "one tap marks a duty on a break");
+  assert(await grid.getByText("Πρωινή").isVisible(), "the morning duty before the bell has its own row");
+  await grid.getByRole("button", { name: "Όλη τη μέρα: Πέμπτη" }).click();
+  const thursday = grid.getByRole("button", { name: /^(Εφημερία|Παιδονομία) Πέμπτη/ });
+  const states = await thursday.evaluateAll((els) => els.map((e) => e.getAttribute("aria-pressed")));
+  assert(states.length >= 3 && states.every((x) => x === "true"), `tapping the day marks the morning and every break (${states.length})`);
   const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert(wide <= 0, `duty grid fits the phone (${wide})`);
   await page.screenshot({ path: path.join(OUT, `${name}-grid.png`) });

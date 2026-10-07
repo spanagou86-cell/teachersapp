@@ -182,12 +182,14 @@ function DutyPicker({
   breaks,
   isOn,
   onToggle,
+  onDay,
   place,
   setPlace,
 }: {
   breaks: Period[];
   isOn: (day: number, b: Period) => boolean;
   onToggle: (day: number, b: Period) => void;
+  onDay: (day: number) => void;
   place: string;
   setPlace: (p: string) => void;
 }) {
@@ -206,7 +208,10 @@ function DutyPicker({
             {duty}: πότε έχεις;
             {count > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber">{count} τη βδομάδα</span>}
           </h2>
-          <p className="text-sm text-muted">Πάτα το διάλειμμα κάθε μέρας που έχεις {duty.toLowerCase()}. Θα σε ειδοποιώ 5′ πριν.</p>
+          <p className="text-sm text-muted">
+            Συνήθως είναι μία μέρα τη βδομάδα: πάτα τη <b className="text-ink-2">μέρα</b> και μπαίνουν η πρωινή και όλα τα διαλείμματα. Θα σε ειδοποιώ 5′ πριν από
+            καθεμιά.
+          </p>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -214,18 +219,32 @@ function DutyPicker({
           <thead>
             <tr>
               <th className="w-[84px]" />
-              {DAYS_SHORT.map((d) => (
-                <th key={d} className="text-center text-[11px] font-bold text-muted">
-                  {d}
-                </th>
-              ))}
+              {DAYS_SHORT.map((d, i) => {
+                const all = breaks.every((b) => isOn(i + 1, b));
+                return (
+                  <th key={d}>
+                    <button
+                      type="button"
+                      aria-pressed={all}
+                      aria-label={`Όλη τη μέρα: ${DAYS[i]}`}
+                      onClick={() => onDay(i + 1)}
+                      className={clsx(
+                        "h-9 w-full min-w-10 rounded-lg border text-[11px] font-bold transition-colors",
+                        all ? "border-amber bg-amber-50 text-amber" : "border-line bg-surface text-ink-2 hover:bg-amber-50",
+                      )}
+                    >
+                      {d}
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {breaks.map((b, i) => (
               <tr key={`${b.start}-${b.end}`}>
                 <td className="pr-1 text-left">
-                  <span className="block text-[12.5px] font-semibold leading-tight">{ORDINAL[i] ?? `${i + 1}ο`} διάλειμμα</span>
+                  <span className="block text-[12.5px] font-semibold leading-tight">{i === 0 ? "Πρωινή" : `${ORDINAL[i - 1] ?? `${i}ο`} διάλειμμα`}</span>
                   <span className="block text-[11.5px] tabular-nums text-muted">
                     {b.start}–{b.end}
                   </span>
@@ -320,31 +339,50 @@ function Editor() {
   const lessons = entries.filter((e) => e.kind === "lesson").length;
 
   // Breaks of this timetable (short rows), or the school system's own when it has none yet.
+  // The morning duty (15′ before the first bell), then the breaks of this timetable, or the
+  // school system's own when it has none yet.
   const breaks = useMemo(() => {
-    const short = (p: Period) => isValidTime(p.start) && isValidTime(p.end) && timeToMin(p.end) > timeToMin(p.start) && timeToMin(p.end) - timeToMin(p.start) < 30;
+    const valid = (p: Period) => isValidTime(p.start) && isValidTime(p.end) && timeToMin(p.end) > timeToMin(p.start);
+    const short = (p: Period) => valid(p) && timeToMin(p.end) - timeToMin(p.start) < 30;
+    const long = rows.filter((p) => valid(p) && !short(p));
+    const bell = timeToMin((long.length ? long : BELLS[country]).map((p) => p.start).sort()[0]);
+    const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
     const own = rows.filter(short);
-    return (own.length ? own : BELLS[country].filter(short)).map((p) => ({ start: p.start, end: p.end }));
+    const morning = own.find((p) => timeToMin(p.end) <= bell) ?? { start: hhmm(bell - 15), end: hhmm(bell) };
+    const later = (own.some((p) => timeToMin(p.start) >= bell) ? own : BELLS[country].filter(short)).filter((p) => timeToMin(p.start) >= bell);
+    return [morning, ...later].map((p) => ({ start: p.start, end: p.end }));
   }, [rows, country]);
   const rowFor = (b: Period) => rows.find((r) => r.start === b.start && r.end === b.end);
   const dutyOn = (day: number, b: Period) => {
     const r = rowFor(b);
     return !!r && cells[`${day}|${r.key}`]?.kind === "duty";
   };
-  const toggleDuty = (day: number, b: Period) => {
-    let row = rowFor(b);
-    if (!row) {
-      row = { key: uid(), start: b.start, end: b.end };
-      const added = row;
-      setRows((rs) => [...rs, added].sort((x, y) => timeToMin(x.start) - timeToMin(y.start)));
-    }
-    const key = `${day}|${row.key}`;
+  /** Marks (or clears) duties; rows for breaks not yet in the timetable are added. */
+  const setDuties = (list: { day: number; b: Period }[], on: boolean) => {
+    const added: Row[] = [];
+    const keyOf = (b: Period) => {
+      let row = rowFor(b) ?? added.find((r) => r.start === b.start && r.end === b.end);
+      if (!row) {
+        row = { key: uid(), start: b.start, end: b.end };
+        added.push(row);
+      }
+      return row.key;
+    };
+    const keys = list.map(({ day, b }) => `${day}|${keyOf(b)}`);
+    if (added.length) setRows((rs) => [...rs, ...added].sort((x, y) => timeToMin(x.start) - timeToMin(y.start)));
     setCells((cs) => {
       const next = { ...cs };
-      if (next[key]?.kind === "duty") delete next[key];
-      else next[key] = { kind: "duty", label: place };
+      for (const key of keys) {
+        if (!on) {
+          if (next[key]?.kind === "duty") delete next[key];
+        } else if (next[key]?.kind !== "duty") next[key] = { kind: "duty", label: place };
+      }
       return next;
     });
   };
+  const toggleDuty = (day: number, b: Period) => setDuties([{ day, b }], !dutyOn(day, b));
+  /** «Όλη τη μέρα»: the usual case, one day a week with the morning and every break. */
+  const toggleDay = (day: number) => setDuties(breaks.map((b) => ({ day, b })), !breaks.every((b) => dutyOn(day, b)));
 
   const setRow = (key: string, p: Partial<Period>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
   const removeRow = (key: string) => {
@@ -459,7 +497,7 @@ function Editor() {
           }}
         />
       </Card>
-      <DutyPicker breaks={breaks} isOn={dutyOn} onToggle={toggleDuty} place={place} setPlace={setPlace} />
+      <DutyPicker breaks={breaks} isOn={dutyOn} onToggle={toggleDuty} onDay={toggleDay} place={place} setPlace={setPlace} />
 
       {readNotes && (
         <p role="note" className="mb-5 flex gap-2 rounded-xl bg-amber-50 p-3 text-sm">
