@@ -544,10 +544,13 @@ async function dutyFlow(name) {
   await page.getByRole("button", { name: "Άλλη ώρα κάθε εβδομάδα" }).click();
   await page.getByLabel("Από", { exact: true }).fill("13:15");
   await page.getByLabel("Έως", { exact: true }).fill("13:30");
+  assert(await page.getByText(/Μόνο μέσα στο σχολικό ωράριο/).isVisible(), "a time after school is refused");
+  await page.getByLabel("Από", { exact: true }).fill("09:20");
+  await page.getByLabel("Έως", { exact: true }).fill("09:35");
   await page.getByRole("group", { name: "Μέρες" }).getByRole("button", { name: "ΤΕΤ" }).click();
   await page.getByRole("button", { name: "Προσθήκη", exact: true }).click();
-  assert(await grid.getByText("Άλλη ώρα").isVisible(), "another weekly duty time gets its own row");
-  assert((await grid.getByRole("button", { name: /Τετάρτη 13:15/ }).getAttribute("aria-pressed")) === "true", "…marked on the chosen day");
+  assert(await grid.getByRole("row").filter({ hasText: "09:20–09:35" }).getByText("Άλλη ώρα").isVisible(), "another weekly duty time gets its own row");
+  assert((await grid.getByRole("button", { name: /Τετάρτη 09:20/ }).getAttribute("aria-pressed")) === "true", "…marked on the chosen day");
   const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert(wide <= 0, `duty grid fits the phone (${wide})`);
   await page.screenshot({ path: path.join(OUT, `${name}-grid.png`) });
