@@ -6,8 +6,8 @@ import { useApp } from ".";
 import { cloudEnabled, supabase } from "../supabase/client";
 import { useHydrated } from "./hooks";
 
-export const PUBLIC_PATHS = ["/login", "/auth", "/legal"];
-const BARE_PATHS = ["/login", "/onboarding", "/auth", "/legal"];
+export const PUBLIC_PATHS = ["/login", "/auth", "/legal", "/welcome"];
+const BARE_PATHS = ["/login", "/onboarding", "/auth", "/legal", "/welcome"];
 
 export const isBarePath = (p: string) => BARE_PATHS.some((b) => p === b || p.startsWith(`${b}/`));
 
@@ -73,7 +73,8 @@ export function useSession(): { ready: boolean; failed: boolean; retry: () => vo
   useEffect(() => {
     if (!checked) return;
     const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
-    if (!mode && !isPublic) router.replace("/login");
+    // Someone new at the front door sees what the app does; any other page asks to sign in.
+    if (!mode && !isPublic) router.replace(pathname === "/" ? "/welcome" : "/login");
     else if (mode === "cloud" && !onboarded && !pathname.startsWith("/onboarding") && !pathname.startsWith("/settings/timetable")) router.replace("/onboarding");
   }, [checked, mode, onboarded, pathname, router]);
 

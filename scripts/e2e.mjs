@@ -30,7 +30,12 @@ async function flow(name, viewport, mobile) {
   const shot = (n) => page.screenshot({ path: path.join(OUT, `${name}-${n}.png`), fullPage: true });
 
   await page.goto(BASE);
-  // No account: start the demo from the login screen.
+  // Someone new sees the front page first; from there, sign in or try the demo.
+  await page.waitForURL("**/welcome");
+  await page.getByRole("heading", { name: /Η εβδομάδα σου, έτοιμη σε 10 λεπτά/ }).waitFor();
+  assert((await page.getByText("€49").count()) > 0, "the front page explains the app and its prices");
+  if (mobile) await page.screenshot({ path: path.join(OUT, `${name}-00-welcome.png`), fullPage: true });
+  await page.getByRole("link", { name: "Σύνδεση", exact: true }).click();
   await page.waitForURL("**/login");
   await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
   await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
@@ -177,8 +182,10 @@ async function dark(name, viewport, mobile) {
   const page = await ctx.newPage();
   page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
   await page.goto(BASE);
-  await page.waitForURL("**/login");
-  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.waitForURL("**/welcome");
+  await page.screenshot({ path: path.join(OUT, `${name}-00-welcome.png`) });
+  // The demo starts from the front page too.
+  await page.getByRole("button", { name: /Δες την εφαρμογή τώρα/ }).click();
   await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
   for (const [n, url] of [["01-today", "/"], ["02-schedule", "/schedule"], ["03-settings", "/settings"]]) {
     await page.goto(BASE + url);
@@ -360,8 +367,8 @@ async function schoolAndSignOut(name) {
   assert((await page.getByText("Ελληνικά").count()) > 0 && (await page.getByText("Γλώσσα", { exact: true }).count()) === 0, "Cypriot subject names (Ελληνικά, not Γλώσσα)");
   await page.screenshot({ path: path.join(OUT, `${name}-02-today-cy.png`), fullPage: true });
   await page.getByRole("button", { name: "Έξοδος από την επίδειξη" }).click();
-  await page.waitForURL("**/login");
-  assert(true, "sidebar sign-out returns to the login page");
+  await page.waitForURL(/\/(login|welcome)$/);
+  assert(true, "sidebar sign-out returns to the front door");
   await ctx.close();
 }
 

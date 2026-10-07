@@ -117,6 +117,7 @@ export const Users = make(T.IconUsers, "Users");
 export const X = make(T.IconX, "X");
 export const CalendarPlus = make(T.IconCalendarPlus, "CalendarPlus");
 export const Eye = make(T.IconEye, "Eye");
+export const Lock = make(T.IconLock, "Lock");
 export const Shuffle = make(T.IconArrowsShuffle, "Shuffle");
 export const Presentation = make(T.IconPresentation, "Presentation");
 export const FileQuestion = make(T.IconFileUnknown, "FileQuestion");
