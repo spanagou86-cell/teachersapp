@@ -1,3 +1,4 @@
+import { periodsFrom } from "../timetable";
 import { describe, expect, it } from "vitest";
 import { carryOverLesson, findConflicts, freePeriods, nextLesson, undoCarryOver } from "../schedule";
 import { seed } from "../seed";
@@ -67,10 +68,10 @@ describe("seed schedule", () => {
   it("matches the mockup Monday", () => {
     const monday = slots.filter((s) => s.date === "2026-10-05");
     expect(monday.map((s) => `${s.start} ${s.subjectId} ${s.topic}`)).toEqual([
-      "08:00 glossa Επαναληπτικές ασκήσεις – Ορθογραφία",
-      "09:20 math Γραφικές παραστάσεις",
-      "10:20 meleti Το νερό στον τόπο μας",
-      "11:40 eikastika Δημιουργία αφίσας – Ομαδική εργασία",
+      "07:45 glossa Επαναληπτικές ασκήσεις – Ορθογραφία",
+      "09:25 math Γραφικές παραστάσεις",
+      "10:05 fysika Το νερό στον τόπο μας",
+      "11:35 eikastika Δημιουργία αφίσας – Ομαδική εργασία",
     ]);
   });
   it("has unique ids and no overlaps", () => {
@@ -79,6 +80,7 @@ describe("seed schedule", () => {
   });
   it("finds the next lesson and free periods", () => {
     expect(nextLesson(slots, "2026-10-05", "09:05")?.subjectId).toBe("math");
-    expect(freePeriods(slots, "2026-10-06").map((p) => p.start)).toEqual(["08:40", "10:20", "11:40"]);
+    // The demo is a Cypriot school: free periods come from the Cyprus bell.
+    expect(freePeriods(slots, "2026-10-06", periodsFrom([], "cy")).map((p) => p.start)).toEqual(["08:25", "10:05", "11:35", "12:25"]);
   });
 });

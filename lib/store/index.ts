@@ -177,7 +177,7 @@ const EMPTY: SeedState = {
   studentNotes: [],
 };
 
-const DEMO_PROFILE: Profile = { displayName: "Σπύρος", schoolName: "3ο Δημοτικό Σχολείο Πάτρας", onboarded: true, country: "gr" };
+const DEMO_PROFILE: Profile = { displayName: "Σπύρος", schoolName: "Δημοτικό Σχολείο Στροβόλου", onboarded: true, country: "cy" };
 
 const noteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 

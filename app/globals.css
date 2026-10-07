@@ -258,3 +258,11 @@ html[data-kb] .kb-hide {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Fields and buttons scrolled into view never end up under the bottom bar on phones. */
+@media (max-width: 1023px) {
+  html {
+    scroll-padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+    scroll-padding-top: 1rem;
+  }
+}

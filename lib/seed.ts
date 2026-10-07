@@ -1,7 +1,16 @@
 import { buildBlocks } from "./ai/templates";
 import { addDays, DEMO_TODAY, startOfWeek } from "./dates";
-import { PERIODS } from "./schedule";
 import type { AttendanceRecord, ClassGroup, ClassNote, LessonSlot, Material, Student, StudentNote, SubjectId, Task, TimeBlock, TimetableEntry } from "./types";
+
+/** The demo is a Cypriot school: the official bell (07:45, 40′ periods) without the breaks. */
+const PERIODS = [
+  { start: "07:45", end: "08:25" },
+  { start: "08:25", end: "09:05" },
+  { start: "09:25", end: "10:05" },
+  { start: "10:05", end: "10:45" },
+  { start: "10:55", end: "11:35" },
+  { start: "11:35", end: "12:15" },
+];
 
 export const CLASSES: ClassGroup[] = [
   { id: "d1", name: "Δ1", grade: "Δ΄ Δημοτικού", room: "Αίθουσα 1" },
@@ -31,23 +40,23 @@ export const STUDENTS: Student[] = [...students("d1", D1_NAMES), ...students("d2
 export const TOPICS: Partial<Record<SubjectId, string[]>> = {
   glossa: ["Επαναληπτικές ασκήσεις – Ορθογραφία", "Ο πληθυντικός των ουσιαστικών", "Κατανόηση κειμένου: «Το ποτάμι»", "Γράφω μια περιγραφή", "Ρήματα σε -ίζω", "Παραγωγή λόγου: Μια επιστολή", "Λεξιλόγιο: συνώνυμα", "Σημεία στίξης", "Διαβάζω ένα ποίημα", "Ορθογραφία: -ει / -οι", "Μικρή υπαγόρευση", "Λέξεις με διπλά σύμφωνα", "Επανάληψη ενότητας"],
   math: ["Γραφικές παραστάσεις", "Πρόσθεση τριψήφιων", "Αφαίρεση με κρατούμενο", "Προπαίδεια του 6 και του 8", "Προβλήματα δύο πράξεων", "Κλάσματα — επανάληψη", "Μετρήσεις μήκους", "Η διαίρεση ως μοιρασιά", "Γεωμετρικά σχήματα", "Χρήματα και ρέστα", "Επανάληψη ενότητας"],
-  meleti: ["Το νερό στον τόπο μας", "Ο κύκλος του νερού", "Οικονομία στο νερό", "Ο χάρτης της περιοχής μας", "Επάγγελμα και τόπος", "Επανάληψη ενότητας"],
+  fysika: ["Το νερό στον τόπο μας", "Ο κύκλος του νερού", "Οικονομία στο νερό", "Ο χάρτης της περιοχής μας", "Επάγγελμα και τόπος", "Επανάληψη ενότητας"],
   eikastika: ["Δημιουργία αφίσας – Ομαδική εργασία", "Χρώματα θερμά και ψυχρά", "Κολάζ με ανακυκλώσιμα"],
 };
 
 /** Weekly timetable: [weekday 1–5, period index, class, subject]. */
 const TIMETABLE: [number, number, string, SubjectId][] = [
-  [1, 0, "d1", "glossa"], [1, 2, "d1", "math"], [1, 3, "d2", "meleti"], [1, 5, "d1", "eikastika"],
-  [2, 0, "d1", "math"], [2, 2, "d1", "glossa"], [2, 4, "d1", "meleti"],
-  [3, 0, "d1", "glossa"], [3, 1, "d2", "math"], [3, 3, "d1", "meleti"], [3, 5, "d2", "eikastika"],
+  [1, 0, "d1", "glossa"], [1, 2, "d1", "math"], [1, 3, "d2", "fysika"], [1, 5, "d1", "eikastika"],
+  [2, 0, "d1", "math"], [2, 2, "d1", "glossa"], [2, 4, "d1", "fysika"],
+  [3, 0, "d1", "glossa"], [3, 1, "d2", "math"], [3, 3, "d1", "fysika"], [3, 5, "d2", "eikastika"],
   [4, 0, "d1", "math"], [4, 2, "d2", "glossa"], [4, 3, "d1", "glossa"],
-  [5, 0, "d1", "glossa"], [5, 2, "d1", "math"], [5, 4, "d2", "meleti"],
+  [5, 0, "d1", "glossa"], [5, 2, "d1", "math"], [5, 4, "d2", "fysika"],
 ];
 
 const PAST_NOTES: Partial<Record<SubjectId, string>> = {
   glossa: "Ολοκληρώθηκε η ενότητα. Δυσκολία στις καταλήξεις -ει/-οι — επανάληψη τη Δευτέρα.",
   math: "Καλή συμμετοχή. 4 μαθητές χρειάζονται επιπλέον εξάσκηση στο κρατούμενο.",
-  meleti: "Συζήτηση και εργασία σε ομάδες.",
+  fysika: "Πείραμα σε ομάδες· καλές παρατηρήσεις.",
   eikastika: "Οι ομάδες διάλεξαν θέμα.",
 };
 
@@ -150,9 +159,9 @@ function seedTimetable(): TimetableEntry[] {
   }));
   return [
     ...lessons,
-    { id: "t-duty-1", weekday: 2, start: "10:00", end: "10:20", kind: "duty", label: "Αυλή" },
-    { id: "t-duty-2", weekday: 4, start: "11:40", end: "12:00", kind: "duty", label: "Είσοδος" },
-    { id: "t-free-1", weekday: 2, start: "08:40", end: "09:20", kind: "free", label: "" },
+    { id: "t-duty-1", weekday: 2, start: "09:05", end: "09:25", kind: "duty", label: "Αυλή" },
+    { id: "t-duty-2", weekday: 4, start: "10:45", end: "10:55", kind: "duty", label: "Είσοδος" },
+    { id: "t-free-1", weekday: 2, start: "08:25", end: "09:05", kind: "free", label: "" },
   ];
 }
 
@@ -183,7 +192,7 @@ export interface SeedState {
 
 export function seed(): SeedState {
   const materials = seedMaterials();
-  const slots = buildSlots().map((s) => (s.id === `l-${DEMO_TODAY}-0920` ? { ...s, materialIds: ["m1"] } : s));
+  const slots = buildSlots().map((s) => (s.id === `l-${DEMO_TODAY}-0925` ? { ...s, materialIds: ["m1"] } : s));
   const timetable = seedTimetable();
   return {
     timetable,

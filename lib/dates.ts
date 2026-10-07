@@ -2,7 +2,7 @@ import type { HHMM, ISODate } from "./types";
 
 /** The prototype runs on a fixed demo clock so the flow matches the mockups. */
 export const DEMO_TODAY: ISODate = "2026-10-05";
-export const DEMO_NOW: HHMM = "09:05";
+export const DEMO_NOW: HHMM = "09:10";
 
 const DAYS = ["Κυριακή", "Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο"];
 const DAYS_SHORT = ["ΚΥΡ", "ΔΕΥ", "ΤΡΙ", "ΤΕΤ", "ΠΕΜ", "ΠΑΡ", "ΣΑΒ"];
