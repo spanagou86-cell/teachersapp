@@ -759,6 +759,14 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
 
           <PrepareTiles onPick={go} disabled={uploading || reading.busy} subjectId={sub} />
 
+          <Link
+            href="/week"
+            onClick={onClose}
+            className="-mt-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[13.5px] font-semibold text-brand-500 hover:underline"
+          >
+            <Sparkles className="size-4" /> Όλη την εβδομάδα με ένα πάτημα <ArrowRight className="size-3.5" />
+          </Link>
+
           <p className="-mt-2 flex items-start gap-1.5 text-xs text-muted">
             <ShieldCheck className="mt-px size-3.5 shrink-0" />
             {mode === "cloud"

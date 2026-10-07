@@ -183,10 +183,26 @@ function NextStep() {
         </div>
       );
   }
-  // Friday afternoon: next week's programme, ready to check and hand to the head teacher.
-  if (weekday(today) === 5 && (dayOver || timeToMin(now) >= 12 * 60)) {
+  // Thursday and Friday afternoon: next week, prepared in one go, then the programme for the head teacher.
+  if (weekday(today) >= 4 && weekday(today) <= 5 && (dayOver || timeToMin(now) >= 12 * 60)) {
     const monday = addDays(startOfWeek(today), 7);
     const next = slots.filter((s) => s.date >= monday && s.date <= addDays(monday, 4) && !s.carriedToId);
+    const bareNext = next.filter((s) => !s.materialIds.length);
+    if (bareNext.length >= 3)
+      return (
+        <div className={box}>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
+            <Sparkles className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Ετοίμασε την επόμενη εβδομάδα σε 10′</p>
+            <p className="text-[13px] text-muted">{bareNext.length} μαθήματα χωρίς υλικό · και οι στόχοι για τον προγραμματισμό</p>
+          </div>
+          <ButtonLink size="sm" href="/week">
+            Ξεκίνα
+          </ButtonLink>
+        </div>
+      );
     if (next.length)
       return (
         <div className={box}>
@@ -280,7 +296,10 @@ export default function TodayPage() {
             )}
           </div>
           <div className="grid content-start gap-4">
-            <DayStats index={3} />
+            {/* On a phone the hero's bar already says how the day goes: the rings are for the desktop. */}
+            <div className="max-lg:hidden">
+              <DayStats index={3} />
+            </div>
             <WeekStrip index={5} />
             <Backlog />
             <Tasks />

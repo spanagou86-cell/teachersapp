@@ -44,6 +44,7 @@ export const Church = make(T.IconBuildingChurch, "Church");
 export const CircleDashed = make(T.IconCircleDashed, "CircleDashed");
 export const Clock = make(T.IconClock, "Clock");
 export const Clock3 = make(T.IconClockHour3, "Clock3");
+export const Timer = make(T.IconHourglassHigh, "Timer");
 export const CloudUpload = make(T.IconCloudUpload, "CloudUpload");
 export const Coffee = make(T.IconCoffee, "Coffee");
 export const Columns2 = make(T.IconColumns2, "Columns2");

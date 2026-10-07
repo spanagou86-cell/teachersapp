@@ -218,7 +218,7 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
           country: profile.country as Country,
           localHoliday: typeof meta?.local_holiday === "string" ? meta.local_holiday : undefined,
         }
-      : { displayName: "", schoolName: "", onboarded: false, country: "gr" },
+      : { displayName: "", schoolName: "", onboarded: false, country: "cy" },
     classes: (classes as { id: string; name: string; grade: string; room: string }[]).map((c) => ({ ...c })),
     students: (students as { id: string; class_id: string; first_name: string; last_name: string }[]).map((s) => ({
       id: s.id,

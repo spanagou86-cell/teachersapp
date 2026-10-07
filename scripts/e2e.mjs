@@ -262,7 +262,6 @@ async function mobileQuality(name) {
       "/classes/d1?tab=notes",
       "/students/d1-s1",
       "/lessons/l-2026-10-05-0925",
-      "/materials/new",
       materialHref,
       "/journal?class=d1",
       "/journal?view=plan&class=d1",
@@ -804,6 +803,13 @@ async function bookPagesFlow(name) {
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64");
   const pages = [1, 2].map((n) => ({ name: `selida-${n}.png`, mimeType: "image/png", buffer: png }));
 
+  // One way to make material: the old «Νέο υλικό» page (and the home-screen shortcut) opens «Ετοίμασε».
+  await page.goto(BASE + "/materials/new");
+  await page.waitForURL(BASE + "/materials");
+  await page.getByRole("dialog", { name: "Ετοίμασε" }).waitFor();
+  assert(true, "«Νέο υλικό» opens «Ετοίμασε», no second wizard");
+  await page.getByRole("dialog", { name: "Ετοίμασε" }).getByRole("button", { name: "Κλείσιμο" }).first().click();
+
   await page.getByRole("navigation", { name: "Κύρια πλοήγηση" }).getByRole("button", { name: /Ετοίμασε/ }).click();
   const sheet = page.getByRole("dialog", { name: "Ετοίμασε" });
   await sheet.getByLabel("Τι θέλεις να ετοιμάσω").fill("6 προβλήματα με ευρώ, τα 2 πρώτα εύκολα");
@@ -832,6 +838,39 @@ async function bookPagesFlow(name) {
   await ctx.close();
 }
 
+/** «Η εβδομάδα σε 10 λεπτά»: from the Home chip, every lesson of the week gets material and objectives. */
+async function weekFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  await page.getByRole("link", { name: /Όλη η εβδομάδα/ }).first().click();
+  await page.waitForURL(/\/week$/);
+  await page.getByRole("heading", { name: "Η εβδομάδα σε 10 λεπτά" }).waitFor();
+  const boxes = page.getByRole("checkbox", { name: /^Ετοίμασε:/ });
+  const n = await boxes.count();
+  assert(n >= 10, `the week's lessons without material are listed and chosen (${n})`);
+  assert((await page.getByText("έχει υλικό").count()) >= 1, "a lesson that already has material is left alone");
+  await boxes.first().uncheck();
+  await page.screenshot({ path: path.join(OUT, `${name}-01-list.png`), fullPage: true });
+  await page.getByRole("button", { name: "Ετοίμασέ τα" }).click();
+  await page.getByText("Η εβδομάδα είναι έτοιμη").waitFor({ timeout: 60000 });
+  assert((await page.getByText(new RegExp(`${n - 1} μαθήματα πήραν υλικό`)).count()) === 1, `${n - 1} lessons got material in one go`);
+  assert((await page.getByText(/στόχοι σε \d+ μαθήματα/).count()) === 1, "…and the objectives for the programme");
+  await page.screenshot({ path: path.join(OUT, `${name}-02-done.png`), fullPage: true });
+  await page.getByRole("link", { name: "Προγραμματισμός για τον Διευθυντή" }).click();
+  await page.waitForURL(/\/journal\?view=plan/);
+  assert((await page.getByText(/μαθήματα χωρίς στόχους/).count()) === 0, "the programme has its objectives");
+  await page.goto(BASE + "/");
+  await page.getByText(/Γλίτωσες ~\d+ ώ/).waitFor();
+  assert(true, "Home shows the time saved this week");
+  await page.screenshot({ path: path.join(OUT, `${name}-03-saved.png`) });
+  await ctx.close();
+}
+
 try {
   await syllabusFlow("syllabus");
   await programmeFlow("programme");
@@ -842,6 +881,7 @@ try {
   await bookletFlow("booklets");
   await prepareFlow("prepare");
   await bookPagesFlow("pages");
+  await weekFlow("week");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
   await dark("dark-mobile", { width: 390, height: 844 }, true);

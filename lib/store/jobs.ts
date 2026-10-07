@@ -25,6 +25,8 @@ export interface JobInput {
   /** Split the result into three sheets: Επίπεδο Α, Β, Γ. */
   levels?: boolean;
   slotId?: string;
+  /** Part of a batch («Η εβδομάδα σε 10′»): no toast per piece, and gone from the list once done. */
+  quiet?: boolean;
   /** «Όλο το μάθημα»: more pieces made together with this one (the plan first), all filed in the lesson. */
   pack?: { request: JobInput["request"]; material: JobInput["material"] }[];
 }
@@ -99,7 +101,7 @@ async function run(id: string, input: JobInput): Promise<void> {
     if (!r.ok) {
       const error = r.unavailable ? "Η δημιουργία με AI δεν είναι διαθέσιμη αυτή τη στιγμή. Ξαναδοκίμασε σε λίγο." : r.error;
       patch(job.id, { status: "failed", error });
-      toast(error);
+      if (!input.quiet) toast(error);
       return;
     }
     blocks = r.data;
@@ -139,6 +141,7 @@ async function run(id: string, input: JobInput): Promise<void> {
   }
   const finished: Job = { ...job, status: "done", href };
   patch(job.id, finished);
+  if (input.quiet) return dismissJob(job.id);
   for (const w of watchers) if (w(finished)) return dismissJob(job.id);
   toast(done, { label: "Άνοιγμα", run: () => openJob(finished) });
 }
@@ -155,7 +158,7 @@ async function runPack(job: Job, input: JobInput, stillHere: () => boolean): Pro
     if (failed && !failed.ok) {
       const error = failed.unavailable ? "Η δημιουργία με AI δεν είναι διαθέσιμη αυτή τη στιγμή. Ξαναδοκίμασε σε λίγο." : failed.error;
       patch(job.id, { status: "failed", error });
-      toast(error);
+      if (!input.quiet) toast(error);
       return;
     }
     made = answers.map((r) => (r.ok ? r.data : undefined));
@@ -171,6 +174,51 @@ async function runPack(job: Job, input: JobInput, stillHere: () => boolean): Pro
   });
   const finished: Job = { ...job, status: "done", href: input.slotId ? `/lessons/${input.slotId}` : `/materials/${ids[0]}?created=1` };
   patch(job.id, finished);
+  if (input.quiet) return dismissJob(job.id);
   for (const w of watchers) if (w(finished)) return dismissJob(job.id);
   toast("Έτοιμο όλο το μάθημα: σχέδιο, φύλλο και τεστ εξόδου", { label: "Άνοιγμα", run: () => openJob(finished) });
+}
+
+/** Resolves when the job is no longer running: done, failed, or gone. */
+function settled(id: string): Promise<Job | undefined> {
+  return new Promise((resolve) => {
+    let last: Job | undefined;
+    const check = () => {
+      const j = useJobs.getState().jobs.find((x) => x.id === id);
+      if (j && j.status === "running") return void (last = j);
+      unsub();
+      resolve(j ?? (last && { ...last, status: "done" }));
+    };
+    const unsub = useJobs.subscribe(check);
+    check();
+  });
+}
+
+export interface BatchItem {
+  slotId: string;
+  status: "queued" | "running" | "done" | "failed";
+  href?: string;
+  error?: string;
+}
+
+/** «Η εβδομάδα σε 10′»: many lessons, a few at a time, carrying on while the teacher does something else. */
+export const useBatch = create<{ items: BatchItem[]; active: boolean }>(() => ({ items: [], active: false }));
+const setItem = (slotId: string, p: Partial<BatchItem>) => useBatch.setState((s) => ({ items: s.items.map((i) => (i.slotId === slotId ? { ...i, ...p } : i)) }));
+
+export async function runBatch(list: (JobInput & { slotId: string })[], concurrency = 3): Promise<BatchItem[]> {
+  useBatch.setState({ items: list.map((j) => ({ slotId: j.slotId, status: "queued" })), active: true });
+  const queue = [...list];
+  const worker = async () => {
+    for (let input = queue.shift(); input; input = queue.shift()) {
+      setItem(input.slotId, { status: "running" });
+      const job = await settled(startJob({ ...input, quiet: true }));
+      if (job?.status === "failed") {
+        setItem(input.slotId, { status: "failed", error: job.error });
+        dismissJob(job.id);
+      } else setItem(input.slotId, { status: "done", href: job?.href });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker));
+  useBatch.setState({ active: false });
+  return useBatch.getState().items;
 }

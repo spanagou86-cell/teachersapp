@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, ArrowUp, CalendarClock, CheckCircle2, NotebookPen, Paperclip, Sparkles } from "@/components/icons";
+import { ArrowRight, ArrowUp, CalendarClock, CheckCircle2, NotebookPen, Paperclip, Sparkles, Timer } from "@/components/icons";
 import Link from "next/link";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { openCloseDay } from "./closeDay";
@@ -13,6 +13,9 @@ import { PREP, PREP_KINDS } from "@/lib/prepare";
 import { slotsOn, upcomingLesson } from "@/lib/schedule";
 import { holidayOn, termOn, weekNumber } from "@/lib/schoolYear";
 import { vocative } from "@/lib/greek";
+import { useReports } from "@/lib/store/reports";
+import { hoursMinutes, minutesSavedThisWeek } from "@/lib/timeSaved";
+import { toast } from "./toast";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import type { LessonSlot } from "@/lib/types";
@@ -222,6 +225,9 @@ export function TodayHero() {
   const week = weekNumber(country, clock.today);
   const term = termOn(country, clock.today);
   const firstName = vocative(profile.displayName.split(" ")[0] ?? "");
+  const materials = useApp((s) => s.materials);
+  const reports = useReports((s) => s.reports);
+  const saved = minutesSavedThisWeek(materials, Object.values(reports), clock.today);
   const greeting = nowMin < 12 * 60 ? "Καλημέρα" : nowMin < 18 * 60 ? "Καλό απόγευμα" : "Καλησπέρα";
 
   return (
@@ -248,10 +254,20 @@ export function TodayHero() {
               {firstName && <span className="text-white/70">, {firstName}</span>}
             </h1>
           </div>
-          {(week || term) && (
+          {(week || term || saved > 0) && (
             <div className="flex flex-wrap gap-1.5 text-[12.5px] font-semibold">
               {week && <span className="rounded-full bg-white/12 px-2.5 py-1 ring-1 ring-white/15">Εβδομάδα {week}</span>}
               {term && <span className="rounded-full bg-white/12 px-2.5 py-1 ring-1 ring-white/15">{term}</span>}
+              {saved > 0 && (
+                // The value, as a number: what «Ετοίμασε» and the ΣΕΠ saved since Monday.
+                <button
+                  type="button"
+                  onClick={() => toast("Περίπου: 25′ για κάθε φύλλο ή σχέδιο, 20′ για τεστ, 15′ για κάθε επίπεδο, 10′ για κάθε ΣΕΠ που έλεγξες.")}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/20 px-2.5 py-1 text-emerald-50 ring-1 ring-emerald-300/40 transition-colors hover:bg-emerald-400/30"
+                >
+                  <Timer className="size-3.5" /> Γλίτωσες ~{hoursMinutes(saved)} αυτή την εβδομάδα
+                </button>
+              )}
             </div>
           )}
           <DayProgress lessons={lessons} nowMin={nowMin} />
@@ -313,6 +329,12 @@ export function AskBar({ index = 1 }: { index?: number }) {
               {PREP[k].title}
             </button>
           ))}
+          <Link
+            href="/week"
+            className="flex h-8 shrink-0 items-center gap-1 rounded-full border border-brand-100 bg-brand-50 px-3 text-[13px] font-semibold text-brand transition-colors hover:bg-brand-100"
+          >
+            Όλη η εβδομάδα <ArrowRight className="size-3.5" />
+          </Link>
         </div>
       </div>
     </section>
