@@ -23,6 +23,7 @@ import { isActive, NAV } from "./nav";
 import { SyllabusSheet } from "../syllabus";
 import { CloseDaySheet } from "../closeDay";
 import { DutySheet } from "../dutySheet";
+import { BookletSheet } from "../booklets";
 
 /** The app mark: a «τ» on ink, with the red dot of the teacher's pen. */
 export function LogoMark({ className }: { className?: string }) {
@@ -329,6 +330,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SyllabusSheet />
       <CloseDaySheet />
       <DutySheet />
+      <BookletSheet />
       <ConfirmHost />
       <Toaster />
     </div>

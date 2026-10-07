@@ -9,6 +9,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AdaptPanel, type Suggestion } from "@/components/doc/AdaptPanel";
 import { DocPage } from "@/components/doc/DocPage";
+import { PrintButton } from "@/components/booklets";
 import { BackButton } from "@/components/shell/PageHeader";
 import { toast } from "@/components/toast";
 import { Button, ButtonLink, Card, EmptyState, IconButton, Segmented, Select, Sheet, Toggle } from "@/components/ui";
@@ -516,9 +517,12 @@ function Editor() {
           <p className="font-semibold">Φτιάξε φύλλο από αυτό το αρχείο</p>
           <p className="text-sm text-muted">Φύλλο εργασίας, τεστ, 3 επίπεδα ή σχέδιο μαθήματος, με βάση τη σελίδα σου.</p>
         </div>
-        <Button onClick={prepareFromFile}>
-          <Sparkles className="size-4" /> Ετοίμασε
-        </Button>
+        <div className="flex gap-2">
+          <PrintButton material={material} />
+          <Button onClick={prepareFromFile}>
+            <Sparkles className="size-4" /> Ετοίμασε
+          </Button>
+        </div>
       </Card>
       <div className="rounded-2xl bg-line-2/70 p-2 sm:p-6">
         <OriginalView material={material} />

@@ -595,6 +595,56 @@ async function cyDutyFlow(name) {
   await ctx.close();
 }
 
+async function bookletFlow(name) {
+  console.log(`\n## ${name}`);
+  // Two small "photos" of booklet pages.
+  const pngA = path.join(OUT, "page-1.png");
+  const pngB = path.join(OUT, "page-2.png");
+  const PIX = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAEUlEQVR42mP8z8DwnwEIGAEAJvQD/qnYqJcAAAAASUVORK5CYII=";
+  fs.writeFileSync(pngA, Buffer.from(PIX, "base64"));
+  fs.writeFileSync(pngB, Buffer.from(PIX, "base64"));
+  for (const [w, h] of [[390, 844], [1280, 900]]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, locale: "el-GR", ...(w < 500 && { isMobile: true, hasTouch: true, deviceScaleFactor: 2 }) });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+    await page.goto(BASE + "/login");
+    await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+    await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+    await page.goto(`${BASE}/materials`);
+    await page.getByRole("radio", { name: /^Φυλλάδια/ }).click();
+    await page.getByText(/Τα φυλλάδιά σου, πάντα έτοιμα για φωτοτυπία/).waitFor();
+    await page.getByRole("button", { name: "Νέο φυλλάδιο" }).first().click();
+    const sheet = page.getByRole("dialog", { name: "Νέο φυλλάδιο" });
+    await sheet.getByLabel("Αρχεία φυλλαδίου").setInputFiles([pngA, pngB]);
+    await sheet.getByText("page-2.png").waitFor();
+    await sheet.getByRole("textbox", { name: "Τίτλος" }).fill("Φυλλάδιο κλασμάτων");
+    await sheet.getByRole("combobox", { name: "Μάθημα" }).selectOption("math");
+    const wide = await sheet.evaluate((el) => [...el.querySelectorAll("*")].filter((x) => x.getBoundingClientRect().right > window.innerWidth + 1).length);
+    assert(wide === 0, `${w}px: booklet upload fits the screen (${wide} wider)`);
+    await sheet.getByRole("button", { name: "Αποθήκευση" }).click();
+    await page.getByText(/Το φυλλάδιο «Φυλλάδιο κλασμάτων» αποθηκεύτηκε/).waitFor({ timeout: 20000 });
+    const group = page.getByRole("region", { name: "Μαθηματικά" });
+    assert(await group.getByText("Φυλλάδιο κλασμάτων").isVisible(), `${w}px: two photos become one booklet, under Μαθηματικά`);
+    if (w > 500) {
+      await page.evaluate(() => {
+        window.__opened = [];
+        window.open = (u) => (window.__opened.push(String(u)), null);
+      });
+      await group.getByRole("button", { name: "Εκτύπωση: Φυλλάδιο κλασμάτων" }).click();
+      await page.waitForFunction(() => !!document.querySelector('iframe[aria-hidden="true"][src^="blob:"]'), null, { timeout: 10000 });
+      const ok = await page.evaluate(async () => {
+        const f = document.querySelector('iframe[aria-hidden="true"][src^="blob:"]');
+        const b = await (await fetch(f.src)).blob();
+        const head = new TextDecoder().decode(new Uint8Array(await b.slice(0, 5).arrayBuffer()));
+        return head === "%PDF-";
+      });
+      assert(ok, "«Εκτύπωση» sends the booklet's PDF to the printer");
+      await page.screenshot({ path: path.join(OUT, `${name}-list.png`) });
+    }
+    await ctx.close();
+  }
+}
+
 async function smartTilesFlow(name) {
   console.log(`\n## ${name}`);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
@@ -707,6 +757,7 @@ try {
   await smartTilesFlow("tiles");
   await dutyFlow("duty");
   await cyDutyFlow("duty-cy");
+  await bookletFlow("booklets");
   await prepareFlow("prepare");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
