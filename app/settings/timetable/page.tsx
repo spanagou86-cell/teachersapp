@@ -185,13 +185,10 @@ function DutyPicker({
   onDay,
   onAdd,
   extra,
-  dayEnd,
   place,
   setPlace,
 }: {
   breaks: Period[];
-  /** The last bell: nothing happens at school after it. */
-  dayEnd: string;
   /** Other weekly duty times the teacher added (after school, a lunch break…). */
   extra: Period[];
   onAdd: (days: number[], p: Period) => void;
@@ -209,9 +206,7 @@ function DutyPicker({
   const [to, setTo] = useState("");
   const [days, setDays] = useState<number[]>([]);
   const filled = isValidTime(from) && isValidTime(to);
-  // Only within the school day: from the morning duty to the last bell.
-  const inDay = filled && timeToMin(from) >= timeToMin(breaks[0]?.start ?? "00:00") && timeToMin(to) <= timeToMin(dayEnd);
-  const okTime = filled && timeToMin(to) > timeToMin(from) && inDay;
+  const okTime = filled && timeToMin(to) > timeToMin(from);
   if (!breaks.length) return null;
   return (
     <Card className="mb-5 grid grid-cols-1 gap-3 border-amber-100 p-4">
@@ -299,9 +294,7 @@ function DutyPicker({
             <span className="text-muted">–</span>
             <input type="time" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Έως" className={cx(inputClass, "h-10 !w-28", filled && !okTime && "border-danger")} />
           </div>
-          <p className={cx("text-[13px]", filled && !okTime ? "text-danger" : "text-muted")}>
-            {filled && !inDay ? `Μόνο μέσα στο σχολικό ωράριο: ${breaks[0]?.start}–${dayEnd}.` : `Μέσα στο σχολικό ωράριο, ${breaks[0]?.start}–${dayEnd}.`}
-          </p>
+          {filled && !okTime && <p className="text-[13px] text-danger">Η λήξη πρέπει να είναι μετά την έναρξη.</p>}
           <div className="grid grid-cols-5 gap-1" role="group" aria-label="Μέρες">
             {DAYS_SHORT.map((d, i) => (
               <button
@@ -413,6 +406,13 @@ function Editor() {
   const breaks = useMemo(() => {
     const valid = (p: Period) => isValidTime(p.start) && isValidTime(p.end) && timeToMin(p.end) > timeToMin(p.start);
     const short = (p: Period) => valid(p) && timeToMin(p.end) - timeToMin(p.start) < 30;
+    if (country === "cy") {
+      // One bell for every public primary school: 07:30 before the bell, then 09:05, 10:45 and 12:15.
+      const bells = BELLS.cy;
+      const first = timeToMin(bells[0].start);
+      const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      return [{ start: hm(first - 15), end: bells[0].start }, ...bells.filter(short).map((p) => ({ start: p.start, end: p.end }))];
+    }
     const long = rows.filter((p) => valid(p) && !short(p));
     const day = long.length ? long : BELLS[country];
     const bell = timeToMin(day.map((p) => p.start).sort()[0]);
@@ -426,10 +426,6 @@ function Editor() {
     const between = (p: Period) => timeToMin(p.start) >= bell && timeToMin(p.end) <= last && !overlapsLesson(p);
     const later = (own.some(between) ? own : BELLS[country].filter(short)).filter(between);
     return [morning, ...later].map((p) => ({ start: p.start, end: p.end }));
-  }, [rows, country]);
-  const dayEnd = useMemo(() => {
-    const long = rows.filter((p) => isValidTime(p.start) && isValidTime(p.end) && timeToMin(p.end) - timeToMin(p.start) >= 30);
-    return (long.length ? long : BELLS[country]).map((p) => p.end).sort().at(-1)!;
   }, [rows, country]);
   const rowFor = (b: Period) => rows.find((r) => r.start === b.start && r.end === b.end);
   // Other rows that already hold a duty: they stay in the duty grid as «Άλλη ώρα».
@@ -582,7 +578,6 @@ function Editor() {
       </Card>
       <DutyPicker
         breaks={breaks}
-        dayEnd={dayEnd}
         extra={extraDuty}
         isOn={dutyOn}
         onToggle={toggleDuty}

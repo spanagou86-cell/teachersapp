@@ -40,10 +40,7 @@ function Body({ onClose, initialDate }: { onClose: () => void; initialDate?: str
   const [start, setStart] = useState(firstBreak.start);
   const [end, setEnd] = useState(firstBreak.end);
   const [place, setPlace] = useState("");
-  const lastBell = BELLS[country].at(-1)!.end;
-  const filled = isValidTime(start) && isValidTime(end);
-  const inDay = filled && timeToMin(start) >= timeToMin(morning.start) && timeToMin(end) <= timeToMin(lastBell);
-  const valid = Boolean(date) && filled && timeToMin(end) > timeToMin(start) && inDay;
+  const valid = Boolean(date) && isValidTime(start) && isValidTime(end) && timeToMin(end) > timeToMin(start);
 
   const save = () => {
     if (!valid) return;
@@ -67,11 +64,7 @@ function Body({ onClose, initialDate }: { onClose: () => void; initialDate?: str
     >
       <div className="grid grid-cols-1 gap-3">
         <p className="text-sm text-muted">Για μία μόνο μέρα, π.χ. αντικατάσταση συναδέλφου. Δεν αλλάζει το εβδομαδιαίο σου πρόγραμμα.</p>
-        {filled && !inDay && (
-          <p role="alert" className="text-sm text-danger">
-            Μόνο μέσα στο σχολικό ωράριο: {morning.start}–{lastBell}.
-          </p>
-        )}
+
         <Field label="Ημερομηνία">
           <input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className={cx(inputClass, "h-11")} />
         </Field>

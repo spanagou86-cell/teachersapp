@@ -542,9 +542,6 @@ async function dutyFlow(name) {
   const states = await thursday.evaluateAll((els) => els.map((e) => e.getAttribute("aria-pressed")));
   assert(states.length >= 3 && states.every((x) => x === "true"), `tapping the day marks the morning and every break (${states.length})`);
   await page.getByRole("button", { name: "Άλλη ώρα κάθε εβδομάδα" }).click();
-  await page.getByLabel("Από", { exact: true }).fill("13:15");
-  await page.getByLabel("Έως", { exact: true }).fill("13:30");
-  assert(await page.getByText(/Μόνο μέσα στο σχολικό ωράριο/).isVisible(), "a time after school is refused");
   await page.getByLabel("Από", { exact: true }).fill("09:20");
   await page.getByLabel("Έως", { exact: true }).fill("09:35");
   await page.getByRole("group", { name: "Μέρες" }).getByRole("button", { name: "ΤΕΤ" }).click();
@@ -572,6 +569,29 @@ async function dutyFlow(name) {
   await page.goto(`${BASE}/settings`);
   await page.getByText(/Υπενθύμιση (εφημερία|παιδονομία)ς? 5′ πριν|Υπενθύμιση .* 5′ πριν/).first().waitFor();
   assert(true, "settings offer the 5′ duty reminder");
+  await ctx.close();
+}
+
+async function cyDutyFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  await page.goto(BASE + "/settings");
+  await page.getByRole("radio", { name: "Κύπρος" }).click();
+  await page.getByText(/άλλαξε σε Κύπρου/).waitFor();
+  await page.goto(`${BASE}/settings/timetable`);
+  const grid = page.getByRole("grid", { name: /Παιδονομία ανά μέρα και διάλειμμα/ });
+  await grid.waitFor();
+  const text = await grid.innerText();
+  assert(/Πρωινή\s*07:30–07:45/.test(text), "Cyprus: morning duty 07:30–07:45");
+  assert(["09:05–09:25", "10:45–10:55", "12:15–12:25"].every((t) => text.includes(t)) && (text.match(/διάλειμμα/g) ?? []).length === 3, "Cyprus: the three official breaks");
+  await grid.getByRole("button", { name: "Όλη τη μέρα: Τρίτη" }).click();
+  const tue = await grid.getByRole("button", { name: /^Παιδονομία Τρίτη (07:30|09:05|10:45|12:15)$/ }).evaluateAll((els) => els.map((e) => e.getAttribute("aria-pressed")));
+  assert(tue.length === 4 && tue.every((x) => x === "true"), "Cyprus: one tap on the day gives the morning and the three breaks");
   await ctx.close();
 }
 
@@ -686,6 +706,7 @@ try {
   await sepFlow("sep");
   await smartTilesFlow("tiles");
   await dutyFlow("duty");
+  await cyDutyFlow("duty-cy");
   await prepareFlow("prepare");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
