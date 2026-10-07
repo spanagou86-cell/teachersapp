@@ -105,7 +105,15 @@ export function splitSlots(rows: SlotRow[], links: { slot_id: string; material_i
         carriedToId: r.carried_to_id ?? undefined,
       });
     } else if (r.kind !== "lesson") {
-      blocks.push({ id: r.id, date: r.date, start: hhmm(r.start_time), end: hhmm(r.end_time), kind: r.kind as TimeBlock["kind"], label: r.topic });
+      blocks.push({
+        id: r.id,
+        date: r.date,
+        start: hhmm(r.start_time),
+        end: hhmm(r.end_time),
+        kind: r.kind as TimeBlock["kind"],
+        label: r.topic,
+        ...(!r.template_id && { oneOff: true }),
+      });
     }
   }
   return { slots, blocks };
@@ -452,6 +460,9 @@ export const remote = {
       await run(db().from("slot_materials").insert(s.materialIds.map((m) => ({ slot_id: s.id, material_id: m }))));
   },
   deleteSlot: (id: string) => run(db().from("lesson_slots").delete().eq("id", id)),
+  /** A duty (or meeting) for one day, outside the weekly timetable. */
+  insertBlock: (b: TimeBlock) =>
+    run(db().from("lesson_slots").insert({ id: b.id, date: b.date, start_time: b.start, end_time: b.end, kind: b.kind, topic: b.label.slice(0, 200) })),
 
   /** "Διαγραφή μαθήματος": kept as cancelled, so the timetable never recreates it. */
   cancelSlot: (id: string, cancelled = true) => run(db().from("lesson_slots").update({ cancelled }).eq("id", id)),

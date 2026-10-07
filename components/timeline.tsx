@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, Coffee, CornerDownRight, MessagesSquare, Paperclip, ShieldCheck, Sparkles, Users } from "@/components/icons";
+import { ArrowRight, Coffee, CornerDownRight, MessagesSquare, Paperclip, ShieldCheck, Sparkles, Users, X } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { timeToMin } from "@/lib/dates";
@@ -145,6 +145,8 @@ const BLOCK_ICON = { duty: ShieldCheck, free: Coffee, meeting: MessagesSquare };
 
 function BlockItem({ block }: { block: TimeBlock }) {
   const country = useApp((s) => s.profile.country);
+  const today = useApp((s) => s.today);
+  const removeBlock = useApp((s) => s.removeBlock);
   const Icon = BLOCK_ICON[block.kind];
   const label = block.kind === "duty" ? dutyLabel(country) : block.kind === "free" ? "Κενό" : "Σύσκεψη";
   return (
@@ -157,11 +159,25 @@ function BlockItem({ block }: { block: TimeBlock }) {
       )}
     >
       <Icon className="size-4 shrink-0" />
-      <span className="truncate">
+      <span className="min-w-0 flex-1 truncate">
         {label}
         {block.label && ` · ${block.label}`}
         {block.kind === "free" && ` · ${timeToMin(block.end) - timeToMin(block.start)}′`}
+        {block.oneOff && <span className="font-normal opacity-80"> · μία φορά</span>}
       </span>
+      {block.kind === "duty" && block.date >= today && (
+        <button
+          type="button"
+          aria-label={`Αφαίρεση ${label.toLowerCase()} ${block.start} για αυτή τη μέρα`}
+          onClick={() => {
+            const undo = removeBlock(block.id);
+            toast(`Η ${label.toLowerCase()} των ${block.start} αφαιρέθηκε για αυτή τη μέρα`, { label: "Αναίρεση", run: undo });
+          }}
+          className="-mr-1.5 flex size-8 shrink-0 items-center justify-center rounded-full opacity-70 hover:bg-white/60 hover:opacity-100"
+        >
+          <X className="size-4" />
+        </button>
+      )}
     </div>
   );
 }

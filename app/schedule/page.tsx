@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { BookOpenCheck, CalendarCog, Plus, Sparkles, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "@/components/icons";
+import { BookOpenCheck, CalendarCog, ShieldCheck, Plus, Sparkles, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
@@ -18,6 +18,7 @@ import { useSubjects } from "@/lib/store/hooks";
 import { periodsFrom } from "@/lib/timetable";
 import { Menu } from "@/components/menu";
 import { openSyllabus } from "@/components/syllabus";
+import { openDutySheet } from "@/components/dutySheet";
 
 type View = "week" | "month" | "year";
 
@@ -334,6 +335,7 @@ function Calendar() {
               label="Περισσότερα"
               items={[
                 { label: "Έκτακτο μάθημα", icon: <Plus />, onClick: () => setAdding(true) },
+                { label: `${dutyLabel(country)} μία φορά`, icon: <ShieldCheck />, onClick: () => openDutySheet(day < today ? today : day) },
                 { label: "Ύλη μαθήματος: θέματα για όλη τη χρονιά", icon: <Sparkles />, onClick: () => openSyllabus() },
                 { label: "Τι διδάχθηκε και προγραμματισμός", icon: <BookOpenCheck />, href: "/journal" },
                 { label: "Ωρολόγιο πρόγραμμα", icon: <CalendarCog />, href: "/settings/timetable" },

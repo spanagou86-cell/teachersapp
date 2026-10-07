@@ -1,10 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, Camera, Coffee, Loader2, MessagesSquare, Plus, ShieldCheck, Trash2 } from "@/components/icons";
+import { AlertTriangle, CalendarPlus, Camera, Coffee, Loader2, MessagesSquare, Plus, ShieldCheck, Trash2 } from "@/components/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { DUTY_PLACES, openDutySheet } from "@/components/dutySheet";
 import { SUBJECT_STYLE } from "@/components/subject";
 import { toast } from "@/components/toast";
 import { Button, Card, cx, Field, IconButton, inputClass, Segmented, Select, Sheet } from "@/components/ui";
@@ -22,7 +23,6 @@ import { subjectChoices } from "@/lib/subjects";
 
 const DAYS = ["Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή"];
 const DAYS_SHORT = ["ΔΕΥ", "ΤΡΙ", "ΤΕΤ", "ΠΕΜ", "ΠΑΡ"];
-const DUTY_PLACES = ["Αυλή", "Είσοδος", "Διάδρομος", "Κλίμακα", "Κυλικείο"];
 
 type Kind = TimetableEntry["kind"] | "none";
 interface Cell {
@@ -183,10 +183,15 @@ function DutyPicker({
   isOn,
   onToggle,
   onDay,
+  onAdd,
+  extra,
   place,
   setPlace,
 }: {
   breaks: Period[];
+  /** Other weekly duty times the teacher added (after school, a lunch break…). */
+  extra: Period[];
+  onAdd: (days: number[], p: Period) => void;
   isOn: (day: number, b: Period) => boolean;
   onToggle: (day: number, b: Period) => void;
   onDay: (day: number) => void;
@@ -195,7 +200,12 @@ function DutyPicker({
 }) {
   const country = useApp((s) => s.profile.country);
   const duty = dutyLabel(country);
-  const count = breaks.reduce((n, b) => n + [1, 2, 3, 4, 5].filter((d) => isOn(d, b)).length, 0);
+  const count = [...breaks, ...extra].reduce((n, b) => n + [1, 2, 3, 4, 5].filter((d) => isOn(d, b)).length, 0);
+  const [adding, setAdding] = useState(false);
+  const [from, setFrom] = useState("13:05");
+  const [to, setTo] = useState("13:20");
+  const [days, setDays] = useState<number[]>([]);
+  const okTime = isValidTime(from) && isValidTime(to) && timeToMin(to) > timeToMin(from);
   if (!breaks.length) return null;
   return (
     <Card className="mb-5 grid grid-cols-1 gap-3 border-amber-100 p-4">
@@ -241,10 +251,12 @@ function DutyPicker({
             </tr>
           </thead>
           <tbody>
-            {breaks.map((b, i) => (
+            {[...breaks, ...extra].map((b, i) => (
               <tr key={`${b.start}-${b.end}`}>
                 <td className="pr-1 text-left">
-                  <span className="block text-[12.5px] font-semibold leading-tight">{i === 0 ? "Πρωινή" : `${ORDINAL[i - 1] ?? `${i}ο`} διάλειμμα`}</span>
+                  <span className="block text-[12.5px] font-semibold leading-tight">
+                    {i === 0 ? "Πρωινή" : i < breaks.length ? `${ORDINAL[i - 1] ?? `${i}ο`} διάλειμμα` : "Άλλη ώρα"}
+                  </span>
                   <span className="block text-[11.5px] tabular-nums text-muted">
                     {b.start}–{b.end}
                   </span>
@@ -273,6 +285,54 @@ function DutyPicker({
           </tbody>
         </table>
       </div>
+      {adding ? (
+        <div className="grid grid-cols-1 gap-2.5 rounded-xl border border-line bg-bg p-3">
+          <p className="text-sm font-semibold">Άλλη ώρα, κάθε εβδομάδα</p>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <input type="time" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Από" className={cx(inputClass, "h-10 !w-28")} />
+            <span className="text-muted">–</span>
+            <input type="time" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Έως" className={cx(inputClass, "h-10 !w-28", !okTime && "border-danger")} />
+          </div>
+          <div className="grid grid-cols-5 gap-1" role="group" aria-label="Μέρες">
+            {DAYS_SHORT.map((d, i) => (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={days.includes(i + 1)}
+                onClick={() => setDays((ds) => (ds.includes(i + 1) ? ds.filter((x) => x !== i + 1) : [...ds, i + 1]))}
+                className={clsx("h-10 rounded-lg border text-[12px] font-bold", days.includes(i + 1) ? "border-amber bg-amber text-white" : "border-line bg-surface text-ink-2")}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              disabled={!okTime || !days.length}
+              onClick={() => {
+                onAdd(days, { start: from, end: to });
+                setAdding(false);
+                setDays([]);
+              }}
+            >
+              Προσθήκη
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
+              Άκυρο
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
+            <Plus className="size-4" /> Άλλη ώρα κάθε εβδομάδα
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => openDutySheet()}>
+            <CalendarPlus className="size-4" /> Μία φορά (π.χ. αντικατάσταση)
+          </Button>
+        </div>
+      )}
       <label className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-muted">Σημείο (προαιρετικό):</span>
         <Select value={place} onChange={(e) => setPlace(e.target.value)} aria-label="Σημείο" className="!h-9 w-auto min-w-36">
@@ -345,14 +405,22 @@ function Editor() {
     const valid = (p: Period) => isValidTime(p.start) && isValidTime(p.end) && timeToMin(p.end) > timeToMin(p.start);
     const short = (p: Period) => valid(p) && timeToMin(p.end) - timeToMin(p.start) < 30;
     const long = rows.filter((p) => valid(p) && !short(p));
-    const bell = timeToMin((long.length ? long : BELLS[country]).map((p) => p.start).sort()[0]);
+    const day = long.length ? long : BELLS[country];
+    const bell = timeToMin(day.map((p) => p.start).sort()[0]);
+    const last = Math.max(...day.map((p) => timeToMin(p.end)));
     const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
     const own = rows.filter(short);
-    const morning = own.find((p) => timeToMin(p.end) <= bell) ?? { start: hhmm(bell - 15), end: hhmm(bell) };
-    const later = (own.some((p) => timeToMin(p.start) >= bell) ? own : BELLS[country].filter(short)).filter((p) => timeToMin(p.start) >= bell);
+    const morning = own.find((p) => timeToMin(p.end) === bell) ?? { start: hhmm(bell - 15), end: hhmm(bell) };
+    // A break sits between lessons; anything after the last bell is the teacher's «άλλη ώρα».
+    const between = (p: Period) => timeToMin(p.start) >= bell && timeToMin(p.end) <= last;
+    const later = (own.some(between) ? own : BELLS[country].filter(short)).filter(between);
     return [morning, ...later].map((p) => ({ start: p.start, end: p.end }));
   }, [rows, country]);
   const rowFor = (b: Period) => rows.find((r) => r.start === b.start && r.end === b.end);
+  // Other rows that already hold a duty: they stay in the duty grid as «Άλλη ώρα».
+  const extraDuty = rows
+    .filter((r) => !breaks.some((b) => b.start === r.start && b.end === r.end) && [1, 2, 3, 4, 5].some((d) => cells[`${d}|${r.key}`]?.kind === "duty"))
+    .map((r) => ({ start: r.start, end: r.end }));
   const dutyOn = (day: number, b: Period) => {
     const r = rowFor(b);
     return !!r && cells[`${day}|${r.key}`]?.kind === "duty";
@@ -497,7 +565,16 @@ function Editor() {
           }}
         />
       </Card>
-      <DutyPicker breaks={breaks} isOn={dutyOn} onToggle={toggleDuty} onDay={toggleDay} place={place} setPlace={setPlace} />
+      <DutyPicker
+        breaks={breaks}
+        extra={extraDuty}
+        isOn={dutyOn}
+        onToggle={toggleDuty}
+        onDay={toggleDay}
+        onAdd={(days, p) => setDuties(days.map((day) => ({ day, b: p })), true)}
+        place={place}
+        setPlace={setPlace}
+      />
 
       {readNotes && (
         <p role="note" className="mb-5 flex gap-2 rounded-xl bg-amber-50 p-3 text-sm">

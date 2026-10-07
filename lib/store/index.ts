@@ -114,6 +114,10 @@ interface Actions {
   carryOver: (slotId: string, target: TimeWindow) => CarryOverResult;
   /** Writes many lesson topics; returns the «Αναίρεση» that puts the old ones back. */
   setTopics: (patches: TopicPatch[]) => () => void;
+  /** A duty for one day only (a swap or a replacement); returns its id. */
+  addBlock: (b: Omit<TimeBlock, "id" | "oneOff">) => string;
+  /** Takes a duty off one day (kept as cancelled so the timetable doesn't bring it back); returns an undo. */
+  removeBlock: (id: string) => () => void;
   /** Objectives of many lessons at once (weekly programme); returns an undo. */
   setPlans: (plans: Record<string, string>) => () => void;
   /**
@@ -438,7 +442,7 @@ export const useApp = create<AppState>()(
                 })),
             ],
             blocks: [
-              ...s.blocks.filter((b) => b.date < today),
+              ...s.blocks.filter((b) => b.date < today || b.oneOff),
               ...occ
                 .filter((o) => o.entry.kind !== "lesson")
                 .map((o): TimeBlock => ({ id: uid(), date: o.date, start: o.entry.start, end: o.entry.end, kind: o.entry.kind as TimeBlock["kind"], label: o.entry.label })),
@@ -599,6 +603,22 @@ export const useApp = create<AppState>()(
           };
           apply(patches);
           return () => apply(patches.filter((p) => before.has(p.id)).map((p) => ({ id: p.id, topic: before.get(p.id)! })));
+        },
+        addBlock: (input) => {
+          const block: TimeBlock = { ...input, id: uid(), oneOff: true };
+          set((s) => ({ blocks: [...s.blocks, block] }));
+          sync(() => remote.insertBlock(block));
+          return block.id;
+        },
+        removeBlock: (id) => {
+          const block = get().blocks.find((b) => b.id === id);
+          if (!block) return () => undefined;
+          set((s) => ({ blocks: s.blocks.filter((b) => b.id !== id) }));
+          sync(() => remote.cancelSlot(id));
+          return () => {
+            set((s) => ({ blocks: [...s.blocks, block] }));
+            sync(() => remote.cancelSlot(id, false));
+          };
         },
         setPlans: (plans) => {
           const before: Record<string, string> = {};

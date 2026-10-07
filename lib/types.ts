@@ -71,6 +71,8 @@ export interface TimeBlock {
   end: HHMM;
   kind: BlockKind;
   label: string;
+  /** Added for one day only (a swap, a replacement), not from the weekly timetable. */
+  oneOff?: boolean;
 }
 
 export interface TimetableEntry {

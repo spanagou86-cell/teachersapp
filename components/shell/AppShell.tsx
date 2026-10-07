@@ -22,6 +22,7 @@ import { FoundList, PendingList, usePendingLessons, useSearch } from "./finders"
 import { isActive, NAV } from "./nav";
 import { SyllabusSheet } from "../syllabus";
 import { CloseDaySheet } from "../closeDay";
+import { DutySheet } from "../dutySheet";
 
 /** The app mark: a «τ» on ink, with the red dot of the teacher's pen. */
 export function LogoMark({ className }: { className?: string }) {
@@ -327,6 +328,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <PrepareSheet />
       <SyllabusSheet />
       <CloseDaySheet />
+      <DutySheet />
       <ConfirmHost />
       <Toaster />
     </div>
