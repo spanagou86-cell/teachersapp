@@ -252,3 +252,33 @@ export async function aiReadSyllabus(req: ReadSyllabus): Promise<AiAnswer<{ item
   if (!items.length) return { ok: false, error: "Δεν βρήκα θέματα εδώ. Δοκίμασε πιο καθαρή φωτογραφία των περιεχομένων." };
   return { ok: true, data: { items, notes: r.data.notes } };
 }
+
+export interface ObjectiveLesson {
+  id: string;
+  subject: string;
+  grade: string;
+  topic: string;
+}
+
+/** A plain, honest suggestion for the demo (and the shape the AI follows). */
+export function sampleObjective(l: ObjectiveLesson): string {
+  const topic = l.topic.replace(/^Ενότητα\s+\d+\s*:\s*/i, "").trim();
+  if (!topic) return `Να εξασκηθούν σε όσα διδάχθηκαν στα ${l.subject} · Δραστηριότητα: σύντομη επανάληψη σε ζεύγη`;
+  return `Να κατανοήσουν «${topic}» · Να το εφαρμόζουν σε απλά παραδείγματα · Δραστηριότητα: φύλλο εργασίας σε ζεύγη και σύντομος έλεγχος`;
+}
+
+/** «✨ Συμπλήρωσε στόχους»: objectives and one activity per lesson, from subject, grade and topic only. */
+export async function aiObjectives(lessons: ObjectiveLesson[], country: string, demo: boolean): Promise<AiAnswer<Record<string, string>>> {
+  if (demo) return { ok: true, data: Object.fromEntries(lessons.map((l) => [l.id, sampleObjective(l)])) };
+  const r = await post<{ lessons: unknown }>({ op: "objectives", country, lessons });
+  if (!r.ok) return r.unavailable ? { ok: false, error: "Το AI δεν είναι ενεργό αυτή τη στιγμή. Γράψε τους στόχους με το χέρι." } : r;
+  const ids = new Set(lessons.map((l) => l.id));
+  const out: Record<string, string> = {};
+  for (const x of Array.isArray(r.data.lessons) ? (r.data.lessons as Record<string, unknown>[]) : []) {
+    const id = typeof x?.id === "string" ? x.id.trim() : "";
+    const plan = typeof x?.plan === "string" ? x.plan.replace(/\s+/g, " ").trim().slice(0, 400) : "";
+    if (ids.has(id) && plan) out[id] = plan;
+  }
+  if (!Object.keys(out).length) return { ok: false, error: "Το AI δεν έδωσε στόχους. Ξαναδοκίμασε." };
+  return { ok: true, data: out };
+}

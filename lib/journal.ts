@@ -144,24 +144,28 @@ export function journal({
   return { months, missing: lessons.filter((s) => rows.some((r) => r.type === "lesson" && r.slot.id === s.id && r.missing)), total: lessons.length };
 }
 
-/** The Εβδομαδιαίος προγραμματισμός: every lesson of the week, by day, and which still lack a topic. */
+/** The εβδομαδιαίος or δεκαπενθήμερος προγραμματισμός: every lesson, by school day, and which still lack a topic or objectives. */
 export function weekPlan({
   slots,
   monday,
   classId,
   subjectId,
+  weeks = 1,
 }: {
   slots: LessonSlot[];
   monday: ISODate;
   classId?: string;
   subjectId?: string;
-}): { days: { date: ISODate; lessons: LessonSlot[] }[]; noTopic: LessonSlot[] } {
-  const days = [0, 1, 2, 3, 4].map((i) => {
+  weeks?: 1 | 2;
+}): { days: { date: ISODate; lessons: LessonSlot[] }[]; noTopic: LessonSlot[]; noPlan: LessonSlot[] } {
+  const offsets = weeks === 2 ? [0, 1, 2, 3, 4, 7, 8, 9, 10, 11] : [0, 1, 2, 3, 4];
+  const days = offsets.map((i) => {
     const date = addDays(monday, i);
     const lessons = slots
       .filter((s) => s.date === date && (!classId || s.classId === classId) && (!subjectId || s.subjectId === subjectId) && !s.carriedToId)
       .sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
     return { date, lessons };
   });
-  return { days, noTopic: days.flatMap((d) => d.lessons).filter((s) => !s.topic.trim()) };
+  const all = days.flatMap((d) => d.lessons);
+  return { days, noTopic: all.filter((s) => !s.topic.trim()), noPlan: all.filter((s) => !s.plan?.trim()) };
 }

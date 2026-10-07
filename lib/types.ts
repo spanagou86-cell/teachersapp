@@ -55,6 +55,8 @@ export interface LessonSlot {
   materialIds: string[];
   status: LessonStatus;
   taughtNote: string;
+  /** Στόχοι / δραστηριότητες for the weekly programme (Κ.Δ.Π. 168/2024 άρθρο 39). */
+  plan?: string;
   carriedFromId?: string;
   carriedToId?: string;
 }

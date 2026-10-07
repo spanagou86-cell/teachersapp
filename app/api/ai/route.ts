@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AiError, aiConfigured, callTool, type Part } from "@/lib/ai/claude";
-import { ADAPT_SYSTEM, ADAPT_TOOL, createSystem, CREATE_TOOL, CY_MATHS_PROGRAMME, isCountry, LEVELS_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, SYLLABUS_SYSTEM, SYLLABUS_TOOL, timetableSystem, TIMETABLE_TOOL } from "@/lib/ai/prompts";
+import { ADAPT_SYSTEM, ADAPT_TOOL, createSystem, CREATE_TOOL, CY_MATHS_PROGRAMME, isCountry, LEVELS_TOOL, objectivesSystem, OBJECTIVES_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, SYLLABUS_SYSTEM, SYLLABUS_TOOL, timetableSystem, TIMETABLE_TOOL } from "@/lib/ai/prompts";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -180,6 +180,24 @@ export async function POST(req: NextRequest) {
         }
         content.push({ type: "text", text: `Μάθημα: ${str("subject")} · Τάξη: ${str("gradeLabel")}` });
         const out = await callTool<{ items: unknown[]; notes?: string }>({ tier: "quality", system: SYLLABUS_SYSTEM, content, tool: SYLLABUS_TOOL, maxTokens: 8000 });
+        return NextResponse.json(out);
+      }
+      case "objectives": {
+        // Only subject, grade and topic per lesson: nothing about the children.
+        const clip = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, n) : "");
+        const lessons = (Array.isArray(body.lessons) ? body.lessons : [])
+          .slice(0, 80)
+          .map((l: Record<string, unknown>) => ({ id: clip(l?.id, 60), subject: clip(l?.subject, 60), grade: clip(l?.grade, 40), topic: clip(l?.topic, 200) }))
+          .filter((l) => l.id);
+        if (!lessons.length) return fail(400, "Δεν υπάρχουν μαθήματα.");
+        const lines = lessons.map((l) => `${l.id} | ${l.subject} | ${l.grade} | ${l.topic || "(χωρίς θέμα)"}`).join("\n");
+        const out = await callTool<{ lessons: unknown[] }>({
+          tier: "fast",
+          system: objectivesSystem(country),
+          content: [{ type: "text", text: `Μαθήματα (id | μάθημα | τάξη | θέμα):\n${lines}` }],
+          tool: OBJECTIVES_TOOL,
+          maxTokens: 6000,
+        });
         return NextResponse.json(out);
       }
       default:

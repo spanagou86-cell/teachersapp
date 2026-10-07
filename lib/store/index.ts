@@ -101,7 +101,7 @@ interface Actions {
   deleteStudentNote: (id: string) => void;
   markAllPresent: (classId: string, date: string) => void;
 
-  updateSlot: (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic">>) => void;
+  updateSlot: (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic" | "plan">>) => void;
   /** Day, time, class or subject of one lesson. Refuses times already taken. */
   editSlot: (id: string, patch: Pick<LessonSlot, "date" | "start" | "end" | "classId" | "subjectId">) => { ok: true } | { ok: false; conflicts: TimeWindow[] };
   /** Removes one lesson; returns it so "Αναίρεση" can bring it back. */
@@ -114,6 +114,8 @@ interface Actions {
   carryOver: (slotId: string, target: TimeWindow) => CarryOverResult;
   /** Writes many lesson topics; returns the «Αναίρεση» that puts the old ones back. */
   setTopics: (patches: TopicPatch[]) => () => void;
+  /** Objectives of many lessons at once (weekly programme); returns an undo. */
+  setPlans: (plans: Record<string, string>) => () => void;
   /**
    * Lays a syllabus over the class's lessons of a subject, from a date to the end of the year
    * (in an account, also lessons not loaded yet). Returns how far it reached.
@@ -239,11 +241,12 @@ export const useApp = create<AppState>()(
           d.run();
         }
         // Notes still waiting for a pause in typing go out now.
-        for (const [id, timer] of noteTimers) {
+        for (const [key, timer] of noteTimers) {
           clearTimeout(timer);
-          noteTimers.delete(id);
+          noteTimers.delete(key);
+          const [id, field] = key.split("|") as [string, "taughtNote" | "plan"];
           const slot = get().slots.find((x) => x.id === id);
-          if (slot) sync(() => remote.updateSlot(id, { taughtNote: slot.taughtNote }));
+          if (slot) sync(() => remote.updateSlot(id, { [field]: slot[field] ?? "" }));
         }
         return queue;
       };
@@ -515,15 +518,17 @@ export const useApp = create<AppState>()(
 
         updateSlot: (id, patch) => {
           set((s) => ({ slots: s.slots.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
-          if (patch.taughtNote !== undefined && Object.keys(patch).length === 1) {
-            // The note is saved as the teacher types; wait for a pause.
-            clearTimeout(noteTimers.get(id));
+          const typed = Object.keys(patch).length === 1 && (patch.taughtNote !== undefined ? "taughtNote" : patch.plan !== undefined ? "plan" : undefined);
+          if (typed) {
+            // Text is saved as the teacher types; wait for a pause.
+            const key = `${id}|${typed}`;
+            clearTimeout(noteTimers.get(key));
             noteTimers.set(
-              id,
+              key,
               setTimeout(() => {
-                noteTimers.delete(id);
+                noteTimers.delete(key);
                 const slot = get().slots.find((x) => x.id === id);
-                if (slot) sync(() => remote.updateSlot(id, { taughtNote: slot.taughtNote }));
+                if (slot) sync(() => remote.updateSlot(id, { [typed]: slot[typed] ?? "" }));
               }, 700),
             );
             return;
@@ -594,6 +599,16 @@ export const useApp = create<AppState>()(
           };
           apply(patches);
           return () => apply(patches.filter((p) => before.has(p.id)).map((p) => ({ id: p.id, topic: before.get(p.id)! })));
+        },
+        setPlans: (plans) => {
+          const before: Record<string, string> = {};
+          for (const id of Object.keys(plans)) before[id] = get().slots.find((x) => x.id === id)?.plan ?? "";
+          const apply = (by: Record<string, string>) => {
+            set((s) => ({ slots: s.slots.map((x) => (x.id in by ? { ...x, plan: by[x.id] } : x)) }));
+            sync(() => remote.updatePlans(by));
+          };
+          apply(plans);
+          return () => apply(before);
         },
         spreadSyllabus: async (classId, subjectId, items, from) => {
           const { mode, slots, profile } = get();

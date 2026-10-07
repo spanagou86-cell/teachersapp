@@ -226,3 +226,35 @@ export const SYLLABUS_TOOL = {
 
 /** The Cyprus Ministry's indicative Maths programmes, one PDF per grade (2026–27). */
 export const CY_MATHS_PROGRAMME = (grade: number) => `https://sch.cy/sd/98/programmatismos_${["a", "b", "c", "d", "e", "st"][grade]}_dim.pdf`;
+
+const OBJECTIVES_SYSTEM = `${STYLE}
+
+Συμπληρώνεις τον εβδομαδιαίο προγραμματισμό ενός εκπαιδευτικού Δημοτικού.
+Για κάθε μάθημα (id, μάθημα, τάξη, θέμα) γράφεις στη στήλη «Στόχοι / Δραστηριότητες»:
+- 1–2 σύντομους στόχους που ξεκινούν με ρήμα («Να αναγνωρίζουν…», «Να λύνουν…»)
+- και μία βασική δραστηριότητα, όλα μαζί σε έως 220 χαρακτήρες, χωρίς κουκκίδες, χωρισμένα με « · ».
+Μένεις πιστός στο θέμα που δίνεται· δεν αλλάζεις τη σειρά της ύλης. Όταν το θέμα δεν είναι σαφές, γράφεις κάτι γενικό και σύντομο για το μάθημα.`;
+
+export const objectivesSystem = (country: Country) => `${OBJECTIVES_SYSTEM}
+
+${COUNTRY[country]}`;
+
+export const OBJECTIVES_TOOL = {
+  name: "objectives",
+  description: "Στόχοι και δραστηριότητα ανά μάθημα.",
+  input_schema: {
+    type: "object",
+    properties: {
+      lessons: {
+        type: "array",
+        maxItems: 80,
+        items: {
+          type: "object",
+          properties: { id: { type: "string" }, plan: { type: "string" } },
+          required: ["id", "plan"],
+        },
+      },
+    },
+    required: ["lessons"],
+  },
+};

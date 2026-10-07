@@ -80,4 +80,20 @@ describe("weekPlan", () => {
     expect(plan.days[2].lessons).toHaveLength(0);
     expect(plan.noTopic.map((s) => s.id)).toEqual(["y"]);
   });
+  it("covers two school weeks for the fortnightly programme and finds lessons without objectives", () => {
+    const plan = weekPlan({
+      slots: [
+        slot({ id: "a", date: "2026-11-09", start: "08:00", status: "planned", plan: "Να συγκρίνουν κλάσματα" }),
+        slot({ id: "b", date: "2026-11-20", start: "08:00", status: "planned" }),
+        slot({ id: "c", date: "2026-11-23", start: "08:00", status: "planned" }),
+      ],
+      monday: "2026-11-09",
+      weeks: 2,
+    });
+    expect(plan.days.map((d) => d.date)).toEqual([
+      "2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13",
+      "2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20",
+    ]);
+    expect(plan.noPlan.map((s) => s.id)).toEqual(["b"]);
+  });
 });

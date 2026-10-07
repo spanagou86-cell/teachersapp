@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookOpenCheck, CalendarClock, CalendarOff, CheckCircle2, NotebookPen, Plus, Sparkles, Trash2 } from "@/components/icons";
+import { ArrowRight, BookOpenCheck, CalendarClock, CalendarDays, CalendarOff, CheckCircle2, NotebookPen, Plus, Sparkles, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useState } from "react";
 import { needsLog, useClock } from "@/components/lesson";
@@ -10,7 +10,7 @@ import { openPrepare } from "@/components/prepare";
 import { Timeline } from "@/components/timeline";
 import { toast } from "@/components/toast";
 import { Button, ButtonLink, Card, cx } from "@/components/ui";
-import { addDays, dayName, longDate, shortDate, timeToMin } from "@/lib/dates";
+import { addDays, dayName, longDate, shortDate, startOfWeek, timeToMin, weekday } from "@/lib/dates";
 import { upcoming } from "@/lib/prepare";
 import { slotsOn, sortSlots, upcomingLesson } from "@/lib/schedule";
 import { holidayOn, termOn, weekNumber } from "@/lib/schoolYear";
@@ -150,6 +150,28 @@ function NextStep() {
         </Button>
       </div>
     );
+  // Friday afternoon: next week's programme, ready to check and hand to the head teacher.
+  if (weekday(today) === 5 && (dayOver || timeToMin(now) >= 12 * 60)) {
+    const monday = addDays(startOfWeek(today), 7);
+    const next = slots.filter((s) => s.date >= monday && s.date <= addDays(monday, 4) && !s.carriedToId);
+    if (next.length)
+      return (
+        <div className={box}>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
+            <CalendarDays className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Ο προγραμματισμός της επόμενης εβδομάδας είναι έτοιμος</p>
+            <p className="text-[13px] text-muted">
+              {next.length} μαθήματα{next.some((s) => !s.topic.trim() || !s.plan?.trim()) ? " · λείπουν θέματα ή στόχοι" : " · με θέματα και στόχους"}
+            </p>
+          </div>
+          <ButtonLink size="sm" href={`/journal?view=plan&class=all&d=${monday}`}>
+            Άνοιγμα
+          </ButtonLink>
+        </div>
+      );
+  }
   // Lessons without a topic: the syllabus, given once, fills them for the whole year.
   const noTopic = upcoming(slots, today, now, 10).filter((s) => !s.topic.trim());
   if (noTopic.length >= 3) {

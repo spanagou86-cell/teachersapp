@@ -165,7 +165,7 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
   const meta = (await db.auth.getSession()).data.session?.user.user_metadata;
   const from = addDays(today, -120);
   const to = addDays(today, 240);
-  const [profile, classes, students, slotRows, links, entries, materials, versions, attendance, tasks, notes, studentNotes] = await Promise.all([
+  const [profile, classes, students, slotRows, links, entries, materials, versions, attendance, tasks, notes, studentNotes, plans] = await Promise.all([
     db.from("profiles").select("display_name, school_name, onboarded, country").eq("id", userId).maybeSingle().then(check),
     db.from("classes").select("id, name, grade, room").order("name").then(check),
     db.from("students").select("id, class_id, first_name, last_name").order("sort").order("first_name").then(check),
@@ -192,7 +192,9 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
     all<{ id: string; student_id: string; kind: StudentNote["kind"]; date: string; text: string; created_at: string }>((a, b) =>
       db.from("student_notes").select("id, student_id, kind, date, text, created_at").order("date", { ascending: false }).range(a, b),
     ),
+    plansIn(from, to),
   ]);
+  const split = splitSlots(slotRows, links);
 
   const versionsBy = new Map<string, MaterialVersion[]>();
   for (const v of versions)
@@ -215,7 +217,8 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
       firstName: s.first_name,
       lastName: s.last_name,
     })),
-    ...splitSlots(slotRows, links),
+    slots: withPlans(split.slots, plans),
+    blocks: split.blocks,
     timetable: (entries as EntryRow[]).map(toEntry),
     materials: (materials as MaterialRow[]).map((m) => toMaterial(m, versionsBy.get(m.id) ?? [])),
     attendance: Object.fromEntries(
@@ -244,6 +247,22 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
 
 // Writes ------------------------------------------------------------------------
 const db = () => supabase();
+
+/** False until migration 0007 has added lesson_slots.plan; objectives then stay on this device only. */
+let planColumn = true;
+export const plansSync = () => planColumn;
+
+/** The weekly-programme objectives of a period. Never fails: an older database simply has none. */
+async function plansIn(from: string, to: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase().from("lesson_slots").select("id, plan").gte("date", from).lte("date", to).neq("plan", "").limit(5000);
+  if (error) {
+    planColumn = false;
+    return new Map();
+  }
+  planColumn = true;
+  return new Map((data as { id: string; plan: string }[]).map((r) => [r.id, r.plan]));
+}
+const withPlans = (slots: LessonSlot[], plans: Map<string, string>) => (plans.size ? slots.map((s) => (plans.has(s.id) ? { ...s, plan: plans.get(s.id) } : s)) : slots);
 const run = async (p: PromiseLike<{ error: { message: string } | null }>) => {
   const { error } = await p;
   if (error) throw new Error(error.message);
@@ -291,7 +310,7 @@ export const remote = {
       ),
       all<{ slot_id: string; material_id: string }>((a, b) => db().from("slot_materials").select("slot_id, material_id").range(a, b)),
     ]);
-    return splitSlots(rows, links).slots;
+    return withPlans(splitSlots(rows, links).slots, await plansIn(from, to));
   },
 
   /** Everything the teacher has stored, for "Κατέβασε τα δεδομένα μου" (GDPR portability). */
@@ -356,22 +375,26 @@ export const remote = {
         ),
     ),
 
-  updateSlot: (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic" | "carriedToId">>) =>
-    run(
-      db()
-        .from("lesson_slots")
-        .update({
-          ...(patch.status !== undefined && { status: patch.status }),
-          ...(patch.taughtNote !== undefined && { taught_note: patch.taughtNote }),
-          ...(patch.topic !== undefined && { topic: patch.topic }),
-          ...("carriedToId" in patch && { carried_to_id: patch.carriedToId ?? null }),
-        })
-        .eq("id", id),
-    ),
+  updateSlot: async (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic" | "carriedToId" | "plan">>) => {
+    const row = {
+      ...(patch.status !== undefined && { status: patch.status }),
+      ...(patch.taughtNote !== undefined && { taught_note: patch.taughtNote }),
+      ...(patch.topic !== undefined && { topic: patch.topic }),
+      ...("carriedToId" in patch && { carried_to_id: patch.carriedToId ?? null }),
+      ...(patch.plan !== undefined && planColumn && { plan: patch.plan }),
+    };
+    if (Object.keys(row).length) await run(db().from("lesson_slots").update(row).eq("id", id));
+  },
   /** Many lesson topics at once (a syllabus laid over the year), a few requests at a time. */
   updateTopics: async (patches: { id: string; topic: string }[]) => {
     for (let i = 0; i < patches.length; i += 8)
       await Promise.all(patches.slice(i, i + 8).map((p) => run(db().from("lesson_slots").update({ topic: p.topic }).eq("id", p.id))));
+  },
+  updatePlans: async (plans: Record<string, string>) => {
+    if (!planColumn) return;
+    const list = Object.entries(plans);
+    for (let i = 0; i < list.length; i += 8)
+      await Promise.all(list.slice(i, i + 8).map(([id, plan]) => run(db().from("lesson_slots").update({ plan }).eq("id", id))));
   },
   insertSlot: async (s: LessonSlot) => {
     await run(

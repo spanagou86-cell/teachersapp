@@ -1,11 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Printer } from "@/components/icons";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Printer, Sparkles } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { useClock } from "@/components/lesson";
+import { GrowingTextarea } from "@/components/text";
+import { aiObjectives } from "@/lib/ai/client";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { toast } from "@/components/toast";
 import { Button, Card, cx, inputClass, Segmented, Select } from "@/components/ui";
@@ -59,6 +61,8 @@ function Journal() {
   const country = profile.country;
 
   const view: Mode = params.get("view") === "plan" ? "plan" : "log";
+  // Κ.Δ.Π. 168/2024 άρθρο 39: εβδομαδιαίος ή δεκαπενθήμερος προγραμματισμός.
+  const weeks: 1 | 2 = params.get("span") === "2" ? 2 : 1;
   const kind: PeriodKind = (["week", "month", "term", "year"] as const).find((k) => k === params.get("period")) ?? "month";
   const anchor = isISODate(params.get("d")) ? params.get("d")! : clock.today;
   const classParam = params.get("class");
@@ -79,8 +83,8 @@ function Journal() {
   const weekend = [0, 6].includes(weekday(clock.today));
   const planMonday = isISODate(params.get("d")) ? startOfWeek(anchor) : addDays(startOfWeek(clock.today), weekend ? 7 : 0);
   const period = useMemo(
-    () => (view === "log" ? periodFor(kind, anchor, country) : { from: planMonday, to: addDays(planMonday, 4), label: "" }),
-    [view, kind, anchor, country, planMonday],
+    () => (view === "log" ? periodFor(kind, anchor, country) : { from: planMonday, to: addDays(planMonday, weeks === 2 ? 11 : 4), label: "" }),
+    [view, kind, anchor, country, planMonday, weeks],
   );
   const { slots, loading } = useLessons(period.from, period.to);
   const year = yearFor(country, period.from);
@@ -89,8 +93,9 @@ function Journal() {
     () => journal({ slots, period, classId, subjectId, holidays: year.holidays, today: clock.today, now: clock.now }),
     [slots, period, classId, subjectId, year.holidays, clock.today, clock.now],
   );
-  const plan = useMemo(() => weekPlan({ slots, monday: planMonday, classId, subjectId }), [slots, planMonday, classId, subjectId]);
+  const plan = useMemo(() => weekPlan({ slots, monday: planMonday, classId, subjectId, weeks }), [slots, planMonday, classId, subjectId, weeks]);
   const week = weekNumber(country, planMonday);
+  const lastWeek = weekNumber(country, addDays(planMonday, 7));
 
   const subjectName = (id: string) => subjects.find((s) => s.id === id)?.name ?? "";
   const className = (id: string) => classes.find((c) => c.id === id)?.name ?? "";
@@ -107,8 +112,9 @@ function Journal() {
       </Card>
     );
 
-  const docTitle = view === "log" ? "Ύλη που διδάχθηκε" : "Εβδομαδιαίος προγραμματισμός";
-  const docPeriod = view === "log" ? `${period.label} (${shortDate(period.from)} – ${shortDate(period.to)})` : `${week ? `Εβδομάδα ${week} · ` : ""}${shortDate(planMonday)} – ${shortDate(period.to)}`;
+  const docTitle = view === "log" ? "Ύλη που διδάχθηκε" : weeks === 2 ? "Δεκαπενθήμερος προγραμματισμός" : "Εβδομαδιαίος προγραμματισμός";
+  const weekLabel = weeks === 2 && week && lastWeek ? `Εβδομάδες ${week}–${lastWeek} · ` : week ? `Εβδομάδα ${week} · ` : "";
+  const docPeriod = view === "log" ? `${period.label} (${shortDate(period.from)} – ${shortDate(period.to)})` : `${weekLabel}${shortDate(planMonday)} – ${shortDate(period.to)}`;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -116,7 +122,11 @@ function Journal() {
         <PageHeader
           back={classId ? `/classes/${classId}?tab=progress` : "/schedule"}
           title={docTitle}
-          subtitle={view === "log" ? "Τι διδάχθηκε, από όσα σημειώνεις μετά από κάθε μάθημα. Έτοιμο για εκτύπωση." : "Τι θα διδάξεις την εβδομάδα, από τα θέματα των μαθημάτων σου."}
+          subtitle={
+            view === "log"
+              ? "Τι διδάχθηκε, από όσα σημειώνεις μετά από κάθε μάθημα. Έτοιμο για εκτύπωση."
+              : "Τι θα διδάξεις, με θέματα και στόχους, έτοιμο για τον Διευθυντή (Κ.Δ.Π. 168/2024, άρθρο 39)."
+          }
           actions={
             <Button onClick={() => window.print()} disabled={loading}>
               <Printer className="size-4" /> Εκτύπωση / PDF
@@ -154,6 +164,18 @@ function Journal() {
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
+          {view === "plan" && (
+            <Segmented<"1" | "2">
+              value={weeks === 2 ? "2" : "1"}
+              onChange={(v) => set({ span: v === "2" ? "2" : undefined })}
+              size="sm"
+              className="w-full sm:w-auto sm:min-w-[260px]"
+              options={[
+                { value: "1", label: "Εβδομάδα" },
+                { value: "2", label: "Δεκαπενθήμερο" },
+              ]}
+            />
+          )}
           {view === "log" && (
             <Segmented<PeriodKind>
               value={kind}
@@ -167,7 +189,7 @@ function Journal() {
             <button
               type="button"
               aria-label="Προηγούμενο"
-              onClick={() => set({ d: view === "log" ? shiftPeriod(kind, anchor, -1, country) : addDays(planMonday, -7) })}
+              onClick={() => set({ d: view === "log" ? shiftPeriod(kind, anchor, -1, country) : addDays(planMonday, -7 * weeks) })}
               className="flex size-10 items-center justify-center rounded-xl border border-line bg-surface hover:bg-line-2"
             >
               <ChevronLeft className="size-5" />
@@ -176,7 +198,7 @@ function Journal() {
             <button
               type="button"
               aria-label="Επόμενο"
-              onClick={() => set({ d: view === "log" ? shiftPeriod(kind, anchor, 1, country) : addDays(planMonday, 7) })}
+              onClick={() => set({ d: view === "log" ? shiftPeriod(kind, anchor, 1, country) : addDays(planMonday, 7 * weeks) })}
               className="flex size-10 items-center justify-center rounded-xl border border-line bg-surface hover:bg-line-2"
             >
               <ChevronRight className="size-5" />
@@ -206,6 +228,14 @@ function Journal() {
             done="Αποθηκεύτηκε"
           />
         )}
+        {view === "plan" && !loading && plan.noPlan.length > 0 && (
+          <Objectives
+            lessons={plan.noPlan}
+            grade={(id) => classes.find((c) => c.id === id)?.grade ?? ""}
+            subjectName={subjectName}
+            label={(s) => `${dayName(s.date)} ${shortDate(s.date)} · ${s.start} · ${subjectName(s.subjectId)}${allClasses ? ` · ${className(s.classId)}` : ""}`}
+          />
+        )}
       </div>
 
       {/* Phone: a readable list. The A4 page below is for larger screens and for printing. */}
@@ -232,10 +262,11 @@ function Journal() {
                       : [{ text: year.holidays.find((h) => d.date >= h.from && d.date <= h.to)?.label ?? "Χωρίς μάθημα" }],
                   }))
             }
-            empty={view === "log" ? "Δεν υπάρχουν μαθήματα που έγιναν σε αυτή την περίοδο." : "Δεν υπάρχουν μαθήματα αυτή την εβδομάδα."}
+            empty={view === "log" ? "Δεν υπάρχουν μαθήματα που έγιναν σε αυτή την περίοδο." : "Δεν υπάρχουν μαθήματα σε αυτό το διάστημα."}
             subjectName={subjectName}
             className={allClasses ? className : undefined}
             missingText={view === "log" ? "Χωρίς σημείωση" : "Χωρίς θέμα"}
+            showPlan={view === "plan"}
           />
         )}
         <p className="mt-4 text-center text-xs text-muted">Με το «Εκτύπωση / PDF» βγαίνει σε σελίδα Α4, με κεφαλίδα σχολείου και υπογραφές.</p>
@@ -344,7 +375,7 @@ function Journal() {
                   {allClasses && <th className="w-[48px] py-1.5 pr-2 font-semibold">Τμήμα</th>}
                   <th className="w-[110px] py-1.5 pr-2 font-semibold">Μάθημα</th>
                   <th className="py-1.5 pr-2 font-semibold">Ενότητα / Θέμα</th>
-                  <th className="w-[170px] py-1.5 pr-2 font-semibold">Δραστηριότητες</th>
+                  <th className="w-[200px] py-1.5 pr-2 font-semibold">Στόχοι / Δραστηριότητες</th>
                   <th className="w-[110px] py-1.5 font-semibold">Υλικό</th>
                 </tr>
               </thead>
@@ -378,7 +409,17 @@ function Journal() {
                             {allClasses && <td className="py-1.5 pr-2 align-top">{className(s.classId)}</td>}
                             <td className="py-1.5 pr-2 align-top">{subjectName(s.subjectId)}</td>
                             <td className="py-1.5 pr-2 align-top font-semibold">{s.topic || <span className="font-normal text-ink-2">—</span>}</td>
-                            <td className="py-1.5 pr-2 align-top">{s.taughtNote}</td>
+                            <td className="py-1.5 pr-2 align-top">
+                              <GrowingTextarea
+                                value={s.plan ?? ""}
+                                onChange={(e) => updateSlot(s.id, { plan: e.target.value.slice(0, 2000) })}
+                                placeholder="Στόχοι…"
+                                aria-label={`Στόχοι: ${dayName(s.date)} ${s.start}`}
+                                rows={1}
+                                className="no-print -mx-1 block w-full resize-none rounded bg-transparent px-1 text-[12.5px] leading-snug outline-none placeholder:text-amber hover:bg-line-2 focus:bg-brand-50"
+                              />
+                              <span className="hidden whitespace-pre-line print:block">{s.plan}</span>
+                            </td>
                             <td className="py-1.5 align-top text-ink-2">
                               {s.materialIds
                                 .map((id) => materials.find((m) => m.id === id)?.title)
@@ -417,8 +458,10 @@ function MobileList({
   subjectName,
   className,
   missingText,
+  showPlan,
 }: {
   missingText: string;
+  showPlan?: boolean;
   days: { date: string; items: { slot?: LessonSlot; text?: string; remark?: string; missing?: boolean }[] }[];
   empty: string;
   subjectName: (id: string) => string;
@@ -443,7 +486,7 @@ function MobileList({
                       {it.remark && <span className="text-amber"> · {it.remark}</span>}
                     </p>
                     {it.slot.topic && <p className="font-semibold">{it.slot.topic}</p>}
-                    {it.slot.taughtNote && <p className="text-[14px] text-ink-2">{it.slot.taughtNote}</p>}
+                    {showPlan ? it.slot.plan && <p className="text-[14px] text-ink-2">{it.slot.plan}</p> : it.slot.taughtNote && <p className="text-[14px] text-ink-2">{it.slot.taughtNote}</p>}
                     {it.missing && !it.slot.topic && !it.slot.taughtNote && <p className="text-[14px] text-amber">{missingText}</p>}
                   </Link>
                 </li>
@@ -460,6 +503,69 @@ function MobileList({
   );
 }
 
+/** «Στόχοι / Δραστηριότητες»: written by the AI from subject, grade and topic (never names), or by hand. */
+function Objectives({
+  lessons,
+  grade,
+  subjectName,
+  label,
+}: {
+  lessons: LessonSlot[];
+  grade: (classId: string) => string;
+  subjectName: (id: string) => string;
+  label: (s: LessonSlot) => string;
+}) {
+  const updateSlot = useApp((s) => s.updateSlot);
+  const setPlans = useApp((s) => s.setPlans);
+  const demo = useApp((s) => s.mode) !== "cloud";
+  const country = useApp((s) => s.profile.country);
+  const [busy, setBusy] = useState(false);
+  const withTopic = lessons.filter((s) => s.topic.trim());
+
+  const fill = async () => {
+    setBusy(true);
+    const r = await aiObjectives(
+      withTopic.map((s) => ({ id: s.id, subject: subjectName(s.subjectId), grade: grade(s.classId), topic: s.topic })),
+      country,
+      demo,
+    );
+    setBusy(false);
+    if (!r.ok) return toast(r.error);
+    const undo = setPlans(r.data);
+    const n = Object.keys(r.data).length;
+    toast(`Στόχοι σε ${n} ${n === 1 ? "μάθημα" : "μαθήματα"} · έλεγξέ τους πριν την εκτύπωση`, { label: "Αναίρεση", run: undo });
+  };
+
+  return (
+    <div className="mb-4 grid grid-cols-1 gap-2">
+      {withTopic.length > 0 && (
+        <Card className="flex flex-wrap items-center gap-3 border-brand-100 bg-brand-50 p-4">
+          <Sparkles className="size-5 shrink-0 text-brand-500" />
+          <div className="min-w-0 flex-1">
+            <p className="font-bold">
+              {withTopic.length} {withTopic.length === 1 ? "μάθημα χωρίς στόχους" : "μαθήματα χωρίς στόχους"}
+            </p>
+            <p className="text-sm text-ink-2">Από το μάθημα, την τάξη και το θέμα. Κανένα όνομα μαθητή δεν φεύγει.</p>
+          </div>
+          <Button onClick={fill} disabled={busy} className="w-full sm:w-auto">
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Συμπλήρωσε στόχους
+          </Button>
+        </Card>
+      )}
+      <Gaps
+        title="Στόχοι με το χέρι"
+        hint="Γράψε στόχους ή δραστηριότητες για όποιο μάθημα θέλεις."
+        lessons={lessons}
+        label={label}
+        placeholder={() => "π.χ. Να συγκρίνουν κλάσματα · παιχνίδι με κάρτες"}
+        onSave={(s, text) => updateSlot(s.id, { plan: text })}
+        done="Αποθηκεύτηκε"
+        tone="plain"
+      />
+    </div>
+  );
+}
+
 /** Lessons that need one more line before printing, fillable in place. */
 function Gaps({
   title,
@@ -469,7 +575,9 @@ function Gaps({
   placeholder,
   onSave,
   done,
+  tone = "warn",
 }: {
+  tone?: "warn" | "plain";
   title: string;
   hint: string;
   lessons: LessonSlot[];
@@ -481,9 +589,9 @@ function Gaps({
   const [open, setOpen] = useState(false);
   const [text, setText] = useState<Record<string, string>>({});
   return (
-    <Card className="mb-4 border-amber-100 bg-amber-50 p-4">
+    <Card className={cx("p-4", tone === "warn" && "mb-4 border-amber-100 bg-amber-50")}>
       <div className="flex items-start gap-3">
-        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber" />
+        {tone === "warn" && <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber" />}
         <div className="min-w-0 flex-1">
           <p className="font-bold">{title}</p>
           <p className="text-sm text-ink-2">{hint}</p>

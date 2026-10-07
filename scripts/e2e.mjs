@@ -492,6 +492,35 @@ async function prepareFlow(name) {
 }
 
 /** The syllabus, given once: topics over the year; a lesson that didn't happen moves it on. */
+async function programmeFlow(name) {
+  console.log(`\n## ${name}`);
+  for (const [w, h] of [[390, 844], [1280, 900]]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, locale: "el-GR", ...(w < 500 && { isMobile: true, hasTouch: true, deviceScaleFactor: 2 }) });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+    await page.goto(BASE + "/login");
+    await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+    await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+    await page.goto(`${BASE}/journal?view=plan&class=all&d=2026-10-05`);
+    await page.getByRole("radio", { name: "Δεκαπενθήμερο" }).click();
+    await page.getByRole("heading", { name: "Δεκαπενθήμερος προγραμματισμός" }).first().waitFor();
+    assert(true, `${w}px: fortnightly programme opens`);
+    await page.getByRole("button", { name: "Συμπλήρωσε στόχους" }).click();
+    await page.getByText(/Στόχοι σε \d+ μαθήματα/).waitFor();
+    const text = w < 500 ? await page.locator("main").innerText() : await page.locator("article textarea").first().inputValue();
+    assert(/Να κατανοήσουν/.test(text), `${w}px: objectives filled in for the lessons`);
+    const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert(wide <= 0, `${w}px: programme page doesn't scroll sideways (${wide})`);
+    await page.screenshot({ path: path.join(OUT, `${name}-${w}.png`), fullPage: false });
+    if (w > 500) {
+      await page.getByRole("button", { name: "Αναίρεση" }).click();
+      await page.waitForTimeout(300);
+      assert((await page.locator("article textarea").first().inputValue()) === "", "undo clears the objectives again");
+    }
+    await ctx.close();
+  }
+}
+
 async function syllabusFlow(name) {
   console.log(`\n## ${name}`);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
@@ -527,6 +556,7 @@ async function syllabusFlow(name) {
 
 try {
   await syllabusFlow("syllabus");
+  await programmeFlow("programme");
   await prepareFlow("prepare");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
