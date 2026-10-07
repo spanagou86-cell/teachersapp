@@ -27,6 +27,8 @@ create table private.push_config (
   url text not null,
   secret text not null
 );
+-- Locked as well: only the job below (running as the owner) reads it.
+alter table private.push_config enable row level security;
 
 -- One reminder per duty, however often the job runs.
 create table private.push_log (
@@ -35,12 +37,13 @@ create table private.push_log (
   sent_at timestamptz not null default now(),
   primary key (owner, slot_id)
 );
+alter table private.push_log enable row level security;
 
 create extension if not exists pg_net with schema extensions;
 create extension if not exists pg_cron with schema pg_catalog;
 
 create or replace function private.send_duty_reminders() returns void
-language plpgsql security definer set search_path = '' as $$
+language plpgsql security definer set search_path = '' as $fn$
 declare
   cfg record;
   msgs jsonb;
@@ -92,7 +95,7 @@ begin
     );
   end if;
 end;
-$$;
+$fn$;
 revoke all on function private.send_duty_reminders() from public, anon, authenticated;
 
 select cron.schedule('taxi-duty-reminders', '* * * * *', 'select private.send_duty_reminders()');
