@@ -7,6 +7,7 @@ import { isSchoolDay, yearFor, type Country } from "../schoolYear";
 import { materialize } from "../timetable";
 import type {
   AttendanceRecord,
+  Check,
   Block,
   ClassGroup,
   ClassNote,
@@ -174,7 +175,7 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
   const meta = (await db.auth.getSession()).data.session?.user.user_metadata;
   const from = addDays(today, -120);
   const to = addDays(today, 240);
-  const [profile, classes, students, slotRows, links, entries, materials, versions, attendance, tasks, notes, studentNotes, plans] = await Promise.all([
+  const [profile, classes, students, slotRows, links, entries, materials, versions, attendance, tasks, notes, studentNotes, plans, checks] = await Promise.all([
     db.from("profiles").select("display_name, school_name, onboarded, country").eq("id", userId).maybeSingle().then(check),
     db.from("classes").select("id, name, grade, room").order("name").then(check),
     db.from("students").select("id, class_id, first_name, last_name").order("sort").order("first_name").then(check),
@@ -202,6 +203,7 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
       db.from("student_notes").select("id, student_id, kind, date, text, created_at").order("date", { ascending: false }).range(a, b),
     ),
     plansIn(from, to),
+    checksIn(from, to),
   ]);
   const split = splitSlots(slotRows, links);
 
@@ -226,7 +228,7 @@ export async function loadAll(userId: string, today: string): Promise<CloudData>
       firstName: s.first_name,
       lastName: s.last_name,
     })),
-    slots: withPlans(split.slots, plans),
+    slots: withChecks(withPlans(split.slots, plans), checks),
     blocks: split.blocks,
     timetable: (entries as EntryRow[]).map(toEntry),
     materials: (materials as MaterialRow[]).map((m) => toMaterial(m, versionsBy.get(m.id) ?? [])),
@@ -271,6 +273,23 @@ async function plansIn(from: string, to: string): Promise<Map<string, string>> {
   planColumn = true;
   return new Map((data as { id: string; plan: string }[]).map((r) => [r.id, r.plan]));
 }
+/** False until migration 0009 has added lesson_slots.checks; the ✓/~/✗ then stay on this device only. */
+let checksColumn = true;
+export const checksSync = () => checksColumn;
+
+/** How the pupils did in each lesson of a period. Never fails: an older database simply has none. */
+async function checksIn(from: string, to: string): Promise<Map<string, Record<string, Check>>> {
+  const { data, error } = await supabase().from("lesson_slots").select("id, checks").gte("date", from).lte("date", to).neq("checks", "{}").limit(5000);
+  if (error) {
+    checksColumn = false;
+    return new Map();
+  }
+  checksColumn = true;
+  return new Map((data as { id: string; checks: Record<string, Check> }[]).map((r) => [r.id, r.checks ?? {}]));
+}
+const withChecks = (slots: LessonSlot[], checks: Map<string, Record<string, Check>>) =>
+  checks.size ? slots.map((s) => (checks.has(s.id) ? { ...s, checks: checks.get(s.id) } : s)) : slots;
+
 /** Progress reports (ΣΕΠ). `undefined` when the database has no table for them yet. */
 export async function fetchReports(): Promise<ProgressReport[] | undefined> {
   const { data, error } = await supabase().from("progress_reports").select("student_id, year, term, ratings, texts, reviewed, updated_at").limit(5000);
@@ -344,7 +363,8 @@ export const remote = {
       ),
       all<{ slot_id: string; material_id: string }>((a, b) => db().from("slot_materials").select("slot_id, material_id").range(a, b)),
     ]);
-    return withPlans(splitSlots(rows, links).slots, await plansIn(from, to));
+    const [plans, checks] = await Promise.all([plansIn(from, to), checksIn(from, to)]);
+    return withChecks(withPlans(splitSlots(rows, links).slots, plans), checks);
   },
 
   /** A class's attendance over any period (the app keeps only recent months in memory). */
@@ -419,13 +439,14 @@ export const remote = {
         ),
     ),
 
-  updateSlot: async (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic" | "carriedToId" | "plan">>) => {
+  updateSlot: async (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic" | "carriedToId" | "plan" | "checks">>) => {
     const row = {
       ...(patch.status !== undefined && { status: patch.status }),
       ...(patch.taughtNote !== undefined && { taught_note: patch.taughtNote }),
       ...(patch.topic !== undefined && { topic: patch.topic }),
       ...("carriedToId" in patch && { carried_to_id: patch.carriedToId ?? null }),
       ...(patch.plan !== undefined && planColumn && { plan: patch.plan }),
+      ...(patch.checks !== undefined && checksColumn && { checks: patch.checks }),
     };
     if (Object.keys(row).length) await run(db().from("lesson_slots").update(row).eq("id", id));
   },

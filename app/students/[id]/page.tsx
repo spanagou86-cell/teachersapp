@@ -10,6 +10,9 @@ import { toast } from "@/components/toast";
 import { Avatar, Button, ButtonLink, Card, cx, EmptyState, Field, inputClass, Segmented, Select, Sheet } from "@/components/ui";
 import { longDate } from "@/lib/dates";
 import { useApp } from "@/lib/store";
+import { useSubjects } from "@/lib/store/hooks";
+import { pupilBySubject } from "@/lib/checks";
+import { SubjectIcon } from "@/components/subject";
 import type { Student } from "@/lib/types";
 import { AutoText } from "@/components/text";
 
@@ -153,6 +156,8 @@ export default function StudentPage() {
         ))}
       </div>
 
+      <HowItGoes studentId={student.id} />
+
       <Card className="mb-6 p-4">
         <Segmented<"note" | "parent">
           value={kind}
@@ -236,5 +241,40 @@ export default function StudentPage() {
         </ol>
       )}
     </div>
+  );
+}
+
+/** «Πώς τα πάει»: the ✓ · ~ · ✗ ticked after each lesson, per subject. */
+function HowItGoes({ studentId }: { studentId: string }) {
+  const slots = useApp((s) => s.slots);
+  const subjects = useSubjects();
+  const by = pupilBySubject(slots, studentId);
+  const rows = subjects.map((sub) => ({ sub, t: by[sub.id] })).filter((r) => r.t);
+  if (!rows.length) return null;
+  return (
+    <Card className="mb-5 p-4">
+      <h2 className="mb-3 text-[15px] font-bold">Πώς τα πάει στα μαθήματα</h2>
+      <ul className="grid gap-3">
+        {rows.map(({ sub, t }) => {
+          const total = t!.y + t!.p + t!.n;
+          return (
+            <li key={sub.id} className="grid gap-1.5">
+              <div className="flex items-center gap-2 text-[14px]">
+                <SubjectIcon id={sub.id} size="sm" className="!size-6 [&>svg]:!size-3.5" />
+                <span className="min-w-0 flex-1 font-semibold">{sub.name}</span>
+                <span className="text-[12.5px] font-semibold tabular-nums text-muted">
+                  {t!.y} ✓ · {t!.p} ~ · {t!.n} ✗
+                </span>
+              </div>
+              <div className="flex h-2 overflow-hidden rounded-full bg-line-2" aria-hidden>
+                <span className="bg-emerald-500" style={{ width: `${(t!.y / total) * 100}%` }} />
+                <span className="bg-amber-400" style={{ width: `${(t!.p / total) * 100}%` }} />
+                <span className="bg-danger" style={{ width: `${(t!.n / total) * 100}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }

@@ -910,6 +910,40 @@ async function boardFlow(name) {
   await ctx.close();
 }
 
+/** The closed loop: ✓ · ~ · ✗ after the lesson → a follow-up sheet in the next one → the pupil's page and the ΣΕΠ. */
+async function loopFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  await page.goto(`${BASE}/lessons/l-2026-10-05-0745`);
+  await page.getByRole("button", { name: /Μετά/ }).click();
+  await page.getByRole("heading", { name: "Πώς τα πήγαν τα παιδιά;" }).waitFor();
+  const pupil = (n) => page.getByRole("list", { name: "Μαθητές" }).getByRole("button", { name: new RegExp(`^${n}:`) });
+  await pupil("Νίκος Π.").click();
+  await pupil("Νίκος Π.").click();
+  for (let k = 0; k < 3; k++) await pupil("Ελένη Α.").click();
+  assert((await pupil("Ελένη Α.").getAttribute("aria-label")).endsWith("δυσκολεύτηκε"), "three taps: ✗ struggled");
+  await page.getByRole("button", { name: "Οι υπόλοιποι ✓" }).click();
+  await page.getByText("22 ✓ · 1 ~ · 1 ✗").waitFor();
+  assert(true, "«Οι υπόλοιποι ✓» ticks the rest: 22 ✓ · 1 ~ · 1 ✗");
+  await page.getByText(/2 παιδιά χρειάζονται ενίσχυση/).waitFor();
+  await page.screenshot({ path: path.join(OUT, `${name}-01-checks.png`), fullPage: true });
+  await page.getByRole("button", { name: "Φύλλο ενίσχυσης" }).click();
+  await page.waitForURL(/\/materials\/[0-9a-f-]{36}\?created=1&slot=l-2026-10-06-0925/);
+  assert(true, "a follow-up sheet goes to the next Ελληνικά lesson (Tuesday 09:25)");
+  await page.goto(`${BASE}/students/d1-s2`);
+  await page.getByText("Πώς τα πάει στα μαθήματα").waitFor();
+  assert((await page.getByText("0 ✓ · 1 ~ · 0 ✗").count()) === 1, "the pupil's page shows how it goes per subject");
+  await page.goto(`${BASE}/classes/d1/sep?tab=learning&s=d1-s3`);
+  await page.getByText(/Στα μαθήματα του τετραμήνου:/).first().waitFor();
+  assert((await page.getByText("0 ✓ · 0 ~ · 1 ✗").count()) >= 1, "…and the ΣΕΠ shows the term's ticks beside Ελληνικά");
+  await ctx.close();
+}
+
 try {
   await syllabusFlow("syllabus");
   await programmeFlow("programme");
@@ -922,6 +956,7 @@ try {
   await bookPagesFlow("pages");
   await weekFlow("week");
   await boardFlow("board");
+  await loopFlow("loop");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
   await dark("dark-mobile", { width: 390, height: 844 }, true);

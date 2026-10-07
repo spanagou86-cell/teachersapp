@@ -32,6 +32,7 @@ import {
   type Term,
   type TextKey,
 } from "@/lib/sep";
+import { pupilBySubject } from "@/lib/checks";
 import { useApp } from "@/lib/store";
 import { remote } from "@/lib/store/remote";
 import { useReports } from "@/lib/store/reports";
@@ -426,6 +427,7 @@ function Report() {
   const [printAll, setPrintAll] = useState(false);
 
   const yearInfo = yearFor(profile.country, clock.today);
+  const slots = useApp((s) => s.slots);
   const year = schoolYearStart(clock.today);
   const term: Term = params.get("term") === "2" ? 2 : params.get("term") === "1" ? 1 : termFor(yearInfo, clock.today);
   const tab: Tab = (["skills", "learning", "texts"] as const).find((t) => t === params.get("tab")) ?? "skills";
@@ -607,6 +609,16 @@ function Report() {
                 ).map((g) => (
                   <Card key={g.title} className="px-4 py-2">
                     <h2 className="pt-2 text-[13px] font-bold uppercase tracking-wide text-muted">{g.title}</h2>
+                    {/* What the lessons of the term say: the ✓ · ~ · ✗ ticked after each one. */}
+                    {(() => {
+                      const id = g.title === "Ελληνικά" ? "glossa" : g.title === "Μαθηματικά" ? "math" : undefined;
+                      const t = id && pupilBySubject(slots, student.id, termRange(yearInfo, term).from, termRange(yearInfo, term).to)[id];
+                      return t ? (
+                        <p className="mt-1 rounded-lg bg-bg px-2.5 py-1.5 text-[12.5px] text-ink-2">
+                          Στα μαθήματα του τετραμήνου: <b className="tabular-nums">{t.y} ✓ · {t.p} ~ · {t.n} ✗</b>
+                        </p>
+                      ) : null;
+                    })()}
                     <ul>
                       {g.list.map((a) => (
                         <Row key={a.id} label={a.label}>

@@ -101,7 +101,7 @@ interface Actions {
   deleteStudentNote: (id: string) => void;
   markAllPresent: (classId: string, date: string) => void;
 
-  updateSlot: (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic" | "plan">>) => void;
+  updateSlot: (id: string, patch: Partial<Pick<LessonSlot, "status" | "taughtNote" | "topic" | "plan" | "checks">>) => void;
   /** Day, time, class or subject of one lesson. Refuses times already taken. */
   editSlot: (id: string, patch: Pick<LessonSlot, "date" | "start" | "end" | "classId" | "subjectId">) => { ok: true } | { ok: false; conflicts: TimeWindow[] };
   /** Removes one lesson; returns it so "Αναίρεση" can bring it back. */
@@ -522,7 +522,8 @@ export const useApp = create<AppState>()(
 
         updateSlot: (id, patch) => {
           set((s) => ({ slots: s.slots.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
-          const typed = Object.keys(patch).length === 1 && (patch.taughtNote !== undefined ? "taughtNote" : patch.plan !== undefined ? "plan" : undefined);
+          const typed =
+            Object.keys(patch).length === 1 && (patch.taughtNote !== undefined ? "taughtNote" : patch.plan !== undefined ? "plan" : patch.checks !== undefined ? "checks" : undefined);
           if (typed) {
             // Text is saved as the teacher types; wait for a pause.
             const key = `${id}|${typed}`;
@@ -532,7 +533,7 @@ export const useApp = create<AppState>()(
               setTimeout(() => {
                 noteTimers.delete(key);
                 const slot = get().slots.find((x) => x.id === id);
-                if (slot) sync(() => remote.updateSlot(id, { [typed]: slot[typed] ?? "" }));
+                if (slot) sync(() => remote.updateSlot(id, typed === "checks" ? { checks: slot.checks ?? {} } : { [typed]: slot[typed] ?? "" }));
               }, 700),
             );
             return;

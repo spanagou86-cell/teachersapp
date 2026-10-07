@@ -21,7 +21,8 @@ import { holidayOn, type Country } from "@/lib/schoolYear";
 import { kindLabel, periodsFrom } from "@/lib/timetable";
 import { attendanceFor, useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
-import type { LessonSlot, LessonStatus, TimeBlock } from "@/lib/types";
+import type { Check as PupilCheck, LessonSlot, LessonStatus, TimeBlock } from "@/lib/types";
+import { CHECK_LABEL, nextCheck, nextOfSame, tally } from "@/lib/checks";
 
 const NOTE_MAX = 2000;
 const NOTE_CHIPS = ["Ολοκληρώθηκε η ενότητα", "Μέχρι την άσκηση 2", "Χρειάζεται επανάληψη", "Δόθηκε εργασία για το σπίτι"];
@@ -511,6 +512,7 @@ export default function LessonPage() {
         {stage === "after" && (
           <>
             <TaughtCard slot={slot} future={future} withStatus />
+            {!future && <ChecksCard slot={slot} />}
             {canCarry && (
               <Card className="p-5">
                 <h2 className="mb-1 text-lg font-bold">Δεν ολοκληρώθηκε;</h2>
@@ -522,5 +524,102 @@ export default function LessonPage() {
       </div>
       <AttachSheet slot={slot} open={attachOpen} onClose={() => setAttachOpen(false)} />
     </div>
+  );
+}
+
+/**
+ * «Πώς τα πήγαν τα παιδιά;»: a tap per pupil (✓ · ~ · ✗). Those who struggled get a follow-up sheet
+ * in the next lesson; the ticks add up on the pupil's page and in the ΣΕΠ. Names never leave the device.
+ */
+function ChecksCard({ slot }: { slot: LessonSlot }) {
+  const slots = useApp((s) => s.slots);
+  const allStudents = useApp((s) => s.students);
+  const updateSlot = useApp((s) => s.updateSlot);
+  const attendance = useApp((s) => attendanceFor(s, slot.classId, slot.date));
+  const absent = new Set(attendance?.absentIds ?? []);
+  const pupils = allStudents.filter((x) => x.classId === slot.classId && !absent.has(x.id));
+  const checks = slot.checks ?? {};
+  const t = tally(checks);
+  const struggled = t.n + t.p;
+  const next = nextOfSame(slots, slot);
+  const set = (next: Record<string, PupilCheck>) => updateSlot(slot.id, { checks: next });
+  const tap = (id: string) => {
+    const c = nextCheck(checks[id]);
+    const copy = { ...checks };
+    if (c) copy[id] = c;
+    else delete copy[id];
+    set(copy);
+  };
+  const mark: Record<PupilCheck, { sign: string; cls: string }> = {
+    y: { sign: "✓", cls: "border-emerald-300 bg-emerald-50 text-emerald-800" },
+    p: { sign: "~", cls: "border-amber-100 bg-amber-50 text-amber" },
+    n: { sign: "✗", cls: "border-danger/30 bg-danger-50 text-danger" },
+  };
+  if (!pupils.length) return null;
+  return (
+    <Card className="p-5">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-bold">Πώς τα πήγαν τα παιδιά;</h2>
+        <button
+          type="button"
+          onClick={() => set(Object.fromEntries(pupils.map((p) => [p.id, checks[p.id] ?? "y"])) as Record<string, PupilCheck>)}
+          className="rounded-lg px-2 py-1 text-[13px] font-semibold text-brand-500 hover:bg-brand-50"
+        >
+          Οι υπόλοιποι ✓
+        </button>
+      </div>
+      <p className="mb-3 text-[13px] text-muted">Ένα πάτημα: ✓ κατάλαβε · δεύτερο: ~ μερικώς · τρίτο: ✗ δυσκολεύτηκε. Μένει μόνο εδώ.</p>
+      <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3" aria-label="Μαθητές">
+        {pupils.map((p) => {
+          const c = checks[p.id];
+          return (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => tap(p.id)}
+                aria-label={`${p.firstName} ${p.lastName}: ${c ? CHECK_LABEL[c] : "χωρίς σημείωση"}`}
+                className={cx(
+                  "flex h-11 w-full items-center gap-2 rounded-xl border px-2.5 text-left text-[14px] font-semibold transition-colors",
+                  c ? mark[c].cls : "border-line bg-surface text-ink-2 hover:bg-line-2",
+                )}
+              >
+                <span className="w-4 shrink-0 text-center text-[16px]">{c ? mark[c].sign : ""}</span>
+                <span className="min-w-0 truncate">
+                  {p.firstName} {p.lastName}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {t.y + struggled > 0 && (
+        <p className="mt-3 text-[13px] font-semibold tabular-nums text-ink-2" role="status">
+          {t.y} ✓ · {t.p} ~ · {t.n} ✗
+        </p>
+      )}
+      {struggled > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-amber-50 p-3">
+          <p className="min-w-0 flex-1 text-[14px]">
+            <b>
+              {struggled} {struggled === 1 ? "παιδί χρειάζεται" : "παιδιά χρειάζονται"} ενίσχυση
+            </b>
+            {slot.topic && <> στο «{slot.topic}»</>}.{" "}
+            {next ? `Ένα φύλλο ενίσχυσης για ${dayName(next.date)} ${next.start};` : "Ένα φύλλο ενίσχυσης;"}
+          </p>
+          <Button
+            size="sm"
+            onClick={() =>
+              openPrepare({
+                slotId: next?.id ?? slot.id,
+                // Only the topic goes to the AI: never who struggled.
+                text: `Φύλλο ενίσχυσης για όσους δυσκολεύτηκαν${slot.topic ? ` στο «${slot.topic}»` : ""}: πιο απλές ασκήσεις, με παράδειγμα και βοήθεια βήμα-βήμα, από τις πολύ εύκολες προς τις βασικές.`,
+              })
+            }
+          >
+            <Sparkles className="size-4" /> Φύλλο ενίσχυσης
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }

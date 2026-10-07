@@ -44,6 +44,9 @@ export interface Student {
 
 export type LessonStatus = "planned" | "done" | "partial" | "skipped";
 
+/** ✓ understood · ~ partly · ✗ struggled. */
+export type Check = "y" | "p" | "n";
+
 export interface LessonSlot {
   id: string;
   date: ISODate;
@@ -57,6 +60,8 @@ export interface LessonSlot {
   taughtNote: string;
   /** Στόχοι / δραστηριότητες for the weekly programme (Κ.Δ.Π. 168/2024 άρθρο 39). */
   plan?: string;
+  /** How each pupil did, ticked after the lesson: understood, partly, struggled. */
+  checks?: Record<string, Check>;
   carriedFromId?: string;
   carriedToId?: string;
 }
