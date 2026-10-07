@@ -120,3 +120,4 @@ export const FileQuestion = make(T.IconFileUnknown, "FileQuestion");
 export const Redo2 = make(T.IconArrowForwardUp, "Redo2");
 export const Type = make(T.IconTypography, "Type");
 export const Undo2 = make(T.IconArrowBackUp, "Undo2");
+export const ClipboardCheck = make(T.IconClipboardCheck, "ClipboardCheck");

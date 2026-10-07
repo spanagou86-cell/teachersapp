@@ -1,5 +1,6 @@
 "use client";
 
+import type { ProgressReport, ReportTexts, Term } from "../sep";
 import { addDays } from "../dates";
 import { supabase } from "../supabase/client";
 import { isSchoolDay, yearFor, type Country } from "../schoolYear";
@@ -262,6 +263,31 @@ async function plansIn(from: string, to: string): Promise<Map<string, string>> {
   planColumn = true;
   return new Map((data as { id: string; plan: string }[]).map((r) => [r.id, r.plan]));
 }
+/** Progress reports (ΣΕΠ). `undefined` when the database has no table for them yet. */
+export async function fetchReports(): Promise<ProgressReport[] | undefined> {
+  const { data, error } = await supabase().from("progress_reports").select("student_id, year, term, ratings, texts, reviewed, updated_at").limit(5000);
+  if (error) return undefined;
+  return (data as { student_id: string; year: number; term: Term; ratings: ProgressReport["ratings"]; texts: ReportTexts; reviewed: boolean; updated_at: string }[]).map((r) => ({
+    studentId: r.student_id,
+    year: r.year,
+    term: r.term,
+    ratings: r.ratings ?? {},
+    texts: r.texts ?? {},
+    reviewed: r.reviewed,
+    updatedAt: Date.parse(r.updated_at),
+  }));
+}
+
+export async function saveReport(r: ProgressReport): Promise<boolean> {
+  const { error } = await supabase()
+    .from("progress_reports")
+    .upsert(
+      { student_id: r.studentId, year: r.year, term: r.term, ratings: r.ratings, texts: r.texts, reviewed: r.reviewed, updated_at: new Date(r.updatedAt).toISOString() },
+      { onConflict: "owner,student_id,year,term" },
+    );
+  return !error;
+}
+
 const withPlans = (slots: LessonSlot[], plans: Map<string, string>) => (plans.size ? slots.map((s) => (plans.has(s.id) ? { ...s, plan: plans.get(s.id) } : s)) : slots);
 const run = async (p: PromiseLike<{ error: { message: string } | null }>) => {
   const { error } = await p;
@@ -313,10 +339,20 @@ export const remote = {
     return withPlans(splitSlots(rows, links).slots, await plansIn(from, to));
   },
 
+  /** A class's attendance over any period (the app keeps only recent months in memory). */
+  fetchAttendance: async (classId: string, from: string, to: string): Promise<Record<string, AttendanceRecord>> => {
+    const rows = await all<{ class_id: string; date: string; absent_ids: string[]; late_ids: string[]; recorded_at: string }>((a, b) =>
+      db().from("attendance").select("class_id, date, absent_ids, late_ids, recorded_at").eq("class_id", classId).gte("date", from).lte("date", to).range(a, b),
+    );
+    return Object.fromEntries(rows.map((a) => [`${a.class_id}|${a.date}`, { absentIds: a.absent_ids, lateIds: a.late_ids, recordedAt: Date.parse(a.recorded_at) }]));
+  },
+
   /** Everything the teacher has stored, for "Κατέβασε τα δεδομένα μου" (GDPR portability). */
   exportAll: async (): Promise<Record<string, unknown[]>> => {
     const out: Record<string, unknown[]> = {};
     for (const t of TABLES) out[t] = await all<unknown>((a, b) => db().from(t).select("*").range(a, b));
+    const reports = await all<unknown>((a, b) => db().from("progress_reports").select("*").range(a, b)).catch(() => undefined);
+    if (reports) out.progress_reports = reports;
     return out;
   },
 

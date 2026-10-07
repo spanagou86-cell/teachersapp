@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookOpenCheck, CalendarClock, CalendarDays, CalendarOff, CheckCircle2, NotebookPen, Plus, Sparkles, Trash2 } from "@/components/icons";
+import { ArrowRight, BookOpenCheck, CalendarClock, CalendarDays, ClipboardCheck, CalendarOff, CheckCircle2, NotebookPen, Plus, Sparkles, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useState } from "react";
 import { needsLog, useClock } from "@/components/lesson";
@@ -13,7 +13,9 @@ import { Button, ButtonLink, Card, cx } from "@/components/ui";
 import { addDays, dayName, longDate, shortDate, startOfWeek, timeToMin, weekday } from "@/lib/dates";
 import { upcoming } from "@/lib/prepare";
 import { slotsOn, sortSlots, upcomingLesson } from "@/lib/schedule";
-import { holidayOn, termOn, weekNumber } from "@/lib/schoolYear";
+import { holidayOn, schoolYearStart, termOn, weekNumber } from "@/lib/schoolYear";
+import { reportKey } from "@/lib/sep";
+import { useReports } from "@/lib/store/reports";
 import { vocative } from "@/lib/greek";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
@@ -120,6 +122,10 @@ function Backlog() {
  */
 function NextStep() {
   const slots = useApp((s) => s.slots);
+  const classes = useApp((s) => s.classes);
+  const students = useApp((s) => s.students);
+  const country = useApp((s) => s.profile.country);
+  const reports = useReports((s) => s.reports);
   const subjects = useSubjects();
   const clock = useClock();
   const { today, now } = clock;
@@ -150,6 +156,32 @@ function NextStep() {
         </Button>
       </div>
     );
+  // ΣΕΠ season (mid-January, early June): how many reports are ready.
+  const md = today.slice(5);
+  const season = country === "cy" && ((md >= "01-07" && md <= "01-31") || (md >= "05-25" && md <= "06-15"));
+  if (season && classes.length) {
+    const year = schoolYearStart(today);
+    const term = md <= "01-31" ? 1 : 2;
+    const roster = students.filter((s) => classes.some((c) => c.id === s.classId));
+    const ready = roster.filter((s) => reports[reportKey(s.id, year, term)]?.reviewed).length;
+    if (roster.length && ready < roster.length)
+      return (
+        <div className={box}>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
+            <ClipboardCheck className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Σχολική Έκθεση Προόδου · {term === 1 ? "Α΄" : "Β΄"} τετράμηνο</p>
+            <p className="text-[13px] text-muted">
+              {ready} από {roster.length} έτοιμες · ★ με ένα άγγιγμα, προσχέδια σχολίων με AI
+            </p>
+          </div>
+          <ButtonLink size="sm" href={`/classes/${classes[0].id}/sep`}>
+            Συνέχεια
+          </ButtonLink>
+        </div>
+      );
+  }
   // Friday afternoon: next week's programme, ready to check and hand to the head teacher.
   if (weekday(today) === 5 && (dayOver || timeToMin(now) >= 12 * 60)) {
     const monday = addDays(startOfWeek(today), 7);

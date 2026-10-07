@@ -1,5 +1,8 @@
 "use client";
 
+// Progress reports follow the signed-in teacher (and are wiped on sign-out) from the first screen.
+import "@/lib/store/reports";
+
 import clsx from "clsx";
 import { Bell, Loader2, LogOut, Search, Settings, Sparkles } from "@/components/icons";
 import Link from "next/link";

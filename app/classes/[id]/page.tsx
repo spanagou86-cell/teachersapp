@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { BookOpenCheck, CalendarDays, CheckCheck, ChevronLeft, ChevronRight, Info, NotebookPen, Pencil, Plus, Trash2, Users } from "@/components/icons";
+import { BookOpenCheck, CalendarDays, ClipboardCheck, CheckCheck, ChevronLeft, ChevronRight, Info, NotebookPen, Pencil, Plus, Trash2, Users } from "@/components/icons";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -13,7 +13,9 @@ import { toast } from "@/components/toast";
 import { Avatar, Button, ButtonLink, Card, cx, EmptyState, inputClass, Segmented } from "@/components/ui";
 import { addDays, dayName, isISODate, longDate, shortDate, weekday } from "@/lib/dates";
 import { sortSlots } from "@/lib/schedule";
-import { holidayOn } from "@/lib/schoolYear";
+import { holidayOn, schoolYearStart, yearFor } from "@/lib/schoolYear";
+import { reportKey, termFor } from "@/lib/sep";
+import { useReports } from "@/lib/store/reports";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import type { ClassGroup, Student } from "@/lib/types";
@@ -176,6 +178,11 @@ function Progress({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
   const subjects = useSubjects();
   const attendance = useApp((s) => s.attendance);
   const today = useApp((s) => s.today);
+  const country = useApp((s) => s.profile.country);
+  const reports = useReports((s) => s.reports);
+  const year = schoolYearStart(today);
+  const term = termFor(yearFor(country, today), today);
+  const ready = roster.filter((st) => reports[reportKey(st.id, year, term)]?.reviewed).length;
   const past = useMemo(() => sortSlots(slots.filter((s) => s.classId === cls.id && s.date <= today)), [slots, cls.id, today]);
   const recorded = Object.entries(attendance).filter(([k]) => k.startsWith(`${cls.id}|`));
   const absences = roster
@@ -185,6 +192,22 @@ function Progress({ cls, roster }: { cls: ClassGroup; roster: Student[] }) {
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      {country === "cy" && (
+        <Card className="flex flex-wrap items-center gap-3 p-5 lg:col-span-2">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
+            <ClipboardCheck className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-bold">Σχολική Έκθεση Προόδου</h2>
+            <p className="text-sm text-muted">
+              {ready} από {roster.length} έτοιμες για το {term === 1 ? "Α΄" : "Β΄"} τετράμηνο · ★ με ένα άγγιγμα, προσχέδια σχολίων με AI
+            </p>
+          </div>
+          <ButtonLink href={`/classes/${cls.id}/sep`} className="w-full sm:w-auto">
+            {ready ? "Συνέχεια" : "Ξεκίνα"}
+          </ButtonLink>
+        </Card>
+      )}
       <Card className="p-5">
         <div className="mb-4 flex items-center justify-between gap-2">
           <h2 className="text-lg font-bold">Ύλη ανά μάθημα</h2>

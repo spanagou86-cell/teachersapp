@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AiError, aiConfigured, callTool, type Part } from "@/lib/ai/claude";
-import { ADAPT_SYSTEM, ADAPT_TOOL, createSystem, CREATE_TOOL, CY_MATHS_PROGRAMME, isCountry, LEVELS_TOOL, objectivesSystem, OBJECTIVES_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, SYLLABUS_SYSTEM, SYLLABUS_TOOL, timetableSystem, TIMETABLE_TOOL } from "@/lib/ai/prompts";
+import { ADAPT_SYSTEM, ADAPT_TOOL, createSystem, CREATE_TOOL, CY_MATHS_PROGRAMME, isCountry, LEVELS_TOOL, objectivesSystem, OBJECTIVES_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, SEP_SYSTEM, SEP_TOOL, SYLLABUS_SYSTEM, SYLLABUS_TOOL, timetableSystem, TIMETABLE_TOOL } from "@/lib/ai/prompts";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -180,6 +180,23 @@ export async function POST(req: NextRequest) {
         }
         content.push({ type: "text", text: `Μάθημα: ${str("subject")} · Τάξη: ${str("gradeLabel")}` });
         const out = await callTool<{ items: unknown[]; notes?: string }>({ tier: "quality", system: SYLLABUS_SYSTEM, content, tool: SYLLABUS_TOOL, maxTokens: 8000 });
+        return NextResponse.json(out);
+      }
+      case "sep": {
+        // A child's ratings with their labels, grade and gender: never a name or a note.
+        const lines = (Array.isArray(body.ratings) ? body.ratings : [])
+          .slice(0, 60)
+          .map((x: Record<string, unknown>) => `${String(x?.label ?? "").slice(0, 80)}: ${String(x?.value ?? "").slice(0, 40)}`)
+          .join("\n");
+        if (!lines.trim()) return fail(400, "Βάλε πρώτα βαθμίδες.");
+        const gender = body.gender === "f" ? "κορίτσι" : "αγόρι";
+        const out = await callTool<Record<string, string>>({
+          tier: "quality",
+          system: SEP_SYSTEM,
+          content: [{ type: "text", text: `Τάξη: ${str("grade", 40)} · ${body.term === 2 ? "Β΄" : "Α΄"} τετράμηνο · Γένος: ${gender}\n\nΒαθμίδες:\n${lines}` }],
+          tool: SEP_TOOL,
+          maxTokens: 2500,
+        });
         return NextResponse.json(out);
       }
       case "objectives": {

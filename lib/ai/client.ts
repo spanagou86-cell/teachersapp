@@ -282,3 +282,65 @@ export async function aiObjectives(lessons: ObjectiveLesson[], country: string, 
   if (!Object.keys(out).length) return { ok: false, error: "Το AI δεν έδωσε στόχους. Ξαναδοκίμασε." };
   return { ok: true, data: out };
 }
+
+export interface SepRequest {
+  grade: string;
+  term: 1 | 2;
+  gender: "m" | "f";
+  ratings: { label: string; value: string; stars: number; group: "skill" | "greek" | "maths" | "other" }[];
+}
+export type SepTexts = Partial<Record<"greek.strengths" | "greek.growth" | "maths.strengths" | "maths.growth" | "other.strengths" | "other.growth" | "remarks", string>>;
+
+/** The demo's drafts: built from the same ratings, so they read like the real thing. */
+export function sampleSep(req: SepRequest): SepTexts {
+  const child = req.gender === "f" ? "Η μαθήτρια" : "Ο μαθητής";
+  const by = (g: SepRequest["ratings"][number]["group"]) => req.ratings.filter((r) => r.group === g).sort((a, b) => b.stars - a.stars);
+  const own = req.gender === "f" ? "της" : "του";
+  // «Ελληνικά · Παραγωγή γραπτού λόγου» → «παραγωγή γραπτού λόγου»
+  const lower = (label: string) => {
+    const s = label.split(" · ").at(-1)!;
+    return (s.charAt(0).toLowerCase() + s.slice(1)).replace(/του\/της/g, own);
+  };
+  const join = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(", ")} και ${items.at(-1)}` : items[0]);
+  const pair = (g: "greek" | "maths" | "other") => {
+    const list = by(g);
+    if (!list.length) return {};
+    const top = list.filter((r) => r.stars >= 3).slice(0, 2);
+    const low = list.filter((r) => r.stars <= 2).slice(-2);
+    return {
+      [`${g}.strengths`]: top.length ? `${child} ξεχωρίζει σε: ${join(top.map((r) => lower(r.label)))}.` : `${child} κάνει σταθερή προσπάθεια.`,
+      [`${g}.growth`]: low.length ? `Θα ωφεληθεί από επιπλέον εξάσκηση σε: ${join(low.map((r) => lower(r.label)))}, με μικρά, συχνά βήματα.` : "Να συνεχίσει με τον ίδιο ρυθμό, με πιο απαιτητικές δραστηριότητες.",
+    };
+  };
+  const skills = by("skill");
+  const best = skills.filter((r) => r.stars >= 3).slice(0, 2).map((r) => lower(r.label));
+  return {
+    ...pair("greek"),
+    ...pair("maths"),
+    ...pair("other"),
+    remarks: best.length ? `${child} ${join(best)}· συμβάλλει θετικά στο κλίμα της τάξης.` : `${child} προσαρμόζεται σταδιακά στους ρυθμούς της τάξης.`,
+  };
+}
+
+/** «✨ Προσχέδια σχολίων» for one child's ΣΕΠ. */
+export async function aiSep(req: SepRequest, demo: boolean): Promise<AiAnswer<SepTexts>> {
+  if (demo) return { ok: true, data: sampleSep(req) };
+  const r = await post<Record<string, unknown>>({ op: "sep", grade: req.grade, term: req.term, gender: req.gender, ratings: req.ratings.map((x) => ({ label: x.label, value: x.value })) });
+  if (!r.ok) return r.unavailable ? { ok: false, error: "Το AI δεν είναι ενεργό αυτή τη στιγμή. Γράψε τα σχόλια με το χέρι." } : r;
+  const clip = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, 600) : "");
+  const out: SepTexts = {};
+  for (const [from, to] of [
+    ["greek_strengths", "greek.strengths"],
+    ["greek_growth", "greek.growth"],
+    ["maths_strengths", "maths.strengths"],
+    ["maths_growth", "maths.growth"],
+    ["other_strengths", "other.strengths"],
+    ["other_growth", "other.growth"],
+    ["remarks", "remarks"],
+  ] as const) {
+    const v = clip(r.data[from]);
+    if (v) out[to] = v;
+  }
+  if (!Object.keys(out).length) return { ok: false, error: "Το AI δεν έδωσε κείμενα. Ξαναδοκίμασε." };
+  return { ok: true, data: out };
+}

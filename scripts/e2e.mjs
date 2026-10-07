@@ -521,6 +521,54 @@ async function programmeFlow(name) {
   }
 }
 
+async function sepFlow(name) {
+  console.log(`\n## ${name}`);
+  for (const [w, h] of [[390, 844], [1280, 900]]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, locale: "el-GR", ...(w < 500 && { isMobile: true, hasTouch: true, deviceScaleFactor: 2 }) });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+    await page.goto(BASE + "/login");
+    await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+    await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+    await page.goto(`${BASE}/classes/d1/sep`);
+    await page.getByRole("heading", { name: "Σχολική Έκθεση Προόδου" }).first().waitFor();
+    await page.getByRole("button", { name: "Όλη η τάξη ★★★ όπου λείπει" }).click();
+    await page.getByText(/★★★ σε \d+ κενά/).waitFor();
+    const focus = page.getByRole("radiogroup", { name: "Συγκεντρώνεται στο μάθημα" });
+    assert((await focus.getByRole("radio", { name: "Συχνά" }).getAttribute("aria-checked")) === "true", `${w}px: whole class gets ★★★ in one tap`);
+    await focus.getByRole("radio", { name: "Τις περισσότερες φορές" }).click();
+    assert((await focus.getByRole("radio", { name: "Τις περισσότερες φορές" }).getAttribute("aria-checked")) === "true", `${w}px: one tap changes an exception to ★★★★`);
+    let wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert(wide <= 0, `${w}px: skills screen doesn't scroll sideways (${wide})`);
+    await page.screenshot({ path: path.join(OUT, `${name}-${w}-skills.png`) });
+    await page.getByRole("radio", { name: "Μάθηση" }).click();
+    await page.getByRole("button", { name: "Όλη η τάξη ★★★ όπου λείπει" }).click();
+    await page.getByRole("radiogroup", { name: "Παραγωγή γραπτού λόγου" }).getByRole("radio", { name: "Επιτεύχθηκαν μερικώς" }).click();
+    await page.getByRole("radio", { name: "Σχόλια" }).click();
+    await page.getByRole("button", { name: "Γράψε προσχέδια" }).click();
+    await page.getByText(/Προσχέδια έτοιμα/).waitFor();
+    const growth = await page.getByLabel("Ελληνικά · Περιοχές ανάπτυξης").inputValue();
+    assert(/παραγωγή γραπτού λόγου/.test(growth), `${w}px: AI draft names the area to grow («${growth.slice(0, 60)}…»)`);
+    assert(await page.getByText("Προσχέδιο AI.").isVisible(), `${w}px: draft is marked until checked`);
+    await page.getByRole("checkbox", { name: /Τα έλεγξα/ }).check();
+    assert(!(await page.getByText("Προσχέδιο AI.").isVisible()), `${w}px: «Τα έλεγξα» clears the draft mark`);
+    wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert(wide <= 0, `${w}px: comments screen doesn't scroll sideways (${wide})`);
+    await page.screenshot({ path: path.join(OUT, `${name}-${w}-texts.png`), fullPage: true });
+    if (w > 500) {
+      await page.emulateMedia({ media: "print" });
+      await page.screenshot({ path: path.join(OUT, `${name}-print.png`), fullPage: true });
+      const printed = await page.locator(".print-doc").innerText();
+      assert(printed.includes("ΣΧΟΛΙΚΗ ΕΚΘΕΣΗ ΠΡΟΟΔΟΥ") && printed.includes("★★★★") && /παραγωγή γραπτού λόγου/.test(printed), "printed ΣΕΠ has the form, the stars and the comments");
+      await page.emulateMedia({ media: "screen" });
+      await page.reload();
+      await page.getByRole("checkbox", { name: /Τα έλεγξα/ }).waitFor();
+      assert(await page.getByRole("checkbox", { name: /Τα έλεγξα/ }).isChecked(), "ΣΕΠ is still there after a reload");
+    }
+    await ctx.close();
+  }
+}
+
 async function syllabusFlow(name) {
   console.log(`\n## ${name}`);
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
@@ -557,6 +605,7 @@ async function syllabusFlow(name) {
 try {
   await syllabusFlow("syllabus");
   await programmeFlow("programme");
+  await sepFlow("sep");
   await prepareFlow("prepare");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
