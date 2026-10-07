@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Columns2, Contrast, FileText, Lightbulb, Maximize2, Sparkles, TrendingDown, TrendingUp, X, Info, Loader2 } from "@/components/icons";
+import { Columns2, Contrast, FileText, Lightbulb, Maximize2, Plus, Sparkles, TrendingDown, TrendingUp, X, Info, Loader2 } from "@/components/icons";
 import { useState } from "react";
 import { aiAdapt } from "@/lib/ai/client";
 import { QUICK_ACTIONS, type AdaptResult, type QuickAction } from "@/lib/ai/mock";
@@ -15,6 +15,7 @@ import { FileBadge } from "../subject";
 import { formatBytes } from "@/lib/materials";
 
 const ICONS: Record<QuickAction, typeof FileText> = {
+  more: Plus,
   simpler: TrendingDown,
   harder: TrendingUp,
   versionAB: Columns2,
@@ -139,7 +140,7 @@ export function AdaptPanel({
           value={prompt}
           onChange={(e) => setPrompt(e.target.value.slice(0, 500))}
           rows={3}
-          placeholder="π.χ. Άλλαξε μόνο τη δεύτερη άσκηση, πιο απλά."
+          placeholder="π.χ. Βάλε άλλη μία ερώτηση · Πιο απλά η 2η άσκηση"
           aria-label="Οδηγία"
           className={cx(inputClass, "resize-none pb-6 pt-2.5")}
         />

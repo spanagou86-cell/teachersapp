@@ -1,10 +1,11 @@
 import { exerciseNumber } from "../materials";
 import type { Block, Level } from "../types";
-import { withLevel } from "./templates";
+import { addExercises, withLevel } from "./templates";
 
-export type QuickAction = "simpler" | "harder" | "versionAB" | "solutions" | "space" | "bw";
+export type QuickAction = "more" | "simpler" | "harder" | "versionAB" | "solutions" | "space" | "bw";
 
 export const QUICK_ACTIONS: { id: QuickAction; label: string }[] = [
+  { id: "more", label: "Μία ακόμη άσκηση" },
   { id: "simpler", label: "Πιο απλό" },
   { id: "harder", label: "Πιο απαιτητικό" },
   { id: "versionAB", label: "Δεύτερη εκδοχή" },
@@ -38,9 +39,32 @@ const ORDINALS: [RegExp, number][] = [
 
 const LEVELS: Level[] = ["basic", "standard", "advanced"];
 
+// Matched without accents, so «ασκήσεις», «ασκησεις» and «Άσκηση» all count.
+const plain = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const COUNTS: [RegExp, number][] = [
+  [/(^|\s)(μια|ενα|μιας)(\s|$)/, 1], [/(^|\s)δυο(\s|$)/, 2], [/(^|\s)(τρεις|τρια)(\s|$)/, 3], [/(^|\s)τεσσερ/, 4], [/(^|\s)πεντε(\s|$)/, 5],
+];
+const ITEM = "(ερωτησ|ερωτηση|ασκησ|προβλημ)\\S*";
+// The words that ask for more, as whole words: «άλλαξε» is not «άλλη».
+const ASK = "(^|\\s)(προσθεσ\\S*|βαλε|ακομη|ακομα|αλλη|αλλες|αλλο|αλλα|επιπλεον|νεα|νεες|νεο)";
+// A few words may sit between («βάλε άλλη μία ερώτηση»), but not «βάλε λύσεις στην άσκηση 2».
+const GAP = "(\\s+(?!στ|της|του|την|τη\\s)\\S+){0,3}\\s+";
+
+/** «βάλε άλλη μία ερώτηση», «πρόσθεσε 2 προβλήματα», «θέλω 10 ασκήσεις» → how many to add. */
+export function parseMore(prompt: string, current: number): number {
+  const p = plain(prompt);
+  const total = p.match(new RegExp(`(θελω|να γινουν|να εχει|συνολο)\\s+(\\d{1,2})\\s+${ITEM}`));
+  if (total) return Math.max(0, Math.min(Number(total[2]), 20) - current);
+  if (!new RegExp(`${ASK}${GAP}${ITEM}`).test(p) && !new RegExp(`${ITEM}\\s+(ακομη|ακομα|επιπλεον)`).test(p)) return 0;
+  const digits = p.match(new RegExp(`(\\d{1,2})\\s+(ακομη\\s+|ακομα\\s+|νε\\S*\\s+|επιπλεον\\s+)?${ITEM}`));
+  const n = digits ? Number(digits[1]) : (COUNTS.find(([re]) => re.test(p))?.[1] ?? 1);
+  return Math.max(1, Math.min(n, 10));
+}
+
 export function parsePrompt(prompt: string): { actions: QuickAction[]; exercise?: number } {
   const p = prompt.toLowerCase();
   const actions: QuickAction[] = [];
+  if (parseMore(p, 0) > 0) return { actions: ["more"] };
   if (/απλ|ευκολ|εύκολ/.test(p)) actions.push("simpler");
   if (/δύσκολ|δυσκολ|απαιτητ|πιο προχωρ/.test(p)) actions.push("harder");
   if (/λύσ|απαντήσ/.test(p)) actions.push("solutions");
@@ -88,6 +112,13 @@ export function adaptMaterial({ blocks, actions: quick, prompt, targetId }: Adap
     out = out.map((b) => (inScope(b) ? shift(b, 1) : b));
     notes.push(`πιο απαιτητική εκδοχή για ${scopeLabel}`);
   }
+  if (actions.has("more")) {
+    const current = blocks.filter((b) => b.type === "exercise").length;
+    const count = (quick.includes("more") ? 1 : 0) + parseMore(prompt, current + (quick.includes("more") ? 1 : 0));
+    const { blocks: more, added } = addExercises(out, count, "more-");
+    out = more;
+    if (added.length) notes.push(added.length === 1 ? "μία ακόμη άσκηση στο τέλος" : `${added.length} ακόμη ασκήσεις στο τέλος`);
+  }
   if (actions.has("space")) {
     out = out.map((b) => (inScope(b) ? { ...b, lines: Math.min((b.lines ?? 2) + 2, 8) } : b));
     notes.push("περισσότερο χώρο για απαντήσεις");
@@ -100,7 +131,8 @@ export function adaptMaterial({ blocks, actions: quick, prompt, targetId }: Adap
     notes.push(`μια υπόδειξη για ${scopeLabel}`);
   }
 
-  const changedIds = out.filter((b, i) => JSON.stringify(b) !== JSON.stringify(blocks[i])).map((b) => b.id);
+  const before = new Map(blocks.map((b) => [b.id, JSON.stringify(b)]));
+  const changedIds = out.filter((b) => before.get(b.id) !== JSON.stringify(b)).map((b) => b.id);
   const versionB = actions.has("versionAB")
     ? out.map((b) => (b.type === "exercise" && b.variantB ? { ...b, text: b.variantB.text, answer: b.variantB.answer } : b))
     : undefined;

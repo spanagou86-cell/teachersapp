@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
               text: [
                 `Μάθημα: ${str("subject")} · Τάξη: ${str("grade")}`,
                 `Ενέργειες: ${(Array.isArray(body.actions) ? body.actions : []).join(", ") || "—"}`,
-                str("target") && `Άλλαξε ΜΟΝΟ το block με id ${str("target")}.`,
+                str("target") && `Άλλαξε ΜΟΝΟ το block με id ${str("target")} (όσες νέες ασκήσεις ζητηθούν μπαίνουν στο τέλος).`,
                 `Οδηγία εκπαιδευτικού: ${str("prompt", 500) || "—"}`,
                 `Τρέχον υλικό (JSON):\n${blocks}`,
               ]

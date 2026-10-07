@@ -250,7 +250,7 @@ export function DocPage({
 
           return (
             // In print, a block never splits across pages and a heading stays with what follows it.
-            <div key={b.id} className={clsx("doc-block", b.type === "heading" && "doc-heading")}>
+            <div key={b.id} data-kind={b.type} className={clsx("doc-block", b.type === "heading" && "doc-heading")}>
               {i === 1 && isSheet && blocks[0]?.type === "heading" && (
                 <div className="mb-3 flex gap-6 text-sm text-ink-2">
                   <span className="flex flex-1 items-end gap-2">

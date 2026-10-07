@@ -87,6 +87,26 @@ async function flow(name, viewport, mobile) {
   await page.keyboard.press("Escape");
   await page.getByRole("dialog", { name: "Ιστορικό αλλαγών" }).waitFor({ state: "detached" });
 
+  // At least 5 exercises, and «βάλε άλλη μια ερώτηση» adds one more.
+  const exercisesOnSheet = () => page.locator('[data-kind="exercise"]:visible').count();
+  const before = await exercisesOnSheet();
+  assert(before >= 5, `a new worksheet has at least 5 exercises (${before})`);
+  await actions.getByRole("button", { name: "Άλλαξέ το" }).click();
+  await page.getByRole("textbox", { name: "Οδηγία" }).fill("βάλε άλλη μια ερώτηση");
+  await page.getByRole("button", { name: "Δημιουργία πρότασης" }).click();
+  await page.getByRole("button", { name: /Εφαρμογή/ }).first().click();
+  await page.waitForTimeout(200);
+  await page.waitForTimeout(300);
+  assert((await exercisesOnSheet()) === before + 1, `«βάλε άλλη μια ερώτηση» adds one exercise (${before} → ${await exercisesOnSheet()})`);
+  await actions.getByRole("button", { name: "Άλλαξέ το" }).click();
+  await page.getByRole("button", { name: "Μία ακόμη άσκηση" }).click();
+  await page.getByRole("button", { name: "Δημιουργία πρότασης" }).click();
+  await page.getByRole("button", { name: /Εφαρμογή/ }).first().waitFor();
+  await shot("04b-more");
+  await page.getByRole("button", { name: /Εφαρμογή/ }).first().click();
+  await page.waitForTimeout(200);
+  assert((await exercisesOnSheet()) === before + 2, "«Μία ακόμη άσκηση» adds one more");
+
   // Save: a clear button, and it says where the sheet is kept.
   await actions.getByRole("button", { name: "Αποθήκευση" }).click();
   await page.getByText(/Αποθηκεύτηκε στο Υλικό · Δ1/).waitFor();

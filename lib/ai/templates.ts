@@ -31,6 +31,57 @@ export function withLevel(block: Block, level: Level): Block {
   return { ...block, level, text: variant.text, answer: variant.answer };
 }
 
+/** At least this many exercises on a sheet or a test. */
+export const MIN_EXERCISES = 5;
+
+/**
+ * One more exercise in the spirit of the sheet, with content it doesn't have yet:
+ * the other version (Β) or another level of an exercise, else the last one with new numbers.
+ */
+export function anotherExercise(blocks: Block[], id: string): Block | undefined {
+  const exercises = blocks.filter((b) => b.type === "exercise");
+  const last = exercises[exercises.length - 1];
+  if (!last) return undefined;
+  const used = new Set(exercises.map((b) => b.text.trim()));
+  const fresh = (source: Block, text: string, answer?: string): Block => ({
+    id,
+    type: "exercise",
+    text,
+    answer,
+    lines: source.lines,
+    level: source.level,
+  });
+  for (const pick of [(b: Block) => b.variantB, (b: Block) => b.variants?.advanced, (b: Block) => b.variants?.basic])
+    for (const b of exercises) {
+      const c = pick(b);
+      if (c && !used.has(c.text.trim())) return fresh(b, c.text, c.answer);
+    }
+  for (let k = 1; k < 20; k++) {
+    const text = last.text.replace(/\d+/g, (n) => String(Number(n) + k * (Number(n) >= 10 ? 7 : 1)));
+    if (text !== last.text && !used.has(text.trim())) return fresh(last, text);
+  }
+  return undefined;
+}
+
+/** Adds exercises after the last one until there are `count` more. */
+export function addExercises(blocks: Block[], count: number, prefix: string): { blocks: Block[]; added: string[] } {
+  const out = [...blocks];
+  const added: string[] = [];
+  const ids = new Set(out.map((b) => b.id));
+  for (let i = 0; i < count; i++) {
+    let n = 1;
+    while (ids.has(`${prefix}${n}`)) n++;
+    const next = anotherExercise(out, `${prefix}${n}`);
+    if (!next) break;
+    ids.add(next.id);
+    let at = -1;
+    out.forEach((b, j) => b.type === "exercise" && (at = j));
+    out.splice(at + 1, 0, next);
+    added.push(next.id);
+  }
+  return { blocks: out, added };
+}
+
 const GRAPH_EXERCISES = (p: string): Block[] => [
   ex(`${p}-e1`, {
     basic: ["Ποιο φρούτο έφεραν οι περισσότεροι μαθητές;", "Μήλο"],
@@ -208,7 +259,9 @@ export function buildBlocks({ subjectId, kind, level, grade, hint, prefix: p }: 
   const bank = bankFor(subjectId);
   const isGraph = subjectId === "math" && /γραφ|graph|chart|ραβδ/i.test(hint);
   const topic = isGraph ? "Διαβάζω μια γραφική παράσταση" : bank.topic;
-  const exercises = (isGraph ? GRAPH_EXERCISES(p) : bank.exercises(p)).map((b) => withLevel(b, level));
+  let exercises = (isGraph ? GRAPH_EXERCISES(p) : bank.exercises(p)).map((b) => withLevel(b, level));
+  if (kind !== "plan" && kind !== "summary" && exercises.length < MIN_EXERCISES)
+    exercises = addExercises(exercises, MIN_EXERCISES - exercises.length, `${p}-x`).blocks;
   const head: Block = { id: `${p}-h`, type: "heading", text: topic };
 
   if (kind === "plan") {
