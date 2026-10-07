@@ -169,7 +169,7 @@ function CellEditor({
             )}
           </Field>
         )}
-        {kind === "free" && <p className="text-sm text-muted">Τα κενά σου φαίνονται στο «Σήμερα» και προτείνονται πρώτα όταν μεταφέρεις ένα μάθημα.</p>}
+        {kind === "free" && <p className="text-sm text-muted">Τα κενά σου φαίνονται στην «Αρχική» και προτείνονται πρώτα όταν μεταφέρεις ένα μάθημα.</p>}
       </div>
     </Sheet>
   );

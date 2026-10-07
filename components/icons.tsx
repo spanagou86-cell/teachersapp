@@ -122,3 +122,4 @@ export const Type = make(T.IconTypography, "Type");
 export const Undo2 = make(T.IconArrowBackUp, "Undo2");
 export const ClipboardCheck = make(T.IconClipboardCheck, "ClipboardCheck");
 export const BellRing = make(T.IconBellRinging, "BellRing");
+export const Home = make(T.IconHome, "Home");

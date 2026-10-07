@@ -254,7 +254,7 @@ function BottomNav() {
   );
 }
 
-/** Single-key shortcuts on a keyboard: T Σήμερα, P Πρόγραμμα, C Τάξεις, M Υλικό, N Ετοίμασε. */
+/** Single-key shortcuts on a keyboard: H Αρχική, P Πρόγραμμα, C Τάξεις, M Υλικό, N Ετοίμασε. */
 function useShortcuts() {
   const router = useRouter();
   useEffect(() => {

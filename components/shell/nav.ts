@@ -1,8 +1,8 @@
-import { CalendarDays, Clock3, FileText, Users } from "@/components/icons";
+import { CalendarDays, FileText, Home, Users } from "@/components/icons";
 
 /** Four places, the same on phone and computer. */
 export const NAV = [
-  { href: "/", label: "Σήμερα", Icon: Clock3, key: "t" },
+  { href: "/", label: "Αρχική", Icon: Home, key: "h" },
   { href: "/schedule", label: "Πρόγραμμα", Icon: CalendarDays, key: "p" },
   { href: "/classes", label: "Τάξεις", Icon: Users, key: "c" },
   { href: "/materials", label: "Υλικό", Icon: FileText, key: "m" },
