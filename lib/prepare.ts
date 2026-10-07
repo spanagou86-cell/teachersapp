@@ -1,15 +1,17 @@
 import { addDays, dayName, timeToMin } from "./dates";
 import { sortSlots } from "./schedule";
+import type { PageReading } from "./ai/client";
 import type { HHMM, ISODate, LessonSlot, MaterialKind, SubjectId } from "./types";
 
 /** What «Ετοίμασε» makes, named after the result rather than the tool: four for every lesson, a few more per subject. */
-export type PrepKind = "worksheet" | "quiz" | "levels" | "plan" | "reading" | "spelling" | "vocab" | "problems" | "mental" | "experiment" | "sources" | "map";
+export type PrepKind = "worksheet" | "quiz" | "levels" | "plan" | "exit" | "reading" | "spelling" | "vocab" | "problems" | "mental" | "experiment" | "sources" | "map";
 
 export const PREP: Record<PrepKind, { title: string; sub: string; kind: Exclude<MaterialKind, "file" | "summary"> }> = {
   worksheet: { title: "Φύλλο εργασίας", sub: "6–8 ασκήσεις, με λύσεις", kind: "worksheet" },
   quiz: { title: "Τεστ 10′", sub: "Σύντομος έλεγχος, με λύσεις", kind: "quiz" },
   levels: { title: "3 επίπεδα", sub: "Το ίδιο φύλλο σε Α, Β, Γ", kind: "worksheet" },
   plan: { title: "Σχέδιο μαθήματος", sub: "40′ σε φάσεις", kind: "plan" },
+  exit: { title: "Τεστ εξόδου", sub: "3 ερωτήσεις στο κλείσιμο", kind: "quiz" },
   reading: { title: "Κατανόηση κειμένου", sub: "Κείμενο και ερωτήσεις", kind: "worksheet" },
   spelling: { title: "Ορθογραφία", sub: "Ασκήσεις και υπαγόρευση", kind: "worksheet" },
   vocab: { title: "Λεξιλόγιο", sub: "Λέξεις του μαθήματος", kind: "worksheet" },
@@ -45,6 +47,7 @@ const ASK: Record<PrepKind, string> = {
   levels:
     "Φύλλο εργασίας σε 3 επίπεδα για διαφοροποίηση: 6 ασκήσεις, καθεμία με την κανονική της εκδοχή και επιπλέον μια απλούστερη (basic) και μια πιο απαιτητική (advanced), όλες με λύσεις.",
   plan: "Σχέδιο μαθήματος 40 λεπτών, με αυτές τις φάσεις: Στόχοι · Αφόρμηση (5′) · Κύρια δραστηριότητα (20′) · Εξάσκηση και διαφοροποίηση (10′) · Κλείσιμο και έλεγχος (5′) · Υλικά.",
+  exit: "Τεστ εξόδου για τα τελευταία 5 λεπτά του μαθήματος: 3 σύντομες ερωτήσεις που δείχνουν αν πέτυχαν οι στόχοι (μία ανάκλησης, μία εφαρμογής και μία «τι σε δυσκόλεψε σήμερα;»), με λύσεις.",
   reading:
     "Φύλλο κατανόησης κειμένου: ένα πρωτότυπο κείμενο 120–250 λέξεων κατάλληλο για την τάξη (block text) και 6–8 ερωτήσεις: εντοπισμός πληροφορίας, συμπερασμός, λεξιλόγιο από το κείμενο και μία ερώτηση προσωπικής άποψης, με λύσεις.",
   spelling:
@@ -69,6 +72,8 @@ const fold = (s: string) =>
 /** A free-text request («ένα τεστ για τα κλάσματα») → the closest tile. */
 export function inferKind(text: string): PrepKind {
   const t = fold(text);
+  if (/(τεστ|εισιτηριο) εξοδου|exit/.test(t)) return "exit";
+  if (/ολο το μαθημα|ολοκληρο (το )?μαθημα/.test(t)) return "plan";
   if (/τεστ|διαγωνισμ|κουιζ|quiz|αξιολογησ/.test(t)) return "quiz";
   if (/σχεδιο|πλανο|πορεια (του )?μαθηματ/.test(t)) return "plan";
   if (/επιπεδ|διαφοροπ/.test(t)) return "levels";
@@ -115,13 +120,15 @@ export interface PrepInput {
   text?: string;
   /** A photo of a textbook page goes along. */
   photo?: boolean;
+  /** What the AI read on those pages first. */
+  reading?: PageReading;
 }
 
 /**
  * The request for the model: title of the new material and the instruction.
  * Only lesson details go out: topics and the teacher's request, never pupils or notes.
  */
-export function prepRequest({ kind, subject, grade, topic, previous, text, photo }: PrepInput): { title: string; hint: string } {
+export function prepRequest({ kind, subject, grade, topic, previous, text, photo, reading }: PrepInput): { title: string; hint: string } {
   const t = topic.trim();
   const base = t || `${subject}${grade ? ` · ${grade.replace(/ Δημοτικού$/, "")}` : ""}`;
   // Three levels become three sheets; each gets «· Επίπεδο Α/Β/Γ» after this title.
@@ -129,10 +136,57 @@ export function prepRequest({ kind, subject, grade, topic, previous, text, photo
   const hint = [
     ASK[kind],
     t ? `Θέμα του μαθήματος: ${t}.` : previous ? `Δεν δόθηκε θέμα· συνέχεια του προηγούμενου μαθήματος («${previous}»).` : "Δεν δόθηκε θέμα· διάλεξε κατάλληλο θέμα της ύλης της τάξης.",
-    photo ? "Βασίσου στη φωτογραφημένη σελίδα του βιβλίου: τις ασκήσεις και το θέμα της." : "",
-    text?.trim() ? `Ο εκπαιδευτικός ζητά επίσης: ${text.trim().slice(0, 500)}` : "",
+    reading
+      ? [
+          `Οι σελίδες του βιβλίου: ${[reading.unit, `«${reading.title}»`, reading.pages && `σελ. ${reading.pages}`].filter(Boolean).join(" · ")}.`,
+          reading.objectives.length ? `Στόχοι: ${reading.objectives.join("· ")}.` : "",
+          reading.keywords.length ? `Βασικές έννοιες: ${reading.keywords.join(", ")}.` : "",
+          reading.content ? `Τι έχει η σελίδα: ${reading.content}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : "",
+    photo ? "Βασίσου στις φωτογραφημένες σελίδες του βιβλίου (θέμα, έννοιες, λεξιλόγιο, επίπεδο). Μην αντιγράψεις τις ασκήσεις τους· φτιάξε νέες στο ίδιο πνεύμα." : "",
+    text?.trim() ? `Ο εκπαιδευτικός ζητά (αυτό έχει προτεραιότητα): ${text.trim().slice(0, 500)}` : "",
   ]
     .filter(Boolean)
     .join("\n");
   return { title: title.slice(0, 200), hint };
+}
+
+/** «Όλο το μάθημα»: the plan, a worksheet and an exit test, made together for one lesson. */
+export const LESSON_PACK: PrepKind[] = ["plan", "worksheet", "exit"];
+
+/** The demo can't read photos: it answers as the AI would for the lesson's own subject. */
+export function demoReading(subjectId: SubjectId, topic: string): PageReading {
+  const sample: Partial<Record<SubjectId, Omit<PageReading, "subjectId" | "confident">>> = {
+    math: {
+      grade: "Δ΄",
+      unit: "Ενότητα 3",
+      title: "Ισοδύναμα κλάσματα",
+      pages: "42–43",
+      objectives: ["Οι μαθητές να αναγνωρίζουν ισοδύναμα κλάσματα", "Να βρίσκουν ισοδύναμα κλάσματα πολλαπλασιάζοντας ή διαιρώντας", "Να τα συγκρίνουν με τη βοήθεια σχημάτων"],
+      keywords: ["κλάσμα", "αριθμητής", "παρονομαστής", "ισοδύναμα", "απλοποίηση"],
+      content: "Σχήματα χωρισμένα σε ίσα μέρη, πίνακας ισοδύναμων κλασμάτων και ασκήσεις συμπλήρωσης.",
+    },
+    glossa: {
+      grade: "Δ΄",
+      unit: "Ενότητα 2",
+      title: "Το ταξίδι της σταγόνας",
+      pages: "28–29",
+      objectives: ["Οι μαθητές να κατανοούν ένα αφηγηματικό κείμενο", "Να αναγνωρίζουν τον Αόριστο των ρημάτων", "Να εμπλουτίσουν το λεξιλόγιο για το νερό"],
+      keywords: ["σταγόνα", "εξάτμιση", "σύννεφο", "Αόριστος", "αφήγηση"],
+      content: "Ανάγνωσμα για τον κύκλο του νερού, ερωτήσεις κατανόησης και άσκηση γραμματικής στον Αόριστο.",
+    },
+  };
+  const s = sample[subjectId] ?? {
+    grade: "",
+    unit: "",
+    title: topic || "Το θέμα της σελίδας",
+    pages: "",
+    objectives: ["Οι μαθητές να κατανοήσουν τις βασικές έννοιες της σελίδας", "Να τις εφαρμόσουν σε νέα παραδείγματα"],
+    keywords: [],
+    content: "",
+  };
+  return { subjectId, confident: true, ...s, title: s.title };
 }

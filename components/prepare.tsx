@@ -1,13 +1,15 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowUp, Camera, Check, FileText, Layers, ListChecks, Loader2, MessageSquareText, PhoneCall, RotateCcw, ShieldCheck, Sparkles, SquareCheckBig, UserCheck, X } from "@/components/icons";
+import { ArrowRight, ArrowUp, BookOpenCheck, Camera, Check, FileText, Layers, ListChecks, Loader2, MessageSquareText, PhoneCall, RotateCcw, ShieldCheck, Sparkles, SquareCheckBig, UserCheck, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { KIND_LABEL, LEVEL_LABEL } from "@/lib/materials";
-import { extrasFor, inferKind, PREP, PREP_KINDS, prepRequest, previousTopic, upcoming, whenLabel, type PrepKind } from "@/lib/prepare";
+import { aiRead, shrinkImage, type PageReading } from "@/lib/ai/client";
+import { pdfFromImages } from "@/lib/pdfFromImages";
+import { demoReading, extrasFor, inferKind, LESSON_PACK, PREP, PREP_KINDS, prepRequest, previousTopic, upcoming, whenLabel, type PrepKind } from "@/lib/prepare";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import { dismissJob, openJob, retryJob, startJob, useJobs, watchJobs, type Job } from "@/lib/store/jobs";
@@ -17,7 +19,7 @@ import { NoteSheet } from "./capture";
 import { useClock } from "./lesson";
 import { FileBadge, SubjectIcon } from "./subject";
 import { toast } from "./toast";
-import { Button, cx, IconButton, inputClass, Select, Sheet } from "./ui";
+import { Button, IconButton, Select, Sheet } from "./ui";
 import { ACCEPT, ingestFile } from "./upload";
 
 export interface PrepareOptions {
@@ -42,6 +44,136 @@ export const usePrepare = create<{ open: boolean; options: PrepareOptions; show:
 
 /** Opens «Ετοίμασε» from anywhere: the bottom bar, Today, a lesson, the materials. */
 export const openPrepare = (o?: PrepareOptions) => usePrepare.getState().show(o);
+
+/** What a teacher of that subject would write in «Τι να περιέχει;». */
+const PLACEHOLDER: Partial<Record<SubjectId, string>> = {
+  math: "π.χ. 6 προβλήματα με ευρώ, τα 2 πρώτα εύκολα, και ένα «εξήγησε πώς σκέφτηκες»",
+  glossa: "π.χ. ερωτήσεις κατανόησης για το κείμενο, Αόριστος ρημάτων και μια μικρή έκθεση",
+  agglika: "e.g. 8 words about food, gap-fill and a short reading",
+  istoria: "π.χ. μια πηγή, χρονολόγιο και ερωτήσεις αιτίας–αποτελέσματος",
+  geografia: "π.χ. ασκήσεις με τον χάρτη της Κύπρου και τα σημεία του ορίζοντα",
+  fysika: "π.χ. ένα απλό πείραμα με υλικά της τάξης και ερωτήσεις παρατήρησης",
+  meleti: "π.χ. παρατήρηση στην αυλή, πίνακας και ερωτήσεις σωστό/λάθος",
+};
+
+/** The pages, and what the AI read on them before making anything. */
+function PagesCard({
+  photo,
+  thumbs,
+  reading,
+  subjectName,
+  lessonSubject,
+  onRemove,
+  onRetry,
+  onTitle,
+  onMatch,
+}: {
+  photo: { meta: FileMeta; url?: string };
+  thumbs: string[];
+  reading: { busy?: boolean; data?: PageReading; error?: string };
+  subjectName: string;
+  lessonSubject?: SubjectId;
+  onRemove: () => void;
+  onRetry: () => void;
+  onTitle: (t: string) => void;
+  onMatch: (id: SubjectId) => void;
+}) {
+  const subjects = useSubjects();
+  const d = reading.data;
+  const found = d && subjects.find((x) => x.id === d.subjectId);
+  const mismatch = d && found && lessonSubject && d.subjectId !== lessonSubject && d.subjectId !== "allo";
+  const shown = thumbs.filter(Boolean);
+  return (
+    <section aria-label="Σελίδες βιβλίου" className="overflow-hidden rounded-xl border border-brand-100 bg-brand-50/50">
+      <div className="flex items-center gap-3 p-2 pr-1">
+        {shown.length ? (
+          <span className="flex shrink-0 -space-x-5">
+            {shown.slice(0, 4).map((u, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={u} src={u} alt="" className="size-12 rounded-md border-2 border-surface object-cover shadow-card" style={{ rotate: `${(i - 1) * 4}deg` }} />
+            ))}
+          </span>
+        ) : photo.url && photo.meta.type.startsWith("image/") ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photo.url} alt="" className="size-12 rounded-md object-cover" />
+        ) : (
+          <FileBadge file={photo.meta} />
+        )}
+        <span className="min-w-0 flex-1 text-sm">
+          <b className="block">Με βάση τη σελίδα σου{shown.length > 1 ? ` · ${shown.length} σελίδες` : ""}</b>
+          <span className="text-muted">{reading.busy ? "Τη διαβάζω…" : d ? "Τη διάβασα· έλεγξε τι βρήκα" : "Διάλεξε τι να φτιάξω από αυτήν"}</span>
+        </span>
+        <IconButton label="Αφαίρεση σελίδας" onClick={onRemove}>
+          <X className="size-4" />
+        </IconButton>
+      </div>
+
+      {reading.busy && (
+        <div className="grid gap-2 border-t border-brand-100 bg-surface p-3" aria-live="polite">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-ink-2">
+            <Loader2 className="size-4 animate-spin text-brand" /> Αναγνωρίζω μάθημα, ενότητα και στόχους…
+          </p>
+          <div className="h-2 w-2/3 animate-pulse-soft rounded bg-brand-100" />
+          <div className="h-2 w-1/2 animate-pulse-soft rounded bg-brand-100" />
+        </div>
+      )}
+
+      {reading.error !== undefined && !reading.busy && !d && (
+        <div className="flex items-center gap-2 border-t border-brand-100 bg-surface p-3 text-[13px]">
+          <span className="min-w-0 flex-1 text-muted">{reading.error || "Δεν διάβασα τη σελίδα· μπορείς να συνεχίσεις κανονικά."}</span>
+          {reading.error && (
+            <Button size="sm" variant="secondary" onClick={onRetry}>
+              <RotateCcw className="size-4" /> Ξανά
+            </Button>
+          )}
+        </div>
+      )}
+
+      {d && (
+        <div className="grid gap-2.5 border-t border-brand-100 bg-surface p-3" aria-live="polite">
+          <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-semibold">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">
+              <Check className="size-3.5" /> Βρήκα
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-bg px-2 py-0.5 ring-1 ring-line">
+              <SubjectIcon id={d.subjectId} size="sm" className="!size-4 [&>svg]:!size-3" />
+              {found?.name ?? "Άλλο μάθημα"}
+              {d.grade && ` · ${d.grade}`}
+            </span>
+            {(d.unit || d.pages) && <span className="text-muted">{[d.unit, d.pages && `σελ. ${d.pages}`].filter(Boolean).join(" · ")}</span>}
+          </div>
+          <input
+            value={d.title}
+            onChange={(e) => onTitle(e.target.value.slice(0, 120))}
+            aria-label="Τίτλος μαθήματος από τη σελίδα"
+            className="h-10 rounded-lg bg-bg px-2.5 text-[15px] font-semibold outline-none ring-1 ring-line focus:ring-brand-100"
+          />
+          {d.objectives.length > 0 && (
+            <ul className="grid gap-1 text-[13px] leading-snug text-ink-2">
+              {d.objectives.slice(0, 3).map((o) => (
+                <li key={o} className="flex gap-2">
+                  <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-brand-500" />
+                  {o}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!d.confident && <p className="text-[12.5px] text-amber">Η φωτογραφία δεν διαβάζεται πολύ καθαρά· έλεγξε τα στοιχεία.</p>}
+          {mismatch && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 p-2.5 text-[13px]">
+              <span className="min-w-0 flex-1">
+                Η σελίδα είναι <b>{found?.name}</b>, ενώ το μάθημα είναι <b>{subjectName}</b>.
+              </span>
+              <Button size="sm" onClick={() => onMatch(d.subjectId)}>
+                {`Κάν' το ${found?.name}`}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 const ICON: Partial<Record<PrepKind, typeof FileText>> = { worksheet: FileText, quiz: SquareCheckBig, levels: Layers, plan: ListChecks };
 
@@ -129,9 +261,13 @@ function JobRow({ job, onOpen }: { job: Job; onOpen: (job: Job) => void }) {
 const STEPS = ["Διαβάζω το μάθημα…", "Γράφω τις ασκήσεις…", "Ελέγχω τις λύσεις…", "Το στήνω σε σελίδα Α4…"];
 
 /** What the teacher sees while the AI works: a page taking shape, never an empty spinner. */
-function Working({ job, kind, photo, onLeave, onBack }: { job?: Job; kind: PrepKind; photo: boolean; onLeave: () => void; onBack: () => void }) {
+function Working({ job, kind, photo, pack, onLeave, onBack }: { job?: Job; kind: PrepKind; photo: boolean; pack?: boolean; onLeave: () => void; onBack: () => void }) {
   const [step, setStep] = useState(0);
-  const steps = photo ? ["Διαβάζω τη σελίδα του βιβλίου…", ...STEPS.slice(1)] : kind === "plan" ? ["Διαβάζω το μάθημα…", "Σχεδιάζω τις φάσεις…", "Το στήνω σε σελίδα…"] : STEPS;
+  const steps = pack
+    ? ["Γράφω το σχέδιο μαθήματος…", "Φτιάχνω το φύλλο εργασίας…", "Ετοιμάζω το τεστ εξόδου…", "Τα βάζω στο μάθημα…"]
+    : photo
+      ? ["Διαβάζω τη σελίδα του βιβλίου…", ...STEPS.slice(1)]
+      : kind === "plan" ? ["Διαβάζω το μάθημα…", "Σχεδιάζω τις φάσεις…", "Το στήνω σε σελίδα…"] : STEPS;
   useEffect(() => {
     const h = setInterval(() => setStep((s) => Math.min(s + 1, steps.length - 1)), 6000);
     return () => clearInterval(h);
@@ -203,8 +339,11 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
   const [topic, setTopic] = useState(slot?.topic ?? "");
   const [text, setText] = useState(options.text ?? "");
   const [photo, setPhoto] = useState<{ meta: FileMeta; url?: string } | undefined>(options.source);
+  // Pages photographed here (not a file chosen elsewhere): the AI reads them first.
+  const [thumbs, setThumbs] = useState<string[]>([]);
+  const [reading, setReading] = useState<{ busy?: boolean; data?: PageReading; error?: string }>({});
   const [uploading, setUploading] = useState(false);
-  const [working, setWorking] = useState<{ kind: PrepKind; jobId: string }>();
+  const [working, setWorking] = useState<{ kind: PrepKind; jobId: string; pack?: boolean }>();
   const [note, setNote] = useState<null | "note" | "parent">(null);
   const photoRef = useRef<HTMLInputElement>(null);
 
@@ -223,6 +362,7 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
       if (job.id !== working.jobId) return false;
       onClose();
       if (job.href) router.push(job.href);
+      if (working.pack) toast("Έτοιμο όλο το μάθημα: σχέδιο, φύλλο εργασίας και τεστ εξόδου");
       return true;
     });
   }, [working, onClose, router]);
@@ -238,21 +378,83 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
     setPicking(false);
   };
 
+  const piece = (kind: PrepKind) => {
+    const t = topic.trim() || reading.data?.title || "";
+    const grade = cl?.grade ?? "";
+    const { title, hint } = prepRequest({ kind, subject: subjectName, grade, topic: t, previous, text, photo: thumbs.length > 0, reading: reading.data });
+    return {
+      t,
+      request: { title, kindLabel: KIND_LABEL[PREP[kind].kind], subject: subjectName, subjectId: sub, grade, levelLabel: LEVEL_LABEL.standard, withSolutions: true, hint, country, levels: kind === "levels" },
+      material: { title, classId: cls, subjectId: sub, kind: PREP[kind].kind, file: photo?.meta },
+    };
+  };
+
   const go = (kind: PrepKind) => {
     if (!cls) return toast("Πρόσθεσε πρώτα ένα τμήμα από τις «Τάξεις».");
-    const t = topic.trim();
-    // The topic typed here is the lesson's topic too.
+    const { t, request, material } = piece(kind);
+    // The topic typed here (or read from the book) is the lesson's topic too.
     if (slot && t && t !== slot.topic) updateSlot(slot.id, { topic: t });
-    const grade = cl?.grade ?? "";
-    const { title, hint } = prepRequest({ kind, subject: subjectName, grade, topic: t, previous, text, photo: Boolean(photo) });
-    const jobId = startJob({
-      label: `${PREP[kind].title} · ${t || subjectName}`,
-      request: { title, kindLabel: KIND_LABEL[PREP[kind].kind], subject: subjectName, grade, levelLabel: LEVEL_LABEL.standard, withSolutions: true, hint, country, levels: kind === "levels" },
-      material: { title, classId: cls, subjectId: sub, kind: PREP[kind].kind, file: photo?.meta },
-      levels: kind === "levels",
-      slotId: slot?.id,
-    });
+    const jobId = startJob({ label: `${PREP[kind].title} · ${t || subjectName}`, request, material, levels: kind === "levels", slotId: slot?.id });
     setWorking({ kind, jobId });
+  };
+
+  /** «Όλο το μάθημα»: plan, worksheet and exit test in one go, filed in the lesson. */
+  const goLesson = () => {
+    if (!cls) return toast("Πρόσθεσε πρώτα ένα τμήμα από τις «Τάξεις».");
+    const [first, ...rest] = LESSON_PACK.map((k) => piece(k));
+    if (slot && first.t && first.t !== slot.topic) updateSlot(slot.id, { topic: first.t });
+    const jobId = startJob({
+      label: `Όλο το μάθημα · ${first.t || subjectName}`,
+      request: first.request,
+      material: first.material,
+      slotId: slot?.id,
+      pack: rest.map(({ request, material }) => ({ request, material })),
+    });
+    setWorking({ kind: "plan", jobId, pack: true });
+  };
+
+  /** The AI reads the pages first: which subject, which unit, what they teach. */
+  const read = async (meta: FileMeta) => {
+    setReading({ busy: true });
+    const r =
+      mode === "cloud"
+        ? await aiRead(meta, [subjectName, topic].filter(Boolean).join(" · "))
+        : await new Promise<{ ok: true; data: PageReading }>((done) => setTimeout(() => done({ ok: true, data: demoReading(sub, topic) }), 1200));
+    if (!r.ok) return setReading({ error: r.unavailable ? "" : r.error });
+    const d = r.data;
+    setReading({ data: d });
+    // No lesson chosen: the page decides the subject. Same subject: the page is the precise topic.
+    if (!slot && d.subjectId !== "allo" && subjects.some((x) => x.id === d.subjectId)) setSubjectId(d.subjectId);
+    if (!slot || slot.subjectId === d.subjectId) setTopic(d.title);
+  };
+
+  /** Up to 4 pages: several photos become one PDF, in the order chosen. */
+  const addPages = async (list: File[]) => {
+    const files = list.filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(f.name)).slice(0, 4);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const images = files.filter((f) => !/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name));
+      let file = files[0];
+      if (images.length > 1) {
+        const shrunk = await Promise.all(images.map((f) => shrinkImage(f, 2000, 0.82)));
+        file = new File([await pdfFromImages(shrunk, "Σελίδες βιβλίου")], "Σελίδες βιβλίου.pdf", { type: "application/pdf" });
+      }
+      const r = await ingestFile(file);
+      if ("error" in r) return toast(r.error);
+      setPhoto({ meta: r.meta, url: r.previewUrl });
+      setThumbs(images.length ? images.map((f) => URL.createObjectURL(f)) : [""]);
+      void read(r.meta);
+    } catch {
+      toast("Οι σελίδες δεν ανέβηκαν. Δοκίμασε ξανά.");
+    } finally {
+      setUploading(false);
+    }
+  };
+  const clearPages = () => {
+    setPhoto(undefined);
+    setThumbs([]);
+    setReading({});
   };
 
   // Opened with a tile already chosen: start at once, exactly as a tap on the tile would.
@@ -262,16 +464,11 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
     started.current = true;
     if (options.kind) go(options.kind);
     else if (options.text?.trim()) go(inferKind(options.text));
+    // A file chosen elsewhere («Φτιάξε φύλλο από αυτό»): read it too.
+    else if (options.source) void read(options.source.meta);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const addPhoto = async (file: File) => {
-    setUploading(true);
-    const r = await ingestFile(file);
-    setUploading(false);
-    if ("error" in r) return toast(r.error);
-    setPhoto({ meta: r.meta, url: r.previewUrl });
-  };
 
   if (note)
     return (
@@ -292,6 +489,7 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
           job={watched}
           kind={working.kind}
           photo={Boolean(photo)}
+          pack={working.pack}
           onLeave={onClose}
           onBack={() => {
             dismissJob(working.jobId);
@@ -391,73 +589,103 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
             </label>
           </section>
 
-          {photo ? (
-            <div className="flex items-center gap-3 rounded-xl border border-brand-100 bg-brand-50/60 p-2 pr-1">
-              {photo.url && photo.meta.type.startsWith("image/") ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photo.url} alt="" className="size-12 rounded-md object-cover" />
-              ) : (
-                <FileBadge file={photo.meta} />
-              )}
-              <span className="min-w-0 flex-1 text-sm">
-                <b className="block">Με βάση τη σελίδα σου</b>
-                <span className="text-muted">Διάλεξε τι να φτιάξω από αυτήν</span>
-              </span>
-              <IconButton label="Αφαίρεση σελίδας" onClick={() => setPhoto(undefined)}>
-                <X className="size-4" />
-              </IconButton>
-            </div>
-          ) : null}
-
-          <PrepareTiles onPick={go} disabled={uploading} subjectId={sub} />
-
-          {!photo && (
-            <button
-              type="button"
-              disabled={uploading}
-              onClick={() => photoRef.current?.click()}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-line text-[14px] font-semibold text-ink-2 transition-colors hover:bg-line-2 disabled:opacity-60"
-            >
-              {uploading ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
-              {uploading ? "Ανεβαίνει…" : "Από φωτογραφία βιβλίου"}
-            </button>
-          )}
-          <input
-            ref={photoRef}
-            type="file"
-            hidden
-            accept={ACCEPT}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) void addPhoto(f);
-            }}
-          />
-
+          {/* The teacher's own words first: what the sheet or the lesson should have. */}
           <form
-            className="relative"
+            className="grid gap-2 rounded-xl border border-line bg-surface p-2.5 focus-within:border-brand-100 focus-within:ring-2 focus-within:ring-brand-50"
             onSubmit={(e) => {
               e.preventDefault();
               if (text.trim()) go(inferKind(text));
             }}
           >
-            <input
+            <label className="px-1 text-[13px] font-semibold text-ink-2" htmlFor="prep-text">
+              Τι να περιέχει; <span className="font-normal text-muted">(προαιρετικό)</span>
+            </label>
+            <textarea
+              id="prep-text"
               value={text}
               onChange={(e) => setText(e.target.value)}
               maxLength={500}
+              rows={2}
               aria-label="Τι θέλεις να ετοιμάσω"
-              placeholder="Ή γράψε τι θέλεις…"
-              className={cx(inputClass, "h-12 pr-12")}
+              placeholder={PLACEHOLDER[sub] ?? "π.χ. 6 ασκήσεις, οι 2 πρώτες εύκολες, με εικόνες"}
+              className="min-h-14 resize-none bg-transparent px-1 !outline-none text-base leading-snug text-ink outline-none placeholder:text-muted/70 sm:text-[15px]"
             />
-            <button
-              type="submit"
-              aria-label="Ετοίμασέ το"
-              disabled={!text.trim() || uploading}
-              className="absolute right-1.5 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-md bg-brand text-white transition-colors hover:bg-brand-hover disabled:bg-brand/25"
-            >
-              <ArrowUp className="size-4" strokeWidth={2.2} />
-            </button>
+            <div className="flex items-center gap-2">
+              {!photo && (
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => photoRef.current?.click()}
+                  className="flex h-9 items-center gap-1.5 rounded-lg bg-bg px-3 text-[13px] font-semibold text-ink-2 ring-1 ring-line transition-colors hover:bg-line-2 disabled:opacity-60"
+                >
+                  {uploading ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+                  {uploading ? "Ανεβαίνουν…" : "Σελίδες βιβλίου"}
+                </button>
+              )}
+              <span className="flex-1" />
+              <button
+                type="submit"
+                aria-label="Ετοίμασέ το"
+                disabled={!text.trim() || uploading}
+                className="flex size-9 items-center justify-center rounded-lg bg-brand text-white transition-colors hover:bg-brand-hover disabled:bg-brand/20"
+              >
+                <ArrowUp className="size-4" strokeWidth={2.2} />
+              </button>
+            </div>
           </form>
+          <input
+            ref={photoRef}
+            type="file"
+            hidden
+            multiple
+            accept={ACCEPT}
+            aria-label="Σελίδες βιβλίου"
+            onChange={(e) => {
+              const list = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              void addPages(list);
+            }}
+          />
+
+          {photo && (
+            <PagesCard
+              photo={photo}
+              thumbs={thumbs}
+              reading={reading}
+              subjectName={subjectName}
+              lessonSubject={slot?.subjectId}
+              onRemove={clearPages}
+              onRetry={() => void read(photo.meta)}
+              onTitle={(t) => (setTopic(t), setReading((r) => (r.data ? { data: { ...r.data, title: t } } : r)))}
+              onMatch={(id) => {
+                const match = next.find((s) => s.subjectId === id && s.classId === cls) ?? next.find((s) => s.subjectId === id);
+                if (match) choose(match.id);
+                else {
+                  choose(null);
+                  setSubjectId(id);
+                }
+                if (reading.data) setTopic(reading.data.title);
+              }}
+            />
+          )}
+
+          <button
+            type="button"
+            onClick={goLesson}
+            disabled={uploading || reading.busy}
+            className="group flex items-center gap-3 rounded-2xl bg-[linear-gradient(135deg,#14275f,#1e3a8a_60%,#2c4fb0)] p-3.5 text-left text-white shadow-lift transition-transform active:scale-[0.99] disabled:opacity-60"
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+              <BookOpenCheck className="size-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-semibold">Όλο το μάθημα</span>
+              <span className="block text-[12.5px] leading-snug text-white/75">Σχέδιο 40′ · φύλλο εργασίας · τεστ εξόδου{slot ? ", μέσα στο μάθημα" : ""}</span>
+            </span>
+            <ArrowRight className="size-4 shrink-0 text-white/70 transition-transform group-hover:translate-x-0.5" />
+          </button>
+
+          <PrepareTiles onPick={go} disabled={uploading || reading.busy} subjectId={sub} />
 
           <p className="-mt-2 flex items-start gap-1.5 text-xs text-muted">
             <ShieldCheck className="mt-px size-3.5 shrink-0" />

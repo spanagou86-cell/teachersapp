@@ -34,13 +34,13 @@ function ToastItem({ t }: { t: Toast }) {
       role="status"
       onClick={() => !t.action && dismiss(t.id)}
       className={clsx(
-        "pointer-events-auto flex max-w-[min(26rem,100%)] animate-slide-up items-center gap-2.5 rounded-full bg-ink/95 py-2 pl-3.5 text-[13.5px] font-medium text-bg shadow-pop backdrop-blur transition-[opacity,transform] duration-200",
+        "pointer-events-auto flex max-w-[min(26rem,100%)] animate-slide-up items-center gap-2.5 rounded-[1.25rem] bg-ink/95 py-2 pl-3.5 text-[13.5px] font-medium text-bg shadow-pop backdrop-blur transition-[opacity,transform] duration-200",
         t.action ? "pr-1.5" : "pr-4",
         leaving && "translate-y-1 opacity-0",
       )}
     >
       <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
-      <span className="min-w-0 truncate">{t.text}</span>
+      <span className="line-clamp-2 min-w-0 leading-snug">{t.text}</span>
       {t.action && (
         <button
           type="button"

@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, CalendarArrowUp, CalendarClock, CalendarCog, Check, CloudUpload, CornerDownRight, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "@/components/icons";
+import { AlertTriangle, ArrowRight, CalendarArrowUp, Camera, CalendarClock, CalendarCog, Check, CloudUpload, CornerDownRight, History, Link2Off, Paperclip, Pencil, Sparkles, UserCheck, Users } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -271,6 +271,36 @@ export default function LessonPage() {
   const future = slot.date > clock.today;
   const canCarry = !slot.carriedToId && slot.status !== "done";
 
+  // Material first once there is some; the AI card follows.
+  const prepareCard = (
+    <Card className="p-5">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
+          <Sparkles className="size-5" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold">Ετοίμασε για αυτό το μάθημα</h2>
+          <p className="text-sm text-muted">
+            {slot.topic ? `«${slot.topic}», ${cls.grade}.` : "Γράψε θέμα πάνω, για πιο στοχευμένο υλικό."} Ό,τι φτιάξεις μπαίνει μόνο του στο μάθημα.
+          </p>
+        </div>
+      </div>
+      <PrepareTiles compact subjectId={slot.subjectId} onPick={(kind) => openPrepare({ slotId: slot.id, kind })} />
+      <button
+        type="button"
+        onClick={() => openPrepare({ slotId: slot.id })}
+        className="mt-3 flex w-full items-center gap-3 rounded-xl border border-dashed border-brand-100 bg-brand-50/50 px-3 py-2.5 text-left transition-colors hover:bg-brand-50"
+      >
+        <Camera className="size-5 shrink-0 text-brand" />
+        <span className="min-w-0 flex-1 text-sm">
+          <b className="block text-ink">Όλο το μάθημα από το βιβλίο</b>
+          <span className="text-muted">Φωτογράφισε τις σελίδες ή γράψε τι θέλεις</span>
+        </span>
+        <ArrowRight className="size-4 text-brand" />
+      </button>
+    </Card>
+  );
+
   return (
     <div>
       <PageHeader
@@ -360,23 +390,7 @@ export default function LessonPage() {
       <div className="mx-auto grid max-w-3xl grid-cols-1 gap-5">
         {stage === "before" && (
           <>
-            <Card className="p-5">
-              <div className="mb-4 flex items-start gap-3">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand">
-                  <Sparkles className="size-5" />
-                </span>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-bold">Ετοίμασε για αυτό το μάθημα</h2>
-                  <p className="text-sm text-muted">
-                    {slot.topic ? `«${slot.topic}», ${cls.grade}.` : "Γράψε θέμα πάνω, για πιο στοχευμένο υλικό."} Ό,τι φτιάξεις μπαίνει μόνο του στο μάθημα.
-                  </p>
-                </div>
-              </div>
-              <PrepareTiles compact subjectId={slot.subjectId} onPick={(kind) => openPrepare({ slotId: slot.id, kind })} />
-              <button type="button" onClick={() => openPrepare({ slotId: slot.id })} className="mt-3 text-sm font-semibold text-brand-500 hover:underline">
-                Από φωτογραφία βιβλίου ή με δική σου οδηγία
-              </button>
-            </Card>
+            {linked.length === 0 && prepareCard}
             {previous && previous.id !== carriedFrom?.id && (
               <Card className="p-5">
                 <p className="text-xs font-semibold text-muted">
@@ -424,6 +438,7 @@ export default function LessonPage() {
                 </UploadTrigger>
               </div>
             </Card>
+            {linked.length > 0 && prepareCard}
           </>
         )}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { uid } from "../id";
-import type { Block, Level, Variant } from "../types";
+import type { Block, FileMeta, Level, SubjectId, Variant } from "../types";
 import { adaptMaterial, type AdaptInput, type AdaptResult, type QuickAction } from "./mock";
 
 /** What the browser gets back from /api/ai. */
@@ -65,6 +65,8 @@ export interface CreateRequest {
   title: string;
   kindLabel: string;
   subject: string;
+  /** The subject's id, so the server adds how that subject is taught. */
+  subjectId?: string;
   grade: string;
   levelLabel: string;
   withSolutions: boolean;
@@ -343,4 +345,46 @@ export async function aiSep(req: SepRequest, demo: boolean): Promise<AiAnswer<Se
   }
   if (!Object.keys(out).length) return { ok: false, error: "Το AI δεν έδωσε κείμενα. Ξαναδοκίμασε." };
   return { ok: true, data: out };
+}
+
+/** What a photographed textbook page teaches, as the AI read it. */
+export interface PageReading {
+  subjectId: SubjectId;
+  grade: string;
+  unit: string;
+  title: string;
+  pages: string;
+  objectives: string[];
+  keywords: string[];
+  content: string;
+  confident: boolean;
+}
+
+const READ_SUBJECTS: SubjectId[] = ["glossa", "math", "meleti", "fysika", "istoria", "geografia", "agglika", "thriskeftika", "eikastika", "mousiki", "fa", "zoi", "kpa", "aeiforia", "tpe", "allo"];
+const line = (v: unknown, n = 160) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+const lines = (v: unknown, max: number) => (Array.isArray(v) ? v.map((x) => line(x)).filter(Boolean).slice(0, max) : []);
+
+export function cleanReading(raw: Record<string, unknown>): PageReading | undefined {
+  const subjectId = READ_SUBJECTS.find((s) => s === raw.subject);
+  const title = line(raw.title, 120);
+  if (!subjectId || !title) return undefined;
+  return {
+    subjectId,
+    grade: line(raw.grade, 20),
+    unit: line(raw.unit, 80),
+    title,
+    pages: line(raw.pages, 30),
+    objectives: lines(raw.objectives, 4),
+    keywords: lines(raw.keywords, 8),
+    content: line(raw.content, 600),
+    confident: raw.confident !== false,
+  };
+}
+
+/** Reads the pages before anything is made: the subject, the unit and what it teaches. */
+export async function aiRead(file: FileMeta, hint: string): Promise<AiAnswer<PageReading>> {
+  const r = await post<Record<string, unknown>>({ op: "read", path: file.path, fileName: file.name, mediaType: file.type, hint });
+  if (!r.ok) return r;
+  const reading = cleanReading(r.data);
+  return reading ? { ok: true, data: reading } : { ok: false, error: "Δεν κατάφερα να διαβάσω τη σελίδα. Δοκίμασε πιο καθαρή φωτογραφία." };
 }

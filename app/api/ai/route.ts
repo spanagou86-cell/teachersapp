@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AiError, aiConfigured, callTool, type Part } from "@/lib/ai/claude";
-import { ADAPT_SYSTEM, ADAPT_TOOL, createSystem, CREATE_TOOL, CY_MATHS_PROGRAMME, isCountry, LEVELS_TOOL, objectivesSystem, OBJECTIVES_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, SEP_SYSTEM, SEP_TOOL, SYLLABUS_SYSTEM, SYLLABUS_TOOL, timetableSystem, TIMETABLE_TOOL } from "@/lib/ai/prompts";
+import { ADAPT_SYSTEM, ADAPT_TOOL, createSystem, CREATE_TOOL, CY_MATHS_PROGRAMME, isCountry, LEVELS_TOOL, objectivesSystem, OBJECTIVES_TOOL, READ_SYSTEM, READ_TOOL, ROSTER_SYSTEM, ROSTER_TOOL, SEP_SYSTEM, SEP_TOOL, SUBJECT_GUIDE, SYLLABUS_SYSTEM, SYLLABUS_TOOL, timetableSystem, TIMETABLE_TOOL } from "@/lib/ai/prompts";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -58,6 +58,22 @@ export async function POST(req: NextRequest) {
 
   try {
     switch (body.op) {
+      case "read": {
+        const path = str("path", 500);
+        if (!path.startsWith(`${user.id}/`)) return fail(403, "Δεν επιτρέπεται.");
+        const { data, error } = await client.storage.from("materials").download(path);
+        if (error || !data) return fail(404, "Δεν βρέθηκε το αρχείο.");
+        const parts = await fileParts(await data.arrayBuffer(), data.type || str("mediaType"), str("fileName"));
+        if (typeof parts === "string") return fail(415, parts);
+        const out = await callTool<Record<string, unknown>>({
+          tier: "quality",
+          system: READ_SYSTEM,
+          content: [...parts, { type: "text", text: `Τι διδάσκουν αυτές οι σελίδες;${str("hint", 200) ? ` (Ο εκπαιδευτικός τις ανέβασε για: ${str("hint", 200)})` : ""}` }],
+          tool: READ_TOOL,
+          maxTokens: 1500,
+        });
+        return NextResponse.json(out);
+      }
       case "create": {
         const path = str("path", 500);
         const content: Part[] = [];
@@ -78,7 +94,8 @@ export async function POST(req: NextRequest) {
             `Επίπεδο: ${str("levelLabel")}`,
             `Τίτλος/θέμα: ${str("title")}`,
             `Λύσεις: ${body.withSolutions ? "ναι, συμπλήρωσε answer σε κάθε άσκηση" : "όχι"}`,
-            str("hint", 1500) && `Τι ζητά ο εκπαιδευτικός:\n${str("hint", 1500)}`,
+            SUBJECT_GUIDE[str("subjectId", 40)] && `Πώς διδάσκεται το μάθημα:\n${SUBJECT_GUIDE[str("subjectId", 40)]}`,
+            str("hint", 3000) && `Τι ζητά ο εκπαιδευτικός:\n${str("hint", 3000)}`,
             path ? "Βασίσου στο συνημμένο αρχείο." : "Δεν υπάρχει αρχείο· φτιάξε πρωτότυπο υλικό για το θέμα.",
           ]
             .filter(Boolean)

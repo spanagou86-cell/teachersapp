@@ -25,6 +25,8 @@ export interface JobInput {
   /** Split the result into three sheets: Επίπεδο Α, Β, Γ. */
   levels?: boolean;
   slotId?: string;
+  /** «Όλο το μάθημα»: more pieces made together with this one (the plan first), all filed in the lesson. */
+  pack?: { request: JobInput["request"]; material: JobInput["material"] }[];
 }
 
 export const useJobs = create<{ jobs: Job[] }>(() => ({ jobs: [] }));
@@ -88,6 +90,8 @@ async function run(id: string, input: JobInput): Promise<void> {
   const start = useApp.getState();
   const stillHere = () => useApp.getState().mode === start.mode && useApp.getState().userId === start.userId;
 
+  if (input.pack?.length) return runPack(job, input, stillHere);
+
   let blocks: Block[] | undefined;
   if (start.mode === "cloud") {
     const r = await aiCreate({ ...input.request, path: input.material.file?.path, fileName: input.material.file?.name, mediaType: input.material.file?.type });
@@ -137,4 +141,36 @@ async function run(id: string, input: JobInput): Promise<void> {
   patch(job.id, finished);
   for (const w of watchers) if (w(finished)) return dismissJob(job.id);
   toast(done, { label: "Άνοιγμα", run: () => openJob(finished) });
+}
+
+/** The plan, the worksheet and the exit test at once; they open together in the lesson. */
+async function runPack(job: Job, input: JobInput, stillHere: () => boolean): Promise<void> {
+  const parts = [{ request: input.request, material: input.material }, ...(input.pack ?? [])];
+  let made: (Block[] | undefined)[] = parts.map(() => undefined);
+  if (useApp.getState().mode === "cloud") {
+    const file = input.material.file;
+    const answers = await Promise.all(parts.map((p) => aiCreate({ ...p.request, path: file?.path, fileName: file?.name, mediaType: file?.type })));
+    if (!stillHere()) return dismissJob(job.id);
+    const failed = answers.find((r) => !r.ok);
+    if (failed && !failed.ok) {
+      const error = failed.unavailable ? "Η δημιουργία με AI δεν είναι διαθέσιμη αυτή τη στιγμή. Ξαναδοκίμασε σε λίγο." : failed.error;
+      patch(job.id, { status: "failed", error });
+      toast(error);
+      return;
+    }
+    made = answers.map((r) => (r.ok ? r.data : undefined));
+  } else {
+    await new Promise((r) => setTimeout(r, 1800));
+    if (!stillHere()) return dismissJob(job.id);
+  }
+  const { createMaterial, attachMaterial } = useApp.getState();
+  const ids = parts.map((p, i) => {
+    const id = createMaterial({ ...p.material, level: "standard", withSolutions: true, blocks: made[i] });
+    if (input.slotId) attachMaterial(input.slotId, id);
+    return id;
+  });
+  const finished: Job = { ...job, status: "done", href: input.slotId ? `/lessons/${input.slotId}` : `/materials/${ids[0]}?created=1` };
+  patch(job.id, finished);
+  for (const w of watchers) if (w(finished)) return dismissJob(job.id);
+  toast("Έτοιμο όλο το μάθημα: σχέδιο, φύλλο και τεστ εξόδου", { label: "Άνοιγμα", run: () => openJob(finished) });
 }

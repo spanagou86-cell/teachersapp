@@ -785,6 +785,39 @@ async function syllabusFlow(name) {
   await ctx.close();
 }
 
+/** Pages of the book → the AI reads them (subject, unit, objectives) → «Όλο το μάθημα» lands in the lesson. */
+async function bookPagesFlow(name) {
+  console.log(`\n## ${name}`);
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "el-GR" });
+  const page = await ctx.newPage();
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(BASE + "/login");
+  await page.getByRole("button", { name: "Δοκίμασε χωρίς λογαριασμό" }).click();
+  await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
+  // Two tiny white «pages».
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64");
+  const pages = [1, 2].map((n) => ({ name: `selida-${n}.png`, mimeType: "image/png", buffer: png }));
+
+  await page.getByRole("navigation", { name: "Κύρια πλοήγηση" }).getByRole("button", { name: /Ετοίμασε/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Ετοίμασε" });
+  await sheet.getByLabel("Τι θέλεις να ετοιμάσω").fill("6 προβλήματα με ευρώ, τα 2 πρώτα εύκολα");
+  await sheet.getByLabel("Σελίδες βιβλίου").setInputFiles(pages);
+  await sheet.getByText("Βρήκα", { exact: true }).waitFor();
+  assert((await sheet.getByText(/2 σελίδες/).count()) === 1, "two photos become one set of pages");
+  assert((await sheet.getByLabel("Τίτλος μαθήματος από τη σελίδα").inputValue()) === "Ισοδύναμα κλάσματα", "the AI reads the unit's title from the page");
+  assert((await sheet.getByText(/Ενότητα 3 · σελ\. 42–43/).count()) === 1, "…and its unit and pages");
+  assert((await sheet.getByText(/Μαθηματικά · Δ΄/).count()) === 1, "…and recognises the subject and the class");
+  await page.screenshot({ path: path.join(OUT, `${name}-01-read.png`), fullPage: true });
+
+  await sheet.getByRole("button", { name: /Όλο το μάθημα/ }).click();
+  await sheet.getByText("Γράφω το σχέδιο μαθήματος…").waitFor();
+  await page.waitForURL(/\/lessons\/l-2026-10-05-0920$/);
+  await page.getByText("Έτοιμο όλο το μάθημα: σχέδιο, φύλλο εργασίας και τεστ εξόδου").waitFor();
+  for (const t of ["Σχέδιο μαθήματος", "Τεστ εξόδου"]) assert((await page.getByText(new RegExp(`· ${t}$`)).count()) > 0, `the lesson has the new «${t}»`);
+  await page.screenshot({ path: path.join(OUT, `${name}-02-lesson.png`), fullPage: true });
+  await ctx.close();
+}
+
 try {
   await syllabusFlow("syllabus");
   await programmeFlow("programme");
@@ -794,6 +827,7 @@ try {
   await cyDutyFlow("duty-cy");
   await bookletFlow("booklets");
   await prepareFlow("prepare");
+  await bookPagesFlow("pages");
   await flow("mobile", { width: 390, height: 844 }, true);
   await flow("desktop", { width: 1440, height: 900 }, false);
   await dark("dark-mobile", { width: 390, height: 844 }, true);
