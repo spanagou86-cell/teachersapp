@@ -66,13 +66,17 @@ async function flow(name, viewport, mobile) {
   await shot("03-editor");
 
   // 3. Change exercise 2 with AI: the proposal shows on the sheet, with Εφαρμογή / Ακύρωση.
-  if (mobile) await page.getByRole("button", { name: /Άλλαξέ το/ }).click();
+  const actions = page.getByRole("toolbar", { name: "Ενέργειες φύλλου" });
+  assert((await actions.getByRole("button").count()) === 4, "the sheet has four actions: save, edit, change, print");
+  await actions.getByRole("button", { name: "Άλλαξέ το" }).click();
   await page.getByRole("textbox", { name: "Οδηγία" }).fill("Άλλαξε μόνο τη δεύτερη άσκηση, πιο απλά.");
   await page.getByRole("button", { name: "Δημιουργία πρότασης" }).click();
   await page.getByRole("button", { name: /Εφαρμογή/ }).first().waitFor();
   await shot("04-suggestion");
   await page.getByRole("button", { name: /Εφαρμογή/ }).first().click();
-  const history = page.locator("h2", { hasText: "Ιστορικό αλλαγών" }).locator("..");
+  await page.getByRole("button", { name: "Περισσότερα" }).click();
+  await page.getByRole("menuitem", { name: "Ιστορικό αλλαγών" }).click();
+  const history = page.getByRole("region", { name: "Ιστορικό αλλαγών" });
   await history.getByText("Δημιουργία από αρχείο").waitFor();
   assert((await history.locator("li").count()) === 2, "AI change recorded in history (2 versions)");
   await history.locator("li", { hasText: "Δημιουργία από αρχείο" }).hover();
@@ -80,8 +84,17 @@ async function flow(name, viewport, mobile) {
   await page.waitForTimeout(200);
   assert((await history.locator("li").count()) === 3, "restore creates a new version (3)");
   await page.getByText(/^Επαναφορά: Δημιουργία/).first().waitFor();
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog", { name: "Ιστορικό αλλαγών" }).waitFor({ state: "detached" });
+
+  // Save: a clear button, and it says where the sheet is kept.
+  await actions.getByRole("button", { name: "Αποθήκευση" }).click();
+  await page.getByText(/Αποθηκεύτηκε στο Υλικό · Δ1/).waitFor();
+  assert(true, "«Αποθήκευση» confirms where the sheet is kept");
 
   // 4. Link to Monday 09:20 lesson
+  await page.getByRole("button", { name: "Περισσότερα" }).click();
+  await page.getByRole("menuitem", { name: /^(Βάλε σε μάθημα|Στα μαθήματα)/ }).click();
   const select = page.getByLabel("Μάθημα", { exact: true });
   const option = await select.locator("option", { hasText: "Δευτέρα 5 Οκτ · 09:20" }).getAttribute("value");
   await select.selectOption(option);
@@ -356,6 +369,7 @@ async function editingFlow(name) {
   await page.waitForURL(/\/materials\/[0-9a-z-]+$/);
   const doc = page.locator("article");
   const blocks = doc.locator("p.whitespace-pre-line");
+  await page.getByRole("toolbar", { name: "Ενέργειες φύλλου" }).getByRole("button", { name: "Επεξεργασία" }).click();
   await blocks.nth(1).click();
   await page.getByRole("button", { name: "Επεξεργασία" }).click();
   await page.getByLabel("Κείμενο", { exact: true }).fill("Γράψε τρία παραδείγματα με κλάσματα.");
@@ -660,6 +674,7 @@ async function smartTilesFlow(name) {
   await chips.getByRole("button", { name: "Νοερός υπολογισμός" }).click();
   await page.waitForURL(/\/materials\//, { timeout: 30000 });
   assert(/Νοερός υπολογισμός/.test(await page.locator("main").innerText()), "the subject's own sheet is made in one tap");
+  await page.getByRole("toolbar", { name: "Ενέργειες φύλλου" }).getByRole("button", { name: "Εκτύπωση" }).click();
   const toggle = page.getByRole("switch", { name: "Φιλικό για δυσλεξία" });
   if (await toggle.count()) {
     await toggle.first().click();
