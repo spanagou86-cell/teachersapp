@@ -29,6 +29,8 @@ export interface PrepareOptions {
   source?: { meta: FileMeta; url?: string };
   /** Class and subject to start from when there is no lesson. */
   defaults?: { classId: string; subjectId: SubjectId };
+  /** A request typed elsewhere (the box on Today): start on it right away. */
+  text?: string;
 }
 
 export const usePrepare = create<{ open: boolean; options: PrepareOptions; show: (o?: PrepareOptions) => void; hide: () => void }>((set) => ({
@@ -199,7 +201,7 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
   const [classId, setClassId] = useState(slot?.classId ?? options.defaults?.classId ?? classes[0]?.id ?? "");
   const [subjectId, setSubjectId] = useState<SubjectId>(slot?.subjectId ?? options.defaults?.subjectId ?? subjectChoices(subjects)[0].id);
   const [topic, setTopic] = useState(slot?.topic ?? "");
-  const [text, setText] = useState("");
+  const [text, setText] = useState(options.text ?? "");
   const [photo, setPhoto] = useState<{ meta: FileMeta; url?: string } | undefined>(options.source);
   const [uploading, setUploading] = useState(false);
   const [working, setWorking] = useState<{ kind: PrepKind; jobId: string }>();
@@ -256,10 +258,10 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
   // Opened with a tile already chosen: start at once, exactly as a tap on the tile would.
   const started = useRef(false);
   useEffect(() => {
-    if (options.kind && !started.current) {
-      started.current = true;
-      go(options.kind);
-    }
+    if (started.current) return;
+    started.current = true;
+    if (options.kind) go(options.kind);
+    else if (options.text?.trim()) go(inferKind(options.text));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

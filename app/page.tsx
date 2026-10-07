@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookOpenCheck, CalendarClock, CalendarDays, ClipboardCheck, CalendarOff, CheckCircle2, NotebookPen, Plus, Sparkles, Trash2 } from "@/components/icons";
+import { ArrowRight, BookOpenCheck, CalendarDays, ClipboardCheck, CheckCircle2, NotebookPen, Plus, Sparkles, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useState } from "react";
 import { needsLog, useClock } from "@/components/lesson";
@@ -8,15 +8,15 @@ import { MobileBrandBar } from "@/components/shell/PageHeader";
 import { SubjectIcon } from "@/components/subject";
 import { openPrepare } from "@/components/prepare";
 import { Timeline } from "@/components/timeline";
+import { AskBar, DayStats, rise, TodayHero, WeekStrip } from "@/components/today";
 import { toast } from "@/components/toast";
-import { Button, ButtonLink, Card, cx } from "@/components/ui";
-import { addDays, dayName, longDate, shortDate, startOfWeek, timeToMin, weekday } from "@/lib/dates";
+import { Button, ButtonLink, cx } from "@/components/ui";
+import { addDays, dayName, shortDate, startOfWeek, timeToMin, weekday } from "@/lib/dates";
 import { upcoming } from "@/lib/prepare";
-import { slotsOn, sortSlots, upcomingLesson } from "@/lib/schedule";
-import { holidayOn, schoolYearStart, termOn, weekNumber } from "@/lib/schoolYear";
+import { slotsOn, sortSlots } from "@/lib/schedule";
+import { schoolYearStart } from "@/lib/schoolYear";
 import { reportKey } from "@/lib/sep";
 import { useReports } from "@/lib/store/reports";
-import { vocative } from "@/lib/greek";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import { AutoText } from "@/components/text";
@@ -255,80 +255,36 @@ function NextStep() {
 
 export default function TodayPage() {
   const slots = useApp((s) => s.slots);
-  const profile = useApp((s) => s.profile);
-  const timetable = useApp((s) => s.timetable);
-  const subjects = useSubjects();
-  const clock = useClock();
-  const { today, now } = clock;
-  const country = profile.country;
-
+  const { today } = useClock();
   const todays = slotsOn(slots, today);
-  const ended = todays.filter((s) => timeToMin(s.end) <= timeToMin(now));
-  const week = weekNumber(country, today);
-  const term = termOn(country, today);
-  const holiday = holidayOn(country, today);
-  const next = upcomingLesson(slots, today, now);
-  const firstName = vocative(profile.displayName.split(" ")[0] ?? "");
-  const greeting = timeToMin(now) < timeToMin("12:00") ? "Καλημέρα" : "Καλησπέρα";
-
-  const nothingToday = (
-    <Card className="grid gap-3 p-5">
-      <div className="flex items-center gap-3">
-        <CalendarOff className="size-6 text-muted" />
-        <p className="font-bold">{holiday ? `Αργία · ${holiday}` : "Κανένα μάθημα σήμερα"}</p>
-      </div>
-      {next ? (
-        <Link href={`/lessons/${next.id}`} className="flex items-center gap-3 rounded-xl bg-bg p-3 hover:bg-line-2">
-          <SubjectIcon id={next.subjectId} size="sm" />
-          <span className="min-w-0 flex-1 text-sm">
-            <span className="block text-[12px] font-semibold text-muted">Επόμενο μάθημα</span>
-            <span className="font-semibold">
-              {dayName(next.date)} {shortDate(next.date)} · {next.start} · {subjects.find((x) => x.id === next.subjectId)?.name}
-            </span>
-          </span>
-          <ArrowRight className="size-4 text-muted" />
-        </Link>
-      ) : (
-        !timetable.length && (
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-            <p className="flex-1 text-sm text-muted">Πρόσθεσε το ωρολόγιο πρόγραμμά σου: μαθήματα, {country === "cy" ? "παιδονομίες" : "εφημερίες"} και κενά.</p>
-            <ButtonLink href="/settings/timetable">
-              <CalendarClock className="size-4" /> Ωρολόγιο
-            </ButtonLink>
-          </div>
-        )
-      )}
-    </Card>
-  );
 
   return (
     <div>
       <MobileBrandBar />
-      <header className="mb-4 grid gap-1">
-        <h1 className="text-[26px] font-semibold tracking-[-0.02em] leading-tight tracking-tight sm:text-[34px]">{longDate(today).replace(",", "")}</h1>
-        <p className="text-[14px] text-muted sm:text-[15px]">
-          {[week && `Εβδομάδα ${week}`, term, `${greeting}${firstName ? `, ${firstName}` : ""}`].filter(Boolean).join(" · ")}
-        </p>
-      </header>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="grid min-w-0 grid-cols-1 content-start gap-3">
-          <NextStep />
-          <Timeline date={today} empty={nothingToday} ai />
-          {todays.length > 0 && (
-            <Link href="/schedule" className="inline-flex items-center gap-1 justify-self-start px-1 text-sm font-semibold text-brand-500 hover:underline">
-              Όλη η εβδομάδα <ArrowRight className="size-4" />
-            </Link>
-          )}
-        </div>
-        <div className="grid content-start gap-6">
-          <Backlog />
-          <Tasks />
-          {ended.length === 0 && todays.length > 0 && (
-            <p className="flex items-center gap-2 text-[13px] text-muted">
-              <NotebookPen className="size-4" /> Μετά από κάθε μάθημα, πάτα «Έγινε» και γράψε δύο λέξεις για το τι διδάχθηκε.
-            </p>
-          )}
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
+        <TodayHero />
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="grid min-w-0 grid-cols-1 content-start gap-4">
+            <AskBar index={1} />
+            <NextStep />
+            {todays.length > 0 && (
+              <section aria-labelledby="day-h" className={cx("grid gap-3", rise(2).className)} style={rise(2).style}>
+                <h2 id="day-h" className="flex items-baseline justify-between px-1 text-[13px] font-bold text-muted">
+                  <span>Το πρόγραμμα της ημέρας</span>
+                  <Link href="/schedule" className="inline-flex items-center gap-1 font-semibold text-brand-500 hover:underline">
+                    Όλη η εβδομάδα <ArrowRight className="size-3.5" />
+                  </Link>
+                </h2>
+                <Timeline date={today} quiet ai />
+              </section>
+            )}
+          </div>
+          <div className="grid content-start gap-4">
+            <DayStats index={3} />
+            <WeekStrip index={5} />
+            <Backlog />
+            <Tasks />
+          </div>
         </div>
       </div>
     </div>

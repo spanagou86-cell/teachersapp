@@ -183,7 +183,8 @@ function BlockItem({ block }: { block: TimeBlock }) {
 }
 
 /** A day as a timeline: lessons, εφημερία/παιδονομία, κενά, and a "now" line on today. `ai` adds «Ετοίμασε» to the next lesson. */
-export function Timeline({ date, empty, ai }: { date: string; empty?: ReactNode; ai?: boolean }) {
+/** `quiet`: the next lesson stays a plain row, for pages that already feature it (Today). */
+export function Timeline({ date, empty, ai, quiet }: { date: string; empty?: ReactNode; ai?: boolean; quiet?: boolean }) {
   const slots = useApp((s) => s.slots);
   const blocks = useApp((s) => s.blocks);
   const { today, now } = useClock();
@@ -211,7 +212,7 @@ export function Timeline({ date, empty, ai }: { date: string; empty?: ReactNode;
             <Times start={e.start} end={e.end} strong={e === nextLesson} />
             <div className="min-w-0 flex-1">
               {e.kind === "lesson" ? (
-                <LessonItem slot={e.slot} highlight={e === nextLesson} minutesTo={timeToMin(e.start) - nowMin} ai={ai} />
+                <LessonItem slot={e.slot} highlight={!quiet && e === nextLesson} minutesTo={timeToMin(e.start) - nowMin} ai={ai} />
               ) : (
                 <BlockItem block={e.block} />
               )}
