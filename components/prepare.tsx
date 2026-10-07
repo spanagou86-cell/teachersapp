@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, ArrowUp, BookOpenCheck, Camera, Check, FileText, Layers, ListChecks, Loader2, MessageSquareText, PhoneCall, RotateCcw, ShieldCheck, Sparkles, SquareCheckBig, UserCheck, X } from "@/components/icons";
+import { ArrowRight, ArrowUp, BookOpenCheck, Camera, Check, Plus, FileText, Layers, ListChecks, Loader2, MessageSquareText, PhoneCall, RotateCcw, ShieldCheck, Sparkles, SquareCheckBig, UserCheck, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -56,24 +56,33 @@ const PLACEHOLDER: Partial<Record<SubjectId, string>> = {
   meleti: "π.χ. παρατήρηση στην αυλή, πίνακας και ερωτήσεις σωστό/λάθος",
 };
 
+/** A lesson's worth of pages: the book and the workbook. */
+const MAX_PAGES = 6;
+
 /** The pages, and what the AI read on them before making anything. */
 function PagesCard({
   photo,
-  thumbs,
+  pages,
+  busy,
   reading,
   subjectName,
   lessonSubject,
   onRemove,
+  onAdd,
+  onRemovePage,
   onRetry,
   onTitle,
   onMatch,
 }: {
   photo: { meta: FileMeta; url?: string };
-  thumbs: string[];
+  pages: { url: string }[];
+  busy: boolean;
   reading: { busy?: boolean; data?: PageReading; error?: string };
   subjectName: string;
   lessonSubject?: SubjectId;
   onRemove: () => void;
+  onAdd: () => void;
+  onRemovePage: (i: number) => void;
   onRetry: () => void;
   onTitle: (t: string) => void;
   onMatch: (id: SubjectId) => void;
@@ -82,16 +91,13 @@ function PagesCard({
   const d = reading.data;
   const found = d && subjects.find((x) => x.id === d.subjectId);
   const mismatch = d && found && lessonSubject && d.subjectId !== lessonSubject && d.subjectId !== "allo";
-  const shown = thumbs.filter(Boolean);
+  const n = pages.length;
   return (
     <section aria-label="Σελίδες βιβλίου" className="overflow-hidden rounded-xl border border-brand-100 bg-brand-50/50">
       <div className="flex items-center gap-3 p-2 pr-1">
-        {shown.length ? (
-          <span className="flex shrink-0 -space-x-5">
-            {shown.slice(0, 4).map((u, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={u} src={u} alt="" className="size-12 rounded-md border-2 border-surface object-cover shadow-card" style={{ rotate: `${(i - 1) * 4}deg` }} />
-            ))}
+        {n ? (
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-surface text-brand ring-1 ring-brand-100">
+            <BookOpenCheck className="size-5" />
           </span>
         ) : photo.url && photo.meta.type.startsWith("image/") ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -100,13 +106,48 @@ function PagesCard({
           <FileBadge file={photo.meta} />
         )}
         <span className="min-w-0 flex-1 text-sm">
-          <b className="block">Με βάση τη σελίδα σου{shown.length > 1 ? ` · ${shown.length} σελίδες` : ""}</b>
+          <b className="block">Με βάση τη σελίδα σου{n > 1 ? ` · ${n} σελίδες` : ""}</b>
           <span className="text-muted">{reading.busy ? "Τη διαβάζω…" : d ? "Τη διάβασα· έλεγξε τι βρήκα" : "Διάλεξε τι να φτιάξω από αυτήν"}</span>
         </span>
-        <IconButton label="Αφαίρεση σελίδας" onClick={onRemove}>
+        <IconButton label="Αφαίρεση όλων των σελίδων" onClick={onRemove}>
           <X className="size-4" />
         </IconButton>
       </div>
+
+      {n > 0 && (
+        // One page at a time from the camera: add the next, drop one that came out blurry.
+        <ol className="flex gap-2.5 overflow-x-auto px-2.5 pb-2.5 pt-2 [scrollbar-width:none]" aria-label="Σελίδες">
+          {pages.map((p, i) => (
+            <li key={p.url} className="relative shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt={`Σελίδα ${i + 1}`} className="h-20 w-16 rounded-lg border border-line bg-surface object-cover shadow-card" />
+              <span className="absolute bottom-1 left-1 rounded bg-ink/75 px-1 text-[10.5px] font-bold text-white tabular-nums">{i + 1}</span>
+              <button
+                type="button"
+                aria-label={`Αφαίρεση σελίδας ${i + 1}`}
+                disabled={busy}
+                onClick={() => onRemovePage(i)}
+                className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full bg-surface text-ink-2 shadow-card ring-1 ring-line hover:text-danger disabled:opacity-50"
+              >
+                <X className="size-3.5" />
+              </button>
+            </li>
+          ))}
+          {n < MAX_PAGES && (
+            <li className="shrink-0">
+              <button
+                type="button"
+                onClick={onAdd}
+                disabled={busy}
+                className="flex h-20 w-16 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-brand-100 bg-surface text-[11.5px] font-semibold text-brand transition-colors hover:bg-brand-50 disabled:opacity-60"
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                Σελίδα
+              </button>
+            </li>
+          )}
+        </ol>
+      )}
 
       {reading.busy && (
         <div className="grid gap-2 border-t border-brand-100 bg-surface p-3" aria-live="polite">
@@ -340,7 +381,9 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
   const [text, setText] = useState(options.text ?? "");
   const [photo, setPhoto] = useState<{ meta: FileMeta; url?: string } | undefined>(options.source);
   // Pages photographed here (not a file chosen elsewhere): the AI reads them first.
-  const [thumbs, setThumbs] = useState<string[]>([]);
+  const [pages, setPages] = useState<{ file: File; url: string }[]>([]);
+  const [bookPdf, setBookPdf] = useState(false);
+  const readSeq = useRef(0);
   const [reading, setReading] = useState<{ busy?: boolean; data?: PageReading; error?: string }>({});
   const [uploading, setUploading] = useState(false);
   const [working, setWorking] = useState<{ kind: PrepKind; jobId: string; pack?: boolean }>();
@@ -381,7 +424,7 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
   const piece = (kind: PrepKind) => {
     const t = topic.trim() || reading.data?.title || "";
     const grade = cl?.grade ?? "";
-    const { title, hint } = prepRequest({ kind, subject: subjectName, grade, topic: t, previous, text, photo: thumbs.length > 0, reading: reading.data });
+    const { title, hint } = prepRequest({ kind, subject: subjectName, grade, topic: t, previous, text, photo: pages.length > 0 || bookPdf, reading: reading.data });
     return {
       t,
       request: { title, kindLabel: KIND_LABEL[PREP[kind].kind], subject: subjectName, subjectId: sub, grade, levelLabel: LEVEL_LABEL.standard, withSolutions: true, hint, country, levels: kind === "levels" },
@@ -415,11 +458,14 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
 
   /** The AI reads the pages first: which subject, which unit, what they teach. */
   const read = async (meta: FileMeta) => {
+    const seq = ++readSeq.current;
     setReading({ busy: true });
     const r =
       mode === "cloud"
         ? await aiRead(meta, [subjectName, topic].filter(Boolean).join(" · "))
         : await new Promise<{ ok: true; data: PageReading }>((done) => setTimeout(() => done({ ok: true, data: demoReading(sub, topic) }), 1200));
+    // Pages changed meanwhile: only the latest reading counts.
+    if (seq !== readSeq.current) return;
     if (!r.ok) return setReading({ error: r.unavailable ? "" : r.error });
     const d = r.data;
     setReading({ data: d });
@@ -428,22 +474,20 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
     if (!slot || slot.subjectId === d.subjectId) setTopic(d.title);
   };
 
-  /** Up to 4 pages: several photos become one PDF, in the order chosen. */
-  const addPages = async (list: File[]) => {
-    const files = list.filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(f.name)).slice(0, 4);
-    if (!files.length) return;
+  /** The pages as one file: a photo as it is, several photos as one PDF in their order. Then the AI reads them. */
+  const applyPages = async (next: { file: File; url: string }[]) => {
+    setPages(next);
+    if (!next.length) return clearPages();
     setUploading(true);
     try {
-      const images = files.filter((f) => !/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name));
-      let file = files[0];
-      if (images.length > 1) {
-        const shrunk = await Promise.all(images.map((f) => shrinkImage(f, 2000, 0.82)));
+      let file = next[0].file;
+      if (next.length > 1) {
+        const shrunk = await Promise.all(next.map((p) => shrinkImage(p.file, 2000, 0.82)));
         file = new File([await pdfFromImages(shrunk, "Σελίδες βιβλίου")], "Σελίδες βιβλίου.pdf", { type: "application/pdf" });
       }
       const r = await ingestFile(file);
       if ("error" in r) return toast(r.error);
       setPhoto({ meta: r.meta, url: r.previewUrl });
-      setThumbs(images.length ? images.map((f) => URL.createObjectURL(f)) : [""]);
       void read(r.meta);
     } catch {
       toast("Οι σελίδες δεν ανέβηκαν. Δοκίμασε ξανά.");
@@ -451,9 +495,34 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
       setUploading(false);
     }
   };
+
+  /** Photos are added after the ones already there (up to 6); a PDF stands on its own. */
+  const addPages = async (list: File[]) => {
+    const isPdf = (f: File) => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name);
+    const pdf = list.find(isPdf);
+    if (pdf) {
+      setPages([]);
+      setBookPdf(true);
+      setUploading(true);
+      const r = await ingestFile(pdf);
+      setUploading(false);
+      if ("error" in r) return toast(r.error);
+      setPhoto({ meta: r.meta, url: r.previewUrl });
+      return void read(r.meta);
+    }
+    const images = list.filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
+    if (!images.length) return;
+    const room = MAX_PAGES - pages.length;
+    if (images.length > room) toast(`Έως ${MAX_PAGES} σελίδες κάθε φορά· για περισσότερες, ανέβασε PDF.`);
+    setBookPdf(false);
+    await applyPages([...pages, ...images.slice(0, Math.max(room, 0)).map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+  };
+
   const clearPages = () => {
+    readSeq.current++;
     setPhoto(undefined);
-    setThumbs([]);
+    setPages([]);
+    setBookPdf(false);
     setReading({});
   };
 
@@ -650,7 +719,10 @@ function PrepareBody({ options, onClose }: { options: PrepareOptions; onClose: (
           {photo && (
             <PagesCard
               photo={photo}
-              thumbs={thumbs}
+              pages={pages}
+              busy={uploading}
+              onAdd={() => photoRef.current?.click()}
+              onRemovePage={(i) => void applyPages(pages.filter((_, j) => j !== i))}
               reading={reading}
               subjectName={subjectName}
               lessonSubject={slot?.subjectId}

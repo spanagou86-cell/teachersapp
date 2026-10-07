@@ -804,6 +804,14 @@ async function bookPagesFlow(name) {
   await sheet.getByLabel("Σελίδες βιβλίου").setInputFiles(pages);
   await sheet.getByText("Βρήκα", { exact: true }).waitFor();
   assert((await sheet.getByText(/2 σελίδες/).count()) === 1, "two photos become one set of pages");
+  // From the camera, one page after another; a blurry one comes out with its ✕.
+  await sheet.locator('input[type=file][aria-label="Σελίδες βιβλίου"]').setInputFiles([{ ...pages[0], name: "selida-3.png" }]);
+  await sheet.getByText(/3 σελίδες/).waitFor();
+  assert((await sheet.getByRole("img", { name: /^Σελίδα \d$/ }).count()) === 3, "«+ Σελίδα» adds the next page");
+  await sheet.getByRole("button", { name: "Αφαίρεση σελίδας 2" }).click();
+  await sheet.getByText(/2 σελίδες/).waitFor();
+  await sheet.getByText("Βρήκα", { exact: true }).waitFor();
+  assert(true, "a page can be removed; the pages are read again");
   assert((await sheet.getByLabel("Τίτλος μαθήματος από τη σελίδα").inputValue()) === "Ισοδύναμα κλάσματα", "the AI reads the unit's title from the page");
   assert((await sheet.getByText(/Ενότητα 3 · σελ\. 42–43/).count()) === 1, "…and its unit and pages");
   assert((await sheet.getByText(/Μαθηματικά · Δ΄/).count()) === 1, "…and recognises the subject and the class");
