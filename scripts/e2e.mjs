@@ -343,9 +343,25 @@ async function schoolAndSignOut(name) {
   await page.getByText(/Καλημέρα, Σπύρο/).waitFor();
   await page.goto(BASE + "/settings");
   // The demo is Cypriot: go to Greece and back, to see the switch at work.
+  // A change of country is said before it is saved; the timetable moves to the new bell with it.
   await page.getByRole("radio", { name: "Ελλάδα" }).click();
+  const greece = page.getByRole("dialog", { name: "Χώρα: Ελλάδα" });
+  assert(await greece.getByText(/Κουδούνι 08:15–13:15/).isVisible(), "the change of country says which bell comes with it");
+  await greece.getByRole("button", { name: "Αποθήκευση" }).click();
+  await page.getByText(/Αποθηκεύτηκε · Ελλάδα: αργίες και ώρες κουδουνιού/).waitFor();
+  assert((await page.getByRole("radio", { name: "Ελλάδα" }).getAttribute("aria-checked")) === "true", "the country is saved");
+  await page.goto(`${BASE}/schedule?view=week&d=2026-10-12`);
+  await page.locator("text=/08:15/ >> visible=true").first().waitFor();
+  assert((await page.getByText(/07:45/).count()) === 0, "Greece: the week starts at 08:15, no Cyprus times left");
+  assert((await page.getByText("Εφημερία").count()) > 0, "Greece: εφημερία, not παιδονομία");
+  await page.goto(BASE + "/settings");
   await page.getByRole("radio", { name: "Κύπρος" }).click();
-  await page.getByText(/άλλαξε σε Κύπρου/).waitFor();
+  await page.getByRole("dialog", { name: "Χώρα: Κύπρος" }).getByRole("button", { name: "Αποθήκευση" }).click();
+  await page.getByText(/Αποθηκεύτηκε · Κύπρος/).waitFor();
+  await page.goto(`${BASE}/schedule?view=week&d=2026-10-12`);
+  await page.locator("text=/07:45/ >> visible=true").first().waitFor();
+  assert((await page.getByText(/08:15/).count()) === 0, "back in Cyprus: 07:45 again, every lesson in its place");
+  await page.goto(BASE + "/settings");
   await page.getByRole("button", { name: "Το σχολείο σου" }).click();
   await page.getByRole("textbox", { name: "Αναζήτηση σχολείου" }).fill("λατσιων γ");
   await page.getByRole("option", { name: /Λατσιών Γ΄/ }).click();
@@ -634,8 +650,11 @@ async function cyDutyFlow(name) {
   await page.goto(BASE + "/settings");
   // The demo is Cypriot: go to Greece and back, to see the switch at work.
   await page.getByRole("radio", { name: "Ελλάδα" }).click();
+  await page.getByRole("dialog", { name: "Χώρα: Ελλάδα" }).getByRole("button", { name: "Αποθήκευση" }).click();
+  await page.getByText(/Αποθηκεύτηκε · Ελλάδα/).waitFor();
   await page.getByRole("radio", { name: "Κύπρος" }).click();
-  await page.getByText(/άλλαξε σε Κύπρου/).waitFor();
+  await page.getByRole("dialog", { name: "Χώρα: Κύπρος" }).getByRole("button", { name: "Αποθήκευση" }).click();
+  await page.getByText(/Αποθηκεύτηκε · Κύπρος/).waitFor();
   await page.goto(`${BASE}/settings/timetable`);
   const grid = page.getByRole("grid", { name: /Παιδονομία ανά μέρα και διάλειμμα/ });
   await grid.waitFor();

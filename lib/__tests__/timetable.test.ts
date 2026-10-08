@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryOverLesson } from "../schedule";
-import { BELLS, bellGaps, materialize, overlappingEntries, periodOrdinal, periodsFrom, schoolYearEnd } from "../timetable";
+import { BELLS, bellGaps, retimeToBell, materialize, overlappingEntries, periodOrdinal, periodsFrom, schoolYearEnd } from "../timetable";
 import type { LessonSlot, TimetableEntry } from "../types";
 
 const entry = (id: string, weekday: number, start: string, end: string, extra: Partial<TimetableEntry> = {}): TimetableEntry => ({
@@ -52,5 +52,33 @@ describe("the Cyprus school day", () => {
   it("fills what a day leaves empty, never over a lesson", () => {
     const used = [{ start: "07:45", end: "08:25" }, { start: "09:05", end: "09:25" }, { start: "10:00", end: "10:40" }];
     expect(bellGaps(BELLS.cy, used).map((p) => p.start)).toEqual(["08:25", "10:45", "10:55", "11:35", "12:15", "12:25"]);
+  });
+});
+
+describe("changing country moves the week onto the new bell", () => {
+  const e = (id: string, weekday: number, start: string, end: string, kind: TimetableEntry["kind"] = "lesson"): TimetableEntry => ({
+    id, weekday, start, end, kind, label: "", ...(kind === "lesson" && { classId: "d1", subjectId: "math" as const }),
+  });
+  it("keeps each period's place, Cyprus → Greece", () => {
+    const week = [e("a", 1, "07:45", "08:25"), e("b", 1, "09:25", "10:05"), e("c", 2, "12:25", "13:05"), e("d", 2, "09:05", "09:25", "duty"), e("m", 3, "07:30", "07:45", "duty")];
+    const r = retimeToBell(week, BELLS.cy, BELLS.gr);
+    expect(r.entries.map((x) => `${x.id} ${x.start}-${x.end}`)).toEqual([
+      "a 08:15-09:00", // 1st period
+      "b 10:05-10:50", // 3rd period
+      "c 13:15-14:00", // the 7th: after Greece's six
+      "d 09:45-10:05", // 1st break
+      "m 08:00-08:15", // before the first bell, same 15′
+    ]);
+    expect(r.unmatched).toBe(0);
+  });
+  it("and back, Greece → Cyprus; a break Greece lacks is left for the teacher", () => {
+    const r = retimeToBell([e("a", 1, "08:15", "09:00"), e("x", 1, "13:30", "14:10")], BELLS.gr, BELLS.cy);
+    expect(r.entries.map((x) => x.start)).toEqual(["07:45", "13:30"]);
+    expect(retimeToBell([e("d", 1, "12:15", "12:25", "duty")], BELLS.cy, BELLS.gr).unmatched).toBe(1);
+  });
+  it("there and back gives the same week", () => {
+    const week = [e("a", 1, "07:45", "08:25"), e("c", 2, "12:25", "13:05"), e("d", 2, "10:45", "10:55", "duty"), e("x", 4, "13:30", "14:10")];
+    const there = retimeToBell(week, BELLS.cy, BELLS.gr).entries;
+    expect(retimeToBell(there, BELLS.gr, BELLS.cy).entries).toEqual(week);
   });
 });

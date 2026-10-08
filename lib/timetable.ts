@@ -66,6 +66,69 @@ export function periodOrdinal(bell: readonly Period[], start: string): string | 
   return i >= 0 ? `${i + 1}η` : undefined;
 }
 
+export interface Retimed {
+  entries: TimetableEntry[];
+  /** What moved: the old window and the new one, per entry. */
+  moves: { id: string; weekday: number; from: Period; to: Period }[];
+  /** Duties on a break the new bell does not have: left where they were, for the teacher to check. */
+  unmatched: number;
+}
+
+/**
+ * The same week on another country's bell: the 3rd period stays the 3rd period, the 2nd break the 2nd break,
+ * the morning duty before the first bell. Times off the old bell (the teacher's own) stay as they are.
+ */
+export function retimeToBell(entries: TimetableEntry[], from: readonly Period[], to: readonly Period[]): Retimed {
+  const minutes = (p: Period) => timeToMin(p.end) - timeToMin(p.start);
+  const at = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const fromTeach = from.filter((p) => !isBreak(p));
+  const fromBreaks = from.filter(isBreak);
+  const toTeach = to.filter((p) => !isBreak(p));
+  const toBreaks = to.filter(isBreak);
+  const firstBell = timeToMin(from[0].start);
+  const moves: Retimed["moves"] = [];
+  let unmatched = 0;
+
+  const target = (e: TimetableEntry): Period | undefined => {
+    const same = (p: Period) => p.start === e.start && p.end === e.end;
+    let t = fromTeach.findIndex(same);
+    if (t < 0) {
+      // A period after the last bell (from an earlier change of country): count on from the last one.
+      const len = minutes(fromTeach[0]);
+      const k = (timeToMin(e.start) - timeToMin(fromTeach.at(-1)!.end)) / len;
+      if (e.kind === "lesson" && Number.isInteger(k) && k >= 0 && minutes(e) === len) t = fromTeach.length + k;
+    }
+    if (t >= 0) {
+      if (t < toTeach.length) return toTeach[t];
+      // More periods than the new bell has: carry on after its last one.
+      const last = toTeach.at(-1)!;
+      const len = minutes(toTeach[0]);
+      const start = timeToMin(last.end) + (t - toTeach.length) * len;
+      return { start: at(start), end: at(start + len) };
+    }
+    const b = fromBreaks.findIndex(same);
+    if (b >= 0) {
+      if (b < toBreaks.length) return toBreaks[b];
+      unmatched++;
+      return undefined;
+    }
+    // A duty before the first bell keeps its length and still ends at the bell.
+    if (e.kind !== "lesson" && timeToMin(e.end) === firstBell) {
+      const end = timeToMin(to[0].start);
+      return { start: at(end - (firstBell - timeToMin(e.start))), end: at(end) };
+    }
+    return undefined;
+  };
+
+  const out = entries.map((e) => {
+    const t = target(e);
+    if (!t || (t.start === e.start && t.end === e.end)) return e;
+    moves.push({ id: e.id, weekday: e.weekday, from: { start: e.start, end: e.end }, to: t });
+    return { ...e, start: t.start, end: t.end };
+  });
+  return { entries: out, moves, unmatched };
+}
+
 /** Rows of the weekly grid: every distinct time window in the template, or the default school day. */
 export function periodsFrom(entries: TimetableEntry[], country?: Country): Period[] {
   if (!entries.length) return country ? teachingPeriods(country) : PERIODS;

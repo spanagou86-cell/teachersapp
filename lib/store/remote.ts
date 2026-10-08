@@ -671,6 +671,25 @@ export const remote = {
     return rows.length;
   },
 
+  /**
+   * The weekly timetable moved to other times (a change of country): the entries keep their ids,
+   * and their lessons from today on move with them — topics, material and notes included.
+   * Lessons already moved by hand (no longer at the old time) stay where they are.
+   */
+  retime: async (moves: { id: string; from: { start: string; end: string }; to: { start: string; end: string } }[], today: string) => {
+    for (const m of moves) {
+      await run(db().from("timetable_entries").update({ start_time: m.to.start, end_time: m.to.end }).eq("id", m.id));
+      await run(
+        db()
+          .from("lesson_slots")
+          .update({ start_time: m.to.start, end_time: m.to.end })
+          .eq("template_id", m.id)
+          .eq("start_time", m.from.start)
+          .gte("date", today),
+      );
+    }
+  },
+
   /** After a change of calendar (country, feast day, new rules): drop untouched lessons on days off, add the missing days. */
   applyCalendar: async (entries: TimetableEntry[], today: string, now: string, country: Country) => {
     const future = await all<FutureSlot>((a, b) => db().from("lesson_slots").select(FUTURE_COLS).gte("date", today).range(a, b));

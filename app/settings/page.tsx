@@ -11,10 +11,11 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { AutoText } from "@/components/text";
 import { toast } from "@/components/toast";
 import { SchoolPicker } from "@/components/schoolPicker";
-import { Button, Card, cx, Field, inputClass, Segmented, Toggle } from "@/components/ui";
+import { Button, Card, cx, Field, inputClass, Segmented, Sheet, Toggle } from "@/components/ui";
 import { usePrefs } from "@/lib/prefs";
 import { longDate } from "@/lib/dates";
-import { schoolYear, schoolYearStart } from "@/lib/schoolYear";
+import { dutyLabel, schoolYear, schoolYearStart, type Country } from "@/lib/schoolYear";
+import { BELLS, isBreak } from "@/lib/timetable";
 import { flushWrites, useApp } from "@/lib/store";
 import { remote } from "@/lib/store/remote";
 import { supabase } from "@/lib/supabase/client";
@@ -62,7 +63,7 @@ export default function SettingsPage() {
   const [prefs, setPrefs] = usePrefs();
   const profile = useApp((s) => s.profile);
   const update = useApp((s) => s.updateProfile);
-  const setCountry = useApp((s) => s.setCountry);
+  const [pendingCountry, setPendingCountry] = useState<"gr" | "cy">();
   const setLocalHoliday = useApp((s) => s.setLocalHoliday);
   const [moving, setMoving] = useState(false);
   const mode = useApp((s) => s.mode);
@@ -154,24 +155,14 @@ export default function SettingsPage() {
           <Segmented<"gr" | "cy">
             className="w-full sm:w-56"
             value={country}
-            onChange={async (c) => {
-              if (moving) return;
-              setMoving(true);
-              try {
-                await setCountry(c);
-                toast(c === "cy" ? "Το σχολικό ημερολόγιο άλλαξε σε Κύπρου" : "Το σχολικό ημερολόγιο άλλαξε σε Ελλάδας");
-              } catch {
-                toast("Δεν ολοκληρώθηκε η αλλαγή. Δοκίμασε ξανά.");
-              } finally {
-                setMoving(false);
-              }
-            }}
+            onChange={(c) => c !== country && setPendingCountry(c)}
             options={[
               { value: "cy", label: "Κύπρος" },
               { value: "gr", label: "Ελλάδα" },
             ]}
           />
         </Row>
+        <CountrySheet to={pendingCountry} onClose={() => setPendingCountry(undefined)} />
         <LinkRow
           href="/settings/timetable"
           icon={<CalendarClock />}
@@ -296,5 +287,85 @@ export default function SettingsPage() {
         )}
       </Section>
     </div>
+  );
+}
+
+const COUNTRY_NAME: Record<Country, string> = { cy: "Κύπρος", gr: "Ελλάδα" };
+
+/** A change of country, said out loud before it is saved: what follows it, and the bell for the timetable. */
+function CountrySheet({ to, onClose }: { to?: Country; onClose: () => void }) {
+  const setCountry = useApp((s) => s.setCountry);
+  const timetable = useApp((s) => s.timetable);
+  const [bell, setBell] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const target = to ?? "cy";
+  const b = BELLS[target];
+  const periods = b.filter((p) => !isBreak(p)).length;
+  const breaks = b.filter(isBreak);
+  const y = schoolYear(target, schoolYearStart(new Date().toISOString().slice(0, 10)));
+
+  const save = async () => {
+    if (!to || saving) return;
+    setSaving(true);
+    try {
+      const r = await setCountry(to, { bell: bell && timetable.length > 0 });
+      onClose();
+      const what = r.moved ? "αργίες και ώρες κουδουνιού" : "αργίες και τρίμηνα";
+      toast(`Αποθηκεύτηκε · ${COUNTRY_NAME[to]}: ${what}${r.unmatched ? ` · έλεγξε ${r.unmatched === 1 ? "1 " + dutyLabel(to).toLowerCase() : `${r.unmatched} ${to === "cy" ? "παιδονομίες" : "εφημερίες"}`}` : ""}`);
+    } catch {
+      toast("Δεν ολοκληρώθηκε η αλλαγή. Δοκίμασε ξανά.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Sheet
+      open={!!to}
+      onClose={onClose}
+      title={`Χώρα: ${COUNTRY_NAME[target]}`}
+      footer={
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={onClose} className="flex-1">
+            Άκυρο
+          </Button>
+          <Button onClick={save} disabled={saving} className="flex-1">
+            {saving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Αποθήκευση
+          </Button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 text-[14px]">
+        <p className="text-muted">Αλλάζουν μόνα τους, για όλη τη χρονιά:</p>
+        <ul className="grid gap-2">
+          <li className="flex gap-2.5 rounded-xl border border-line px-3 py-2.5">
+            <CalendarClock className="mt-0.5 size-4 shrink-0 text-brand-500" />
+            <span>
+              <b className="font-semibold">Αργίες, διακοπές και τρίμηνα {target === "cy" ? "Κύπρου" : "Ελλάδας"}</b>
+              <span className="block text-[13px] text-muted">
+                {y.holidays.length} αργίες και διακοπές · τα μαθήματα εκείνων των ημερών φεύγουν
+              </span>
+            </span>
+          </li>
+          <li className="flex gap-2.5 rounded-xl border border-line px-3 py-2.5">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-500" />
+            <span>
+              <b className="font-semibold">{dutyLabel(target)}</b> αντί για {dutyLabel(target === "cy" ? "gr" : "cy").toLowerCase()}, και τα μαθήματα με τα ονόματα {target === "cy" ? "του ΑΠ Κύπρου" : "της Ελλάδας"}
+            </span>
+          </li>
+        </ul>
+        {timetable.length > 0 && (
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-brand-100 bg-brand-50/60 px-3 py-3">
+            <input type="checkbox" checked={bell} onChange={(e) => setBell(e.target.checked)} className="mt-1 size-4 accent-[var(--color-brand)]" />
+            <span>
+              <b className="font-semibold">Και οι ώρες του ωρολογίου</b>
+              <span className="block text-[13px] text-muted">
+                Κουδούνι {b[0].start}–{b.at(-1)!.end}: {periods} ώρες, {breaks.length} διαλείμματα ({breaks.map((p) => p.start).join(", ")}). Κάθε μάθημα κρατά τη θέση του (η 1η ώρα στην 1η) με θέμα και υλικό.
+              </span>
+            </span>
+          </label>
+        )}
+      </div>
+    </Sheet>
   );
 }

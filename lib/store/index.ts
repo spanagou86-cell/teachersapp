@@ -4,14 +4,14 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { toast } from "@/components/toast";
 import { buildBlocks } from "../ai/templates";
-import { addDays, DEMO_NOW, DEMO_TODAY } from "../dates";
+import { addDays, DEMO_NOW, DEMO_TODAY, weekday } from "../dates";
 import { uid } from "../id";
 import { applyChange, restoreOriginal, restoreVersion } from "../materials";
 import { carryOverLesson, findConflicts, undoCarryOver, type CarryOverResult, type TimeWindow } from "../schedule";
 import { seed, type SeedState } from "../seed";
 import { CALENDAR_VERSION, isSchoolDay, setLocalHoliday, yearFor } from "../schoolYear";
 import { bump, openLessons, spread, type SyllabusItem, type TopicPatch } from "../syllabus";
-import { materialize } from "../timetable";
+import { BELLS, materialize, retimeToBell } from "../timetable";
 import type {
   Block,
   ClassGroup,
@@ -70,7 +70,8 @@ interface Actions {
 
   updateProfile: (p: Partial<Profile>) => void;
   /** Changes country and moves the calendar to its holidays. */
-  setCountry: (country: Profile["country"]) => Promise<void>;
+  /** Holidays, terms and words follow the country; with `bell`, the weekly timetable moves to its bell too. */
+  setCountry: (country: Profile["country"], opts?: { bell?: boolean }) => Promise<{ moved: number; unmatched: number }>;
   /** The school's feast day ("MM-DD", or nothing): lessons that day are taken off the calendar. */
   setLocalHoliday: (mmdd: string | undefined) => Promise<void>;
   addClass: (c: Omit<ClassGroup, "id">) => string;
@@ -333,9 +334,33 @@ export const useApp = create<AppState>()(
           if (get().mode === "demo") set(seed());
         },
 
-        setCountry: async (country) => {
-          if (country === get().profile.country) return;
+        setCountry: async (country, opts) => {
+          const { profile, timetable, mode, today } = get();
+          if (country === profile.country) return { moved: 0, unmatched: 0 };
+          const r = opts?.bell && timetable.length ? retimeToBell(timetable, BELLS[profile.country], BELLS[country]) : undefined;
+          if (r?.moves.length) {
+            if (mode === "cloud") {
+              await flushWrites();
+              await remote.retime(r.moves, today);
+            } else {
+              // Demo: the coming lessons and duties move with their weekly time.
+              const move = (x: { date: string; start: string; end: string }) =>
+                x.date >= today ? r.moves.find((m) => m.weekday === weekday(x.date) && m.from.start === x.start && m.from.end === x.end) : undefined;
+              set((s) => ({
+                slots: s.slots.map((x) => {
+                  const m = move(x);
+                  return m ? { ...x, start: m.to.start, end: m.to.end } : x;
+                }),
+                blocks: s.blocks.map((b) => {
+                  const m = b.oneOff ? undefined : move(b);
+                  return m ? { ...b, start: m.to.start, end: m.to.end } : b;
+                }),
+              }));
+            }
+            set({ timetable: r.entries });
+          }
           await changeCalendar({ country });
+          return { moved: r?.moves.length ?? 0, unmatched: r?.unmatched ?? 0 };
         },
         setLocalHoliday: async (mmdd) => {
           if (mmdd === get().profile.localHoliday) return;
