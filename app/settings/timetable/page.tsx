@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { AlertTriangle, CalendarPlus, Camera, Coffee, Loader2, MessagesSquare, Plus, ShieldCheck, Trash2 } from "@/components/icons";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { DUTY_PLACES, openDutySheet } from "@/components/dutySheet";
 import { SUBJECT_STYLE } from "@/components/subject";
@@ -11,7 +11,8 @@ import { toast } from "@/components/toast";
 import { Button, Card, cx, Field, IconButton, inputClass, Segmented, Select, Sheet } from "@/components/ui";
 import { uid } from "@/lib/id";
 import { dutyLabel, yearFor } from "@/lib/schoolYear";
-import { aiReadTimetable, shrinkImage, toBase64 } from "@/lib/ai/client";
+import type { ReadEntry } from "@/lib/ai/client";
+import { readTimetablePhoto, useTimetableDraft } from "@/lib/timetablePhoto";
 import { enablePush, pushState } from "@/lib/pushClient";
 import { gradeFromName, planImport } from "@/lib/ai/timetableImport";
 import { useApp } from "@/lib/store";
@@ -476,42 +477,48 @@ function Editor() {
     setRows((rs) => [...rs, { key: uid(), start, end }]);
   };
 
+  /** Hours read from a photo → filled grid, for the teacher to check before saving. */
+  const applyRead = (read: ReadEntry[], notes?: string) => {
+    const plan = planImport(read, allClasses);
+    const created = new Map<string, string>();
+    for (const name of plan.newClasses) created.set(name, addClass({ name: name.slice(0, 40), grade: gradeFromName(name), room: "" }));
+    const newRows = plan.periods.map((p) => ({ ...p, key: uid() }));
+    const next: Record<string, Cell> = {};
+    for (const c of plan.cells) {
+      const row = newRows.find((x) => x.start === c.start && x.end === c.end)!;
+      const classId = c.classId ?? (c.className ? created.get(c.className) : undefined);
+      if (c.kind === "lesson" && !classId) continue;
+      next[`${c.weekday}|${row.key}`] = { kind: c.kind, classId, subjectId: c.subjectId, label: c.label };
+    }
+    setRows(newRows);
+    setCells(next);
+    setReadNotes(notes?.trim() ?? "");
+    toast(`Διάβασα ${plan.cells.length} ώρες${plan.newClasses.length ? ` · νέα τμήματα: ${plan.newClasses.join(", ")}` : ""}. Έλεγξέ τες και πάτα Αποθήκευση.`);
+  };
+
   /** Photo or PDF of the school timetable → filled grid, for the teacher to check before saving. */
   const readPhoto = async (file: File) => {
     if (mode !== "cloud") return toast("Η ανάγνωση από φωτογραφία είναι διαθέσιμη με λογαριασμό.");
-    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
-    if (!isPdf && !/^image\/(jpeg|png|webp|gif)$/.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))
-      return toast("Ανέβασε φωτογραφία (JPG/PNG) ή PDF του προγράμματος.");
     setReading(true);
     setReadNotes("");
     try {
-      const blob = isPdf ? file : await shrinkImage(file, 1800, 0.85);
-      if (blob.size > 3_000_000) return toast("Το αρχείο είναι μεγάλο. Δοκίμασε φωτογραφία ή PDF μιας σελίδας.");
-      const mediaType = isPdf ? "application/pdf" : blob.type === "image/jpeg" || blob.type === "image/png" || blob.type === "image/webp" ? blob.type : "";
-      if (!mediaType) return toast("Αυτή η φωτογραφία δεν διαβάζεται. Τράβηξέ τη ξανά από την κάμερα ή στείλε τη ως JPG.");
-      const r = await aiReadTimetable({ data: await toBase64(blob), mediaType }, teacher, allClasses.map((c) => c.name), country);
+      const r = await readTimetablePhoto(file, { teacher, classes: allClasses.map((c) => c.name), country });
       if (!r.ok) return toast(r.error);
-      const plan = planImport(r.data.entries, allClasses);
-      const created = new Map<string, string>();
-      for (const name of plan.newClasses) created.set(name, addClass({ name: name.slice(0, 40), grade: gradeFromName(name), room: "" }));
-      const newRows = plan.periods.map((p) => ({ ...p, key: uid() }));
-      const next: Record<string, Cell> = {};
-      for (const c of plan.cells) {
-        const row = newRows.find((x) => x.start === c.start && x.end === c.end)!;
-        const classId = c.classId ?? (c.className ? created.get(c.className) : undefined);
-        if (c.kind === "lesson" && !classId) continue;
-        next[`${c.weekday}|${row.key}`] = { kind: c.kind, classId, subjectId: c.subjectId, label: c.label };
-      }
-      setRows(newRows);
-      setCells(next);
-      setReadNotes(r.data.notes?.trim() ?? "");
-      toast(
-        `Διάβασα ${plan.cells.length} ώρες${plan.newClasses.length ? ` · νέα τμήματα: ${plan.newClasses.join(", ")}` : ""}. Έλεγξέ τες και πάτα Αποθήκευση.`,
-      );
+      applyRead(r.entries, r.notes);
     } finally {
       setReading(false);
     }
   };
+
+  // A photo taken from «Πρόγραμμα»: its hours arrive here to be checked.
+  const draft = useTimetableDraft((s) => s.draft);
+  const clearDraft = useTimetableDraft((s) => s.set);
+  useEffect(() => {
+    if (!draft) return;
+    clearDraft(undefined);
+    applyRead(draft.entries, draft.notes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
 
   const save = async () => {
     setSaving(true);
@@ -576,6 +583,7 @@ function Editor() {
           }}
         />
       </Card>
+      <div id="duty" className="scroll-mt-4">
       <DutyPicker
         breaks={breaks}
         extra={extraDuty}
@@ -586,6 +594,7 @@ function Editor() {
         place={place}
         setPlace={setPlace}
       />
+      </div>
 
       {readNotes && (
         <p role="note" className="mb-5 flex gap-2 rounded-xl bg-amber-50 p-3 text-sm">

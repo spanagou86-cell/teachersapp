@@ -1,11 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import { BookOpenCheck, CalendarCog, ShieldCheck, Plus, Sparkles, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "@/components/icons";
+import { BookOpenCheck, Plus, Sparkles, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { StatusPill } from "@/components/lesson";
+import { ScheduleSetup } from "@/components/scheduleSetup";
 import { MobileBrandBar, PageHeader } from "@/components/shell/PageHeader";
 import { SUBJECT_STYLE } from "@/components/subject";
 import { Timeline } from "@/components/timeline";
@@ -16,9 +17,7 @@ import { dutyLabel, holidayOn, schoolYear, schoolYearStart, termOn, weekNumber, 
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
 import { periodsFrom } from "@/lib/timetable";
-import { Menu } from "@/components/menu";
 import { openSyllabus } from "@/components/syllabus";
-import { openDutySheet } from "@/components/dutySheet";
 
 type View = "week" | "month" | "year";
 
@@ -331,20 +330,33 @@ function Calendar() {
                 </IconButton>
               </div>
             )}
-            <Menu
-              label="Περισσότερα"
-              items={[
-                { label: "Έκτακτο μάθημα", icon: <Plus />, onClick: () => setAdding(true) },
-                { label: `${dutyLabel(country)} μία φορά`, icon: <ShieldCheck />, onClick: () => openDutySheet(day < today ? today : day) },
-                { label: "Ύλη μαθήματος: θέματα για όλη τη χρονιά", icon: <Sparkles />, onClick: () => openSyllabus() },
-                { label: "Τι διδάχθηκε και προγραμματισμός", icon: <BookOpenCheck />, href: "/journal" },
-                { label: "Ωρολόγιο πρόγραμμα", icon: <CalendarCog />, href: "/settings/timetable" },
-              ]}
-            />
             </div>
           </div>
         }
       />
+
+      {/* «Έκτακτη» opens on the day being looked at (never a past one). */}
+      <ScheduleSetup day={day < today ? undefined : day} />
+
+      {/* Everything else, as buttons you can see (no «⋯» menu). */}
+      <div className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Ενέργειες προγράμματος">
+        {[
+          { label: "Έκτακτο μάθημα", Icon: Plus, onClick: () => setAdding(true) },
+          { label: "Ύλη για όλη τη χρονιά", Icon: Sparkles, onClick: () => openSyllabus() },
+          { label: "Η εβδομάδα σε 10′", Icon: Sparkles, href: "/week" },
+          { label: "Τι διδάχθηκε · Προγραμματισμός", Icon: BookOpenCheck, href: "/journal" },
+        ].map(({ label, Icon, onClick, href }) =>
+          href ? (
+            <Link key={label} href={href} className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 text-[13.5px] font-semibold text-ink-2 hover:bg-line-2 hover:text-ink">
+              <Icon className="size-4 text-brand-500" /> {label}
+            </Link>
+          ) : (
+            <button key={label} type="button" onClick={onClick} className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 text-[13.5px] font-semibold text-ink-2 hover:bg-line-2 hover:text-ink">
+              <Icon className="size-4 text-brand-500" /> {label}
+            </button>
+          ),
+        )}
+      </div>
 
       {view === "week" && (
         <>

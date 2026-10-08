@@ -600,8 +600,11 @@ async function dutyFlow(name) {
   await page.goto(`${BASE}/schedule?view=week&d=2026-10-12`);
   await page.getByText(/Εφημερία|Παιδονομία/).first().waitFor();
   assert(true, "the new duty is in the schedule");
-  await page.getByRole("button", { name: "Περισσότερα" }).click();
-  await page.getByRole("menuitem", { name: /μία φορά/ }).click();
+  // «Πρόγραμμα» shows its tools as buttons: the duty card has «Έκτακτη».
+  const setup = page.getByRole("region", { name: "Το πρόγραμμά σου" });
+  assert((await setup.getByText(/Τρίτη 09:05/).count()) > 0, "the duty card lists the breaks on duty");
+  assert((await page.getByRole("button", { name: "Περισσότερα" }).count()) === 0, "no «⋯» menu on Πρόγραμμα");
+  await setup.getByRole("button", { name: "Έκτακτη" }).click();
   const sheet = page.getByRole("dialog", { name: /μία φορά/ });
   await sheet.getByLabel("Σημείο (προαιρετικό)").fill("Αυλή");
   await sheet.getByRole("button", { name: "Προσθήκη" }).click();
