@@ -51,6 +51,21 @@ export const PERIOD_MINUTES: Record<Country, number> = { gr: 45, cy: 40 };
 /** The teaching periods of a bell (breaks are the short rows). */
 export const teachingPeriods = (country: Country): Period[] => BELLS[country].filter((p) => timeToMin(p.end) - timeToMin(p.start) >= 30);
 
+/** A break is a short row of the bell (under 30′). */
+export const isBreak = (p: Period) => timeToMin(p.end) - timeToMin(p.start) < 30;
+
+/** The bell rows nothing of the day covers: empty periods and breaks, so a day reads from the first bell to the last. */
+export function bellGaps(bell: readonly Period[], used: readonly Period[]): Period[] {
+  const overlaps = (a: Period, b: Period) => timeToMin(a.start) < timeToMin(b.end) && timeToMin(b.start) < timeToMin(a.end);
+  return bell.filter((p) => !used.some((u) => overlaps(p, u)));
+}
+
+/** «3η» for the third teaching period of the bell, nothing for a break or a time off the bell. */
+export function periodOrdinal(bell: readonly Period[], start: string): string | undefined {
+  const i = bell.filter((p) => !isBreak(p)).findIndex((p) => p.start === start);
+  return i >= 0 ? `${i + 1}η` : undefined;
+}
+
 /** Rows of the weekly grid: every distinct time window in the template, or the default school day. */
 export function periodsFrom(entries: TimetableEntry[], country?: Country): Period[] {
   if (!entries.length) return country ? teachingPeriods(country) : PERIODS;

@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { BookOpenCheck, Plus, Sparkles, ChevronLeft, ChevronRight, CornerDownRight, Paperclip } from "@/components/icons";
+import { BookOpenCheck, Plus, Sparkles, ChevronLeft, ChevronRight, CornerDownRight, Paperclip, Coffee } from "@/components/icons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
@@ -16,13 +16,20 @@ import { addDays, dayMonth, dayName, dayOfMonth, dayShort, isISODate, shortDate,
 import { dutyLabel, holidayOn, schoolYear, schoolYearStart, termOn, weekNumber, type Country } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
-import { periodsFrom } from "@/lib/timetable";
+import { BELLS, bellGaps, isBreak, periodOrdinal, periodsFrom, type Period } from "@/lib/timetable";
 import { openSyllabus } from "@/components/syllabus";
 
 type View = "week" | "month" | "year";
 
 const MONTHS = ["Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος", "Ιούλιος", "Αύγουστος", "Σεπτέμβριος", "Οκτώβριος", "Νοέμβριος", "Δεκέμβριος"];
 const iso = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+/** The school day the grid runs on: Cyprus has one official bell; elsewhere, the teacher's own periods. */
+function useBell(): readonly Period[] {
+  const country = useApp((s) => s.profile.country);
+  const timetable = useApp((s) => s.timetable);
+  return useMemo(() => (country === "cy" ? BELLS.cy : periodsFrom(timetable, country)), [country, timetable]);
+}
 
 function WeekAgenda({ dates, country }: { dates: string[]; country: Country }) {
   const slots = useApp((s) => s.slots);
@@ -34,13 +41,14 @@ function WeekAgenda({ dates, country }: { dates: string[]; country: Country }) {
   const weekSlots = slots.filter((s) => s.date >= dates[0] && s.date <= dates[4]);
   const weekBlocks = blocks.filter((b) => b.date >= dates[0] && b.date <= dates[4]);
 
-  // Rows: every time window used this week, else the template's.
+  const bell = useBell();
+  // Rows: every time window used this week, plus the rest of the bell (empty periods, breaks) — first bell to last.
   const rows = useMemo(() => {
-    const map = new Map<string, { start: string; end: string }>();
+    const map = new Map<string, Period>();
     for (const x of [...weekSlots, ...weekBlocks]) map.set(`${x.start}-${x.end}`, { start: x.start, end: x.end });
-    const list = map.size ? [...map.values()] : periodsFrom(timetable);
-    return list.sort((a, b) => timeToMin(a.start) - timeToMin(b.start) || timeToMin(a.end) - timeToMin(b.end));
-  }, [weekSlots, weekBlocks, timetable]);
+    const used = map.size ? [...map.values()] : periodsFrom(timetable);
+    return [...used, ...bellGaps(bell, used)].sort((a, b) => timeToMin(a.start) - timeToMin(b.start) || timeToMin(a.end) - timeToMin(b.end));
+  }, [weekSlots, weekBlocks, timetable, bell]);
 
   return (
     <Card className="hidden overflow-x-auto lg:block">
@@ -56,12 +64,27 @@ function WeekAgenda({ dates, country }: { dates: string[]; country: Country }) {
             </div>
           );
         })}
-        {rows.map((r, ri) => (
+        {rows.map((r, ri) => {
+          const brk = isBreak(r);
+          const ordinal = periodOrdinal(bell, r.start);
+          return (
           <div key={`${r.start}-${r.end}`} className="contents">
-            <div className="border-b border-line-2 bg-bg px-2 py-2 text-[11px] font-medium leading-tight tabular-nums text-muted">
-              {r.start}
-              <br />
-              {r.end}
+            <div className={clsx("border-b border-line-2 bg-bg px-2 text-[11px] font-medium leading-tight tabular-nums text-muted", brk ? "py-1" : "py-2")}>
+              {brk ? (
+                <>
+                  <span className="flex items-center gap-1 text-[10.5px] font-bold">
+                    <Coffee className="size-3" /> Διάλειμμα
+                  </span>
+                  {r.start}–{r.end}
+                </>
+              ) : (
+                <>
+                  {ordinal && <span className="block text-[10.5px] font-bold text-brand-500">{ordinal} ώρα</span>}
+                  {r.start}
+                  <br />
+                  {r.end}
+                </>
+              )}
             </div>
             {dates.map((d) => {
               const holiday = holidayOn(country, d);
@@ -78,7 +101,7 @@ function WeekAgenda({ dates, country }: { dates: string[]; country: Country }) {
               const slot = weekSlots.find((s) => s.date === d && s.start === r.start && s.end === r.end);
               const block = weekBlocks.find((b) => b.date === d && b.start === r.start && b.end === r.end);
               return (
-                <div key={d} className="min-h-[56px] border-b border-l border-line-2 p-1.5">
+                <div key={d} className={clsx("border-b border-l border-line-2", brk ? "min-h-[30px] bg-bg/60 p-1" : "min-h-[56px] p-1.5")}>
                   {slot && (
                     <Link
                       href={`/lessons/${slot.id}`}
@@ -122,7 +145,8 @@ function WeekAgenda({ dates, country }: { dates: string[]; country: Country }) {
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );
@@ -274,6 +298,7 @@ function Calendar() {
   const anchor = isISODate(rawD) ? rawD : today;
   const go = (v: View, d: string) => router.replace(`/schedule?view=${v}&d=${d}`, { scroll: false });
   const [adding, setAdding] = useState(false);
+  const bell = useBell();
 
   const monday = startOfWeek(weekday(anchor) === 6 || weekday(anchor) === 0 ? addDays(anchor, 2) : anchor);
   const dates = weekDates(monday);
@@ -387,6 +412,7 @@ function Calendar() {
             </h2>
             <Timeline
               date={day}
+              bell={bell}
               empty={
                 <p className="rounded-2xl border border-dashed border-line py-8 text-center text-sm text-muted">
                   {holidayOn(country, day) ? `Αργία · ${holidayOn(country, day)}` : "Δεν υπάρχουν μαθήματα."}

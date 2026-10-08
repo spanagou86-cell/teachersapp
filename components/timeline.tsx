@@ -5,6 +5,7 @@ import { ArrowRight, Coffee, CornerDownRight, MessagesSquare, Paperclip, ShieldC
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { timeToMin } from "@/lib/dates";
+import { bellGaps, isBreak, periodOrdinal, type Period } from "@/lib/timetable";
 import { dutyLabel } from "@/lib/schoolYear";
 import { useApp } from "@/lib/store";
 import { useSubjects } from "@/lib/store/hooks";
@@ -15,11 +16,12 @@ import { openPrepare } from "./prepare";
 import { toast } from "./toast";
 import { buttonClass } from "./ui";
 
-type Entry = { kind: "lesson"; slot: LessonSlot } | { kind: "block"; block: TimeBlock };
+type Entry = { kind: "lesson"; slot: LessonSlot } | { kind: "block"; block: TimeBlock } | { kind: "gap"; brk: boolean };
 
-function Times({ start, end, strong }: { start: string; end: string; strong?: boolean }) {
+function Times({ start, end, strong, ordinal, slim }: { start: string; end: string; strong?: boolean; ordinal?: string; slim?: boolean }) {
   return (
-    <div className={clsx("w-11 shrink-0 pt-2.5 text-[11.5px] font-medium leading-tight tabular-nums", strong ? "text-ink" : "text-muted")}>
+    <div className={clsx("w-11 shrink-0 text-[11.5px] font-medium leading-tight tabular-nums", slim ? "pt-1.5" : "pt-2.5", strong ? "text-ink" : "text-muted")}>
+      {ordinal && <span className="block text-[10.5px] font-bold text-brand-500">{ordinal}</span>}
       {start}
       <span className="block font-medium opacity-75">{end}</span>
     </div>
@@ -182,18 +184,33 @@ function BlockItem({ block }: { block: TimeBlock }) {
   );
 }
 
+/** A bell row with nothing in it: a break, or a teaching period without a lesson. */
+function GapItem({ brk, start, end }: { brk: boolean; start: string; end: string }) {
+  const mins = timeToMin(end) - timeToMin(start);
+  return brk ? (
+    <div className="flex items-center gap-2 rounded-xl bg-line-2/60 px-3.5 py-1.5 text-[12.5px] font-medium text-muted">
+      <Coffee className="size-3.5 shrink-0" /> Διάλειμμα · {mins}′
+    </div>
+  ) : (
+    <div className="rounded-2xl border border-dashed border-line px-3.5 py-2.5 text-[13px] text-muted">Χωρίς μάθημα</div>
+  );
+}
+
 /** A day as a timeline: lessons, εφημερία/παιδονομία, κενά, and a "now" line on today. `ai` adds «Ετοίμασε» to the next lesson. */
 /** `quiet`: the next lesson stays a plain row, for pages that already feature it (Today). */
-export function Timeline({ date, empty, ai, quiet }: { date: string; empty?: ReactNode; ai?: boolean; quiet?: boolean }) {
+/** `bell`: the school day — its empty periods and breaks are shown too, so the day runs from the first bell to the last. */
+export function Timeline({ date, empty, ai, quiet, bell }: { date: string; empty?: ReactNode; ai?: boolean; quiet?: boolean; bell?: readonly Period[] }) {
   const slots = useApp((s) => s.slots);
   const blocks = useApp((s) => s.blocks);
   const { today, now } = useClock();
-  const entries: (Entry & { start: string; end: string })[] = [
+  const items: (Entry & { start: string; end: string })[] = [
     ...slots.filter((s) => s.date === date).map((slot) => ({ kind: "lesson" as const, slot, start: slot.start, end: slot.end })),
     ...blocks.filter((b) => b.date === date).map((block) => ({ kind: "block" as const, block, start: block.start, end: block.end })),
-  ].sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
+  ];
+  if (!items.length) return <>{empty}</>;
 
-  if (!entries.length) return <>{empty}</>;
+  const gaps = bell ? bellGaps(bell, items).map((p) => ({ kind: "gap" as const, brk: isBreak(p), start: p.start, end: p.end })) : [];
+  const entries = [...items, ...gaps].sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
 
   const isToday = date === today;
   const nowMin = timeToMin(now);
@@ -206,15 +223,23 @@ export function Timeline({ date, empty, ai, quiet }: { date: string; empty?: Rea
   return (
     <div className="grid grid-cols-1 gap-2">
       {entries.map((e, i) => (
-        <div key={e.kind === "lesson" ? e.slot.id : e.block.id} className="contents">
+        <div key={e.kind === "lesson" ? e.slot.id : e.kind === "block" ? e.block.id : `gap-${e.start}`} className="contents">
           {showNow && i === nowIndex && <NowLine now={now} />}
           <div className="flex gap-2">
-            <Times start={e.start} end={e.end} strong={e === nextLesson} />
+            <Times
+              start={e.start}
+              end={e.end}
+              strong={e === nextLesson}
+              ordinal={bell ? periodOrdinal(bell, e.start) : undefined}
+              slim={e.kind === "gap" && e.brk}
+            />
             <div className="min-w-0 flex-1">
               {e.kind === "lesson" ? (
                 <LessonItem slot={e.slot} highlight={!quiet && e === nextLesson} minutesTo={timeToMin(e.start) - nowMin} ai={ai} />
-              ) : (
+              ) : e.kind === "block" ? (
                 <BlockItem block={e.block} />
+              ) : (
+                <GapItem brk={e.brk} start={e.start} end={e.end} />
               )}
             </div>
           </div>

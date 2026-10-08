@@ -81,6 +81,6 @@ describe("seed schedule", () => {
   it("finds the next lesson and free periods", () => {
     expect(nextLesson(slots, "2026-10-05", "09:05")?.subjectId).toBe("math");
     // The demo is a Cypriot school: free periods come from the Cyprus bell.
-    expect(freePeriods(slots, "2026-10-06", periodsFrom([], "cy")).map((p) => p.start)).toEqual(["08:25", "10:05", "11:35", "12:25"]);
+    expect(freePeriods(slots, "2026-10-06", periodsFrom([], "cy")).map((p) => p.start)).toEqual(["08:25", "10:05", "11:35"]);
   });
 });

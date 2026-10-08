@@ -2,7 +2,7 @@ import { buildBlocks } from "./ai/templates";
 import { addDays, DEMO_TODAY, startOfWeek } from "./dates";
 import type { AttendanceRecord, ClassGroup, ClassNote, LessonSlot, Material, Student, StudentNote, SubjectId, Task, TimeBlock, TimetableEntry } from "./types";
 
-/** The demo is a Cypriot school: the official bell (07:45, 40′ periods) without the breaks. */
+/** The demo is a Cypriot school: the official bell (07:45–13:05, seven 40′ periods) without the breaks. */
 const PERIODS = [
   { start: "07:45", end: "08:25" },
   { start: "08:25", end: "09:05" },
@@ -10,6 +10,7 @@ const PERIODS = [
   { start: "10:05", end: "10:45" },
   { start: "10:55", end: "11:35" },
   { start: "11:35", end: "12:15" },
+  { start: "12:25", end: "13:05" },
 ];
 
 export const CLASSES: ClassGroup[] = [
@@ -51,6 +52,8 @@ const TIMETABLE: [number, number, string, SubjectId][] = [
   [3, 0, "d1", "glossa"], [3, 1, "d2", "math"], [3, 3, "d1", "fysika"], [3, 5, "d2", "eikastika"],
   [4, 0, "d1", "math"], [4, 2, "d2", "glossa"], [4, 3, "d1", "glossa"],
   [5, 0, "d1", "glossa"], [5, 2, "d1", "math"], [5, 4, "d2", "fysika"],
+  // The 7th period (12:25–13:05), last so the topics above keep their order.
+  [2, 6, "d1", "eikastika"], [4, 6, "d2", "eikastika"],
 ];
 
 const PAST_NOTES: Partial<Record<SubjectId, string>> = {

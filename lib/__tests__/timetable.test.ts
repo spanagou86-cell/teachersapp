@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryOverLesson } from "../schedule";
-import { materialize, overlappingEntries, periodsFrom, schoolYearEnd } from "../timetable";
+import { BELLS, bellGaps, materialize, overlappingEntries, periodOrdinal, periodsFrom, schoolYearEnd } from "../timetable";
 import type { LessonSlot, TimetableEntry } from "../types";
 
 const entry = (id: string, weekday: number, start: string, end: string, extra: Partial<TimetableEntry> = {}): TimetableEntry => ({
@@ -39,5 +39,18 @@ describe("timetable", () => {
     const slots: LessonSlot[] = [{ id: "l", date: "2026-10-05", start: "08:00", end: "08:40", classId: "c", subjectId: "math", topic: "", materialIds: [], status: "partial", taughtNote: "" }];
     const r = carryOverLesson(slots, "l", { date: "2026-10-06", start: "10:00", end: "10:20" }, "n", "2026-10-05", [{ id: "d", date: "2026-10-06", start: "10:00", end: "10:20" }]);
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("the Cyprus school day", () => {
+  it("runs 07:45–13:05: seven periods and three breaks", () => {
+    expect(BELLS.cy[0].start).toBe("07:45");
+    expect(BELLS.cy.at(-1)!.end).toBe("13:05");
+    expect(periodOrdinal(BELLS.cy, "12:25")).toBe("7η");
+    expect(periodOrdinal(BELLS.cy, "09:05")).toBeUndefined();
+  });
+  it("fills what a day leaves empty, never over a lesson", () => {
+    const used = [{ start: "07:45", end: "08:25" }, { start: "09:05", end: "09:25" }, { start: "10:00", end: "10:40" }];
+    expect(bellGaps(BELLS.cy, used).map((p) => p.start)).toEqual(["08:25", "10:45", "10:55", "11:35", "12:15", "12:25"]);
   });
 });

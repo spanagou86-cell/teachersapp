@@ -410,16 +410,16 @@ async function editingFlow(name) {
   // Lesson: change its time, then delete and undo.
   await page.goto(`${BASE}/lessons/l-2026-10-08-1005`);
   await page.getByRole("button", { name: /Αλλαγή ώρας/ }).click();
-  await page.getByLabel("Έναρξη").fill("13:00");
+  await page.getByLabel("Έναρξη").fill("13:10");
   await page.getByRole("button", { name: "Αποθήκευση", exact: true }).click();
-  await page.getByText(/13:00–13:40/).waitFor();
-  assert(true, "lesson moved to 13:00 (length kept)");
+  await page.getByText(/13:10–13:50/).waitFor();
+  assert(true, "lesson moved to 13:10 (length kept)");
   await page.getByRole("button", { name: /Αλλαγή ώρας/ }).click();
   await page.getByRole("button", { name: "Διαγραφή μαθήματος" }).click();
   await page.waitForURL(/\/schedule/);
   await page.getByRole("button", { name: "Αναίρεση" }).click();
   await page.goto(`${BASE}/lessons/l-2026-10-08-1005`);
-  assert((await page.getByText(/13:00–13:40/).count()) > 0, "deleted lesson comes back with «Αναίρεση»");
+  assert((await page.getByText(/13:10–13:50/).count()) > 0, "deleted lesson comes back with «Αναίρεση»");
 
   // Long note: fully visible, no hidden text.
   await page.goto(`${BASE}/classes/d1?tab=notes`);
@@ -600,6 +600,10 @@ async function dutyFlow(name) {
   await page.goto(`${BASE}/schedule?view=week&d=2026-10-12`);
   await page.getByText(/Εφημερία|Παιδονομία/).first().waitFor();
   assert(true, "the new duty is in the schedule");
+  // The day runs on the Cyprus bell: 07:45 to 13:05, the 7th period and the breaks are rows too.
+  assert((await page.locator("text=/^7η/ >> visible=true").count()) > 0, "the 7th period (12:25) is in the schedule");
+  assert((await page.locator("text=/13:05/ >> visible=true").count()) > 0, "the day ends at 13:05");
+  assert((await page.locator("text=/Διάλειμμα|10:45–10:55/ >> visible=true").count()) > 0, "the breaks are in the schedule");
   // «Πρόγραμμα» shows its tools as buttons: the duty card has «Έκτακτη».
   const setup = page.getByRole("region", { name: "Το πρόγραμμά σου" });
   assert((await setup.getByText(/Τρίτη 09:05/).count()) > 0, "the duty card lists the breaks on duty");
